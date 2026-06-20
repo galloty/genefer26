@@ -143,10 +143,10 @@ private:
 		return ss.str();
 	}
 
-	static std::string gfn_status(const bool isPrp, const uint64_t pkey, const uint64_t ckey, const uint64_t res64, const uint64_t old64, const double error, const double time)
+	static std::string gfn_status(const bool isPrp, const uint64_t pkey, const uint64_t ckey, const uint64_t res64, const double error, const double time)
 	{
 		std::ostringstream ss; ss << " is ";
-		if (isPrp) ss << "a probable prime"; else ss << "composite, res64 = " << uint64toString(res64) << ", old64 = " << uint64toString(old64);
+		if (isPrp) ss << "a probable prime"; else ss << "composite, res64 = " << uint64toString(res64);
 		if (pkey != 0) ss << ", pkey = " << uint64toString(pkey);
 		if (ckey != 0) ss << ", ckey = " << uint64toString(ckey);
 		if (error != 0) ss << ", error = " << std::setprecision(4) << error;
@@ -596,7 +596,7 @@ private:
 		return EReturn::Success;
 	}
 
-	EReturn quick(const mpz_t & exponent, double & test_time, double & valid_time, bool & is_prp, uint64_t & res64, uint64_t & old64)
+	EReturn quick(const mpz_t & exponent, double & test_time, double & valid_time, bool & is_prp, uint64_t & res64)
 	{
 		const int B_GL = B_GerbiczLi(mpz_sizeinbase(exponent, 2));
 
@@ -605,13 +605,13 @@ private:
 		{
 			gint & gi = *_gi;
 			_transform->getInt(gi);
-			is_prp = gi.isOne(res64, old64);
+			is_prp = gi.isOne(res64);
 		}
 		return GL(exponent, B_GL, valid_time);
 	}
 
 	EReturn proof(const mpz_t & exponent, const int depth, double & test_time, double & valid_time, double & proof_time,
-				  bool & is_prp, uint64_t & pkey, uint64_t & res64, uint64_t & old64)
+				  bool & is_prp, uint64_t & pkey, uint64_t & res64)
 	{
 		const size_t esize = mpz_sizeinbase(exponent, 2);
 		const int B_GL = B_GerbiczLi(esize), B_PL = B_PietrzakLi(esize, depth);
@@ -621,7 +621,7 @@ private:
 		{
 			gint & gi = *_gi;
 			_transform->getInt(gi);
-			is_prp = gi.isOne(res64, old64);
+			is_prp = gi.isOne(res64);
 		}
 		const EReturn rGL = GL(exponent, B_GL, valid_time);
 		if (rGL != EReturn::Success) return rGL;
@@ -630,7 +630,7 @@ private:
 
 	static uint32_t rand32(const uint32_t rmin, const uint32_t rmax) { return (static_cast<uint32_t>(std::rand()) % (rmax - rmin)) + rmin; }
 
-	EReturn server(const mpz_t & exponent, double & time, bool & is_prp, uint64_t & pkey, uint64_t & ckey, uint64_t & res64, uint64_t & old64)
+	EReturn server(const mpz_t & exponent, double & time, bool & is_prp, uint64_t & pkey, uint64_t & ckey, uint64_t & res64)
 	{
 		transform * const ptransform = _transform;
 		gint & gi = *_gi;
@@ -648,7 +648,7 @@ private:
 
 		// v1 = mu[0]^w[0], v1: reg = 1
 		gi.read(proof_file);
-		is_prp = gi.isOne(res64, old64);
+		is_prp = gi.isOne(res64);
 		const uint32_t q = gi.gethash32();
 		mpz_set_ui(w[0], q);
 		ptransform->setInt(gi);
@@ -978,8 +978,8 @@ private:
 
 		_gi = new gint(size_t(1) << n, b);
 		mpz_t exponent; mpz_init(exponent); mpz_ui_pow_ui(exponent, 6, 50);
-		double testTime = 0, validTime = 0; bool isPrp = false; uint64_t res64 = 0, old64 = 0;
-		const EReturn qret = quick(exponent, testTime, validTime, isPrp, res64, old64);
+		double testTime = 0, validTime = 0; bool isPrp = false; uint64_t res64 = 0;
+		const EReturn qret = quick(exponent, testTime, validTime, isPrp, res64);
 		mpz_clear(exponent);
 		clear_checkpoint();
 		delete _gi; _gi = nullptr;
@@ -1023,7 +1023,7 @@ private:
 
 			const size_t memsize = _transform->get_cache_size();
 
-			const double error = _transform->getError();
+			const double error = _transform->get_error();
 			const double mul_time = chrono.get_elapsed_time() / i, estimated_time = mul_time * std::log2(b) * (size_t(1) << n);
 			ss << ": " << timer::format_time(estimated_time) << std::setprecision(3) << ", " << mul_time * 1e3 << " ms/bit, ";
 			if (error != 0) ss << "error = " << std::setprecision(4) << error << ", ";
@@ -1067,7 +1067,7 @@ public:
 		{
 			double time = 0; uint64_t ckey = 0;
 			success = check(time, ckey);
-			const double error = _transform->getError();
+			const double error = _transform->get_error();
 			clearline();
 			std::ostringstream ss; ss << gfn(b, n);
 			if (success == EReturn::Success)
@@ -1092,12 +1092,12 @@ public:
 
 			if (mode == EMode::Quick)
 			{
-				double testTime = 0, validTime = 0; bool isPrp = false; uint64_t res64 = 0, old64 = 0;
-				success = quick(exponent, testTime, validTime, isPrp, res64, old64);
-				const double error = _transform->getError();
+				double testTime = 0, validTime = 0; bool isPrp = false; uint64_t res64 = 0;
+				success = quick(exponent, testTime, validTime, isPrp, res64);
+				const double error = _transform->get_error();
 				clearline();
 				std::ostringstream ss; ss << gfn(b, n);
-				if (success == EReturn::Success) ss << gfn_status(isPrp, 0, 0, res64, old64, error, testTime + validTime);
+				if (success == EReturn::Success) ss << gfn_status(isPrp, 0, 0, res64, error, testTime + validTime);
 				else if (success == EReturn::Failed) ss << ": validation failed!";
 				else ss << ": terminated.";
 				ss << std::endl; pio::print(ss.str());
@@ -1109,9 +1109,9 @@ public:
 			}
 			else if (mode == EMode::Proof)
 			{
-				double testTime = 0, validTime = 0, proofTime = 0; bool isPrp = false; uint64_t pkey = 0, res64 = 0, old64 = 0;
-				success = proof(exponent, depth, testTime, validTime, proofTime, isPrp, pkey, res64, old64);
-				const double error = _transform->getError();
+				double testTime = 0, validTime = 0, proofTime = 0; bool isPrp = false; uint64_t pkey = 0, res64 = 0;
+				success = proof(exponent, depth, testTime, validTime, proofTime, isPrp, pkey, res64);
+				const double error = _transform->get_error();
 				const double time = testTime + validTime + proofTime;
 				clearline();
 				std::ostringstream ss; ss << gfn(b, n) << ": ";
@@ -1126,7 +1126,7 @@ public:
 				ss << std::endl; pio::print(ss.str());
 				if (success == EReturn::Success)
 				{
-					std::ostringstream ssr; ssr << gfn(b, n) << gfn_status(isPrp, pkey, 0, res64, old64, error, time) << std::endl;
+					std::ostringstream ssr; ssr << gfn(b, n) << gfn_status(isPrp, pkey, 0, res64, error, time) << std::endl;
 					pio::result(ssr.str());
 					if (!_is_boinc)
 					{
@@ -1137,11 +1137,11 @@ public:
 			}
 			else if (mode == EMode::Server)
 			{
-				double time = 0; bool isPrp = false; uint64_t pkey = 0, ckey = 0, res64 = 0, old64 = 0;
-				success = server(exponent, time, isPrp, pkey, ckey, res64, old64);
-				const double error = _transform->getError();
+				double time = 0; bool isPrp = false; uint64_t pkey = 0, ckey = 0, res64 = 0;
+				success = server(exponent, time, isPrp, pkey, ckey, res64);
+				const double error = _transform->get_error();
 				std::ostringstream ss; ss << gfn(b, n);
-				if (success == EReturn::Success) ss << gfn_status(isPrp, pkey, ckey, res64, old64, error, time);
+				if (success == EReturn::Success) ss << gfn_status(isPrp, pkey, ckey, res64, error, time);
 				else if (success == EReturn::Failed) ss << ": generation failed!";
 				else ss << ": terminated.";
 				ss << std::endl; pio::print(ss.str());

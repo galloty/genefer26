@@ -293,6 +293,7 @@ public:
 		{
 			// internal test
 			// if (g.check(278, 8, genefer::EMode::Quick, device, true, 5) != genefer::EReturn::Success) return;
+			// if (g.check(4000, 12, genefer::EMode::Quick, device, true, 5) != genefer::EReturn::Success) return;	// res64 = 6BA47FCDC2D7F5E6
 			// return;
 
 			pio::print(usage());

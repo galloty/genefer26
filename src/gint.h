@@ -149,7 +149,7 @@ public:
 		cFile.write(reinterpret_cast<const char *>(_d), _size * sizeof(int32_t));
 	}
 
-	bool isOne(uint64_t & res64, uint64_t & old64)
+	bool isOne(uint64_t & res64)
 	{
 		unbalance();
 		const size_t size = _size;
@@ -167,9 +167,6 @@ public:
 		}
 		res64 = r64;
 
-		uint64_t old = 0;
-		for (size_t i = 8; i != 0; --i) old = (old << 8) | static_cast<uint8_t>(d[size - i]);
-		old64 = old;
 		return bOne;
 	}
 

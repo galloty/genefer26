@@ -22,7 +22,7 @@ private:
 
 public:
 	transformGMP(const uint32_t b, const uint32_t n, const size_t num_regs)
-				: transform(size_t(1) << n, b, EKind::GPU), _num_regs(num_regs), _x(new mpz_t[num_regs])
+				: transform(b, n, EKind::GPU), _num_regs(num_regs), _x(new mpz_t[num_regs])
 	{
 		for (size_t i = 0; i < num_regs; ++i) mpz_init(_x[i]);
 		mpz_inits(_g, _y, nullptr);
@@ -40,7 +40,7 @@ public:
 protected:
 	void getZi(int32_t * const zi) const override
 	{
-		const size_t size = get_size();
+		const size_t size = size_t(1) << get_n();
 		const uint32_t b = get_b();
 		const mpz_t & x = _x[0];
 
@@ -55,7 +55,7 @@ protected:
 
 	void setZi(const int32_t * const zi) override
 	{
-		const size_t size = get_size();
+		const size_t size = size_t(1) << get_n();
 		const uint32_t b = get_b();
 		mpz_t & x = _x[0];
 
@@ -101,9 +101,6 @@ public:
 		mpz_set(_x[dst], _x[src]);
 	}
 
-	size_t get_mem_size() const override { return 0; }
-	size_t get_cache_size() const override { return 0; }
-
 	bool read_checkpoint(file & cFile, const size_t nregs) override
 	{
 		int kind = 0;
@@ -125,5 +122,6 @@ public:
 		for (size_t i = 0; i < num_regs; ++i) if (!cFile.write(_x[i])) return;
 	}
 
-	double getError() const override { return 0.0; }
+	size_t get_cache_size() const override { return 0; }
+	double get_error() const override { return 0.0; }
 };
