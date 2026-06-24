@@ -292,8 +292,19 @@ public:
 		if ((mode == genefer::EMode::None) || (b == 0) || (n == 0))
 		{
 			// internal test
-			// if (g.check(278, 8, genefer::EMode::Quick, device, true, 5) != genefer::EReturn::Success) return;
-			// if (g.check(4000, 12, genefer::EMode::Quick, device, true, 5) != genefer::EReturn::Success) return;	// res64 = 6BA47FCDC2D7F5E6
+			// const bool is_cpu = false;
+			// if (g.check(278,  8, genefer::EMode::Quick, device, is_cpu, 5) != genefer::EReturn::Success) return;
+			// if (g.check(1036, 9, genefer::EMode::Quick, device, is_cpu, 5) != genefer::EReturn::Success) return;
+			// if (g.check(824, 10, genefer::EMode::Quick, device, is_cpu, 5) != genefer::EReturn::Success) return;
+			// if (g.check(280,  8, genefer::EMode::Quick, device, is_cpu, 5) != genefer::EReturn::Success) return;	// res64 = 299409D4B523A706
+			// if (g.check(1038, 9, genefer::EMode::Quick, device, is_cpu, 5) != genefer::EReturn::Success) return;	// res64 = 3094C4CA7735ADD3
+			// if (g.check(826, 10, genefer::EMode::Quick, device, is_cpu, 5) != genefer::EReturn::Success) return;	// res64 = 37029FAC6B01B206
+			// if (g.check(1000000116,  8, genefer::EMode::Quick, device, is_cpu, 5) != genefer::EReturn::Success) return;
+			// if (g.check(1000000512,  9, genefer::EMode::Quick, device, is_cpu, 5) != genefer::EReturn::Success) return;
+			// if (g.check(1000003008, 10, genefer::EMode::Quick, device, is_cpu, 5) != genefer::EReturn::Success) return;
+			// if (g.check(1000000118,  8, genefer::EMode::Quick, device, is_cpu, 5) != genefer::EReturn::Success) return;	// res64 = B868E017B86A68B5
+			// if (g.check(1000000514,  9, genefer::EMode::Quick, device, is_cpu, 5) != genefer::EReturn::Success) return;	// res64 = 769B5E36863A7C45
+			// if (g.check(1000003010, 10, genefer::EMode::Quick, device, is_cpu, 5) != genefer::EReturn::Success) return;	// res64 = 657DFDE7B538C7FC
 			// return;
 
 			pio::print(usage());

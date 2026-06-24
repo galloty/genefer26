@@ -12,6 +12,9 @@ Please give feedback to the authors if improvement is realized. It is distribute
 
 #include "transform.h"
 
+namespace transformCPU_namespace
+{
+
 class Complex
 {
 private:
@@ -53,9 +56,6 @@ public:
 		return Complex(cs, sn / cs);
 	}
 };
-
-namespace transformCPU_namespace
-{
 
 class ComplexPair
 {
