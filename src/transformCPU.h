@@ -22,8 +22,9 @@ namespace transformCPU_namespace
 typedef double	double_2 __attribute__ ((vector_size(2 * sizeof(double))));
 typedef double	double_8 __attribute__ ((vector_size(8 * sizeof(double))));
 
-inline double_2 addmul_2(const double_2 & x, const double_2 & y, const double c) { return x + y * c; }
-inline double_2 submul_2(const double_2 & x, const double_2 & y, const double c) { return x - y * c; }
+inline double_2 madd_2(const double_2 & x, const double y, const double_2 & z) { return x * y + z; }
+inline double_2 nmadd_2(const double_2 & x, const double y, const double_2 & z) { return z - x * y; }
+inline double_2 msub_2(const double_2 & x, const double y, const double_2 & z) { return x * y - z; }
 
 inline double_2 round_2(const double_2 & x) { return _mm_round_pd(x, _MM_FROUND_TO_NEAREST_INT | _MM_FROUND_NO_EXC); }
 
@@ -44,19 +45,21 @@ public:
 	TwiddleFactor() {}
 	TwiddleFactor(const size_t a, const size_t b)
 	{
-#define	C2PI	6.2831853071795864769252867665590057684L
-		const long double alpha = C2PI * (long double)a / (long double)b;
+		const long double alpha = 6.2831853071795864769252867665590057684L * ((long double)(a) / (long double)(b));
 		const double cs = static_cast<double>(std::cosl(alpha)), sn = static_cast<double>(std::sinl(alpha));
 		_z[0] = cs; _z[1] = sn / cs;
 	}
 
 	double cos() const { return _z[0]; }
 	double tan() const { return _z[1]; }
+
+	static TwiddleFactor TF_1_16() { TwiddleFactor r; r._z = double_2{0.92387953251128675612818318939678828682, 0.41421356237309504880168872420969807857}; return r; }
 };
 
 class VComplex
 {
 private:
+	static constexpr double _csqrt2_2 = 0.70710678118654752440084436210484903929;
 	double_2 _re, _im;
 
 	finline constexpr explicit VComplex(const double_2 & re, const double_2 & im) : _re(re), _im(im) {}
@@ -87,22 +90,29 @@ public:
 	finline VComplex operator*(const double rhs) const { return VComplex(_re * rhs, _im * rhs); }
 	finline VComplex addi(const VComplex & rhs) const { return VComplex(_re - rhs._im, _im + rhs._re); }
 	finline VComplex subi(const VComplex & rhs) const { return VComplex(_re + rhs._im, _im - rhs._re); }
+	// finline VComplex muli() const { return VComplex(-_im, _re); }
 
-	finline VComplex addmul(const VComplex & rhs, const double c) const { return VComplex(addmul_2(_re, rhs._re, c), addmul_2(_im, rhs._im, c)); }
-	finline VComplex submul(const VComplex & rhs, const double c) const { return VComplex(submul_2(_re, rhs._re, c), submul_2(_im, rhs._im, c)); }
+	finline VComplex addmul(const VComplex & rhs, const double c) const { return VComplex(madd_2(rhs._re, c, _re), madd_2(rhs._im, c, _im)); }
+	finline VComplex submul(const VComplex & rhs, const double c) const { return VComplex(nmadd_2(rhs._re, c, _re), nmadd_2(rhs._im, c, _im)); }
+
+	finline VComplex mulW_0() const { return VComplex((_re - _im) * _csqrt2_2, (_im + _re) * _csqrt2_2); }
+	finline VComplex mulWconj_0() const { return VComplex((_re + _im) * _csqrt2_2, (_im - _re) * _csqrt2_2); }
 
 	finline VComplex mulW(const TwiddleFactor & rhs) const 
 	{
 		const double cs = rhs.cos(), tg = rhs.tan();
-		return VComplex(submul_2(_re, _im, tg) * cs, addmul_2(_im, _re, tg) * cs);
+		return VComplex(nmadd_2(_im, tg, _re) * cs, madd_2(_re, tg, _im) * cs);
 	}
 	finline VComplex mulWconj(const TwiddleFactor & rhs) const
 	{
 		const double cs = rhs.cos(), tg = rhs.tan();
-		return VComplex(addmul_2(_re, _im, tg) * cs, submul_2(_im, _re, tg) * cs);
+		return VComplex(madd_2(_im, tg, _re) * cs, nmadd_2(_re, tg, _im) * cs);
 	}
-
-	finline VComplex muli() const { return VComplex(-_im, _re); }	// TODO remove
+	finline VComplex mulWconji(const TwiddleFactor & rhs) const
+	{
+		const double cs = rhs.cos(), tg = rhs.tan();
+		return VComplex(msub_2(_re, tg, _im) * cs, madd_2(_im, tg, _re) * cs);
+	}
 
 	finline VComplex sqr() const { const double_2 t = _re * _im; return VComplex(_re * _re - _im * _im, t + t); }
 	finline VComplex mul(const VComplex & rhs) const { return VComplex(_re * rhs._re - _im * rhs._im, _re * rhs._im + _im * rhs._re); }
@@ -145,11 +155,15 @@ public:
 	finline VComplexPair operator*(const double rhs) const { return VComplexPair(_l * rhs, _h * rhs); }
 	finline VComplexPair addi(const VComplexPair & rhs) const { return VComplexPair(_l.addi(rhs._l), _h.addi(rhs._h)); }
 	finline VComplexPair subi(const VComplexPair & rhs) const { return VComplexPair(_l.subi(rhs._l), _h.subi(rhs._h)); }
+	// finline VComplexPair muli() const { return VComplexPair(_l.muli(), _h.muli()); }
 
+	finline VComplexPair addmul(const VComplexPair & rhs, const double c) const { return VComplexPair(_l.addmul(rhs._l, c), _h.addmul(rhs._h, c)); }
+
+	finline VComplexPair mulW_0() const { return VComplexPair(_l.mulW_0(), _h.mulW_0()); }
+	finline VComplexPair mulWconj_0() const { return VComplexPair(_l.mulWconj_0(), _h.mulWconj_0()); }
 	finline VComplexPair mulW(const TwiddleFactor & rhs) const { return VComplexPair(_l.mulW(rhs), _h.mulW(rhs)); }
 	finline VComplexPair mulWconj(const TwiddleFactor & rhs) const { return VComplexPair(_l.mulWconj(rhs), _h.mulWconj(rhs)); }
-
-	finline VComplexPair muli() const { return VComplexPair(_l.muli(), _h.muli()); }	// TODO remove
+	finline VComplexPair mulWconji(const TwiddleFactor & rhs) const { return VComplexPair(_l.mulWconji(rhs), _h.mulWconji(rhs)); }
 
 	finline VComplexPair sqr() const { return VComplexPair(_l.sqr(), _l.mul(_h + _h) + _h.sqr()); }
 	finline VComplexPair mul(const VComplexPair & rhs) const { return VComplexPair(_l.mul(rhs._l), _l.mul(rhs._h) + _h.mul(rhs.get())); }
@@ -186,6 +200,10 @@ private:
 		for (size_t l = 0; l < n; ++l) z[l * s] = zl[l];
 	}
 
+	static void _fwd2_0(VComplexPair & z0, VComplexPair & z1)
+	{
+		const VComplexPair t = z1.mulW_0(); z1 = z0 - t; z0 += t;
+	}
 	static void _fwd2(VComplexPair & z0, VComplexPair & z1, const TwiddleFactor & w)
 	{
 		const VComplexPair t = z1.mulW(w); z1 = z0 - t; z0 += t;
@@ -194,103 +212,214 @@ private:
 	{
 		const VComplexPair t = z1.mulW(w); z1 = z0.subi(t); z0 = z0.addi(t);
 	}
+
+	static void _bck2_0(VComplexPair & z0, VComplexPair & z1)
+	{
+		const VComplexPair t = z0 - z1; z0 += z1, z1 = t.mulWconj_0();
+	}
 	static void _bck2(VComplexPair & z0, VComplexPair & z1, const TwiddleFactor & w)
 	{
 		const VComplexPair t = z0 - z1; z0 += z1, z1 = t.mulWconj(w);
 	}
-
 	static void _bck2i(VComplexPair & z0, VComplexPair & z1, const TwiddleFactor & w)
 	{
-		const VComplexPair t = z0.addi(z1); z0 = z0.subi(z1), z1 = t.mulWconj(w);
+		const VComplexPair t = z1 - z0; z0 += z1, z1 = t.mulWconji(w);
 	}
 
 	static void _sqr2(VComplexPair & z0, VComplexPair & z1, const TwiddleFactor & w)
 	{
 		const VComplexPair t = z1.sqr().mulW(w); z1 = z0.mul(z1 + z1); z0 = z0.sqr() + t;
 	}
+	static void _sqr2i(VComplexPair & z0, VComplexPair & z1, const TwiddleFactor & w)
+	{
+		const VComplexPair t = z1.sqr().mulW(w); z1 = z0.mul(z1 + z1); z0 = z0.sqr().addi(t);
+	}
 	static void _sqr2n(VComplexPair & z0, VComplexPair & z1, const TwiddleFactor & w)
 	{
 		const VComplexPair t = z1.sqr().mulW(w); z1 = z0.mul(z1 + z1); z0 = z0.sqr() - t;
+	}
+	static void _sqr2ni(VComplexPair & z0, VComplexPair & z1, const TwiddleFactor & w)
+	{
+		const VComplexPair t = z1.sqr().mulW(w); z1 = z0.mul(z1 + z1); z0 = z0.sqr().subi(t);
 	}
 
 	static void _mul2(VComplexPair & z0, VComplexPair & z1, const VComplexPair & zp0, const VComplexPair & zp1, const TwiddleFactor & w) 
 	{
 		const VComplexPair t = z1.mul(zp1).mulW(w); z1 = z0.mul(zp1) + zp0.mul(z1); z0 = z0.mul(zp0) + t;
 	}
+	static void _mul2i(VComplexPair & z0, VComplexPair & z1, const VComplexPair & zp0, const VComplexPair & zp1, const TwiddleFactor & w) 
+	{
+		const VComplexPair t = z1.mul(zp1).mulW(w); z1 = z0.mul(zp1) + zp0.mul(z1); z0 = z0.mul(zp0).addi(t);
+	}
 	static void _mul2n(VComplexPair & z0, VComplexPair & z1, const VComplexPair & zp0, const VComplexPair & zp1, const TwiddleFactor & w)
 	{
 		const VComplexPair t = z1.mul(zp1).mulW(w); z1 = z0.mul(zp1) + zp0.mul(z1); z0 = z0.mul(zp0) - t;
 	}
+	static void _mul2ni(VComplexPair & z0, VComplexPair & z1, const VComplexPair & zp0, const VComplexPair & zp1, const TwiddleFactor & w)
+	{
+		const VComplexPair t = z1.mul(zp1).mulW(w); z1 = z0.mul(zp1) + zp0.mul(z1); z0 = z0.mul(zp0).subi(t);
+	}
 
-	static void _forward4(VComplexPair z[4], const TwiddleFactor & w1, const TwiddleFactor & w2)
+	static void _forward4_0(VComplexPair z[4])
+	{
+		const TwiddleFactor w2 = TwiddleFactor::TF_1_16();
+		_fwd2_0(z[0], z[2]); _fwd2_0(z[1], z[3]);
+		_fwd2(z[0], z[1], w2); _fwd2i(z[2], z[3], w2);
+	}
+
+	static void _backward4_0(VComplexPair z[4])
+	{
+		const TwiddleFactor w2 = TwiddleFactor::TF_1_16();
+		_bck2(z[0], z[1], w2); _bck2i(z[2], z[3], w2);
+		_bck2_0(z[0], z[2]); _bck2_0(z[1], z[3]);
+	}
+
+	static void _forward4e(VComplexPair z[4], const TwiddleFactor & w1, const TwiddleFactor & w2)
 	{
 		_fwd2(z[0], z[2], w1); _fwd2(z[1], z[3], w1);
 		_fwd2(z[0], z[1], w2); _fwd2i(z[2], z[3], w2);
 	}
 
-	static void _backward4(VComplexPair z[4], const TwiddleFactor & w1, const TwiddleFactor & w2)
+	static void _forward4o(VComplexPair z[4], const TwiddleFactor & w1, const TwiddleFactor & w2)
 	{
-		_bck2(z[0], z[1], w2); _bck2(z[2], z[3], w2);
-		_bck2(z[0], z[2], w1); _bck2i(z[1], z[3], w1);
+		_fwd2i(z[0], z[2], w1); _fwd2i(z[1], z[3], w1);
+		_fwd2(z[0], z[1], w2); _fwd2i(z[2], z[3], w2);
 	}
 
-	static void _square2x2(VComplexPair z[4], const TwiddleFactor & w1)
+	static void _backward4e(VComplexPair z[4], const TwiddleFactor & w1, const TwiddleFactor & w2)
+	{
+		_bck2(z[0], z[1], w2); _bck2i(z[2], z[3], w2);
+		_bck2(z[0], z[2], w1); _bck2(z[1], z[3], w1);
+	}
+
+	static void _backward4o(VComplexPair z[4], const TwiddleFactor & w1, const TwiddleFactor & w2)
+	{
+		_bck2(z[0], z[1], w2); _bck2i(z[2], z[3], w2);
+		_bck2i(z[0], z[2], w1); _bck2i(z[1], z[3], w1);
+	}
+
+	static void _square2x2e(VComplexPair z[4], const TwiddleFactor & w1)
 	{
 		_sqr2(z[0], z[1], w1); _sqr2n(z[2], z[3], w1);
 	}
 
-	static void _square4(VComplexPair z[4], const TwiddleFactor & w1)
+	static void _square2x2o(VComplexPair z[4], const TwiddleFactor & w1)
+	{
+		_sqr2i(z[0], z[1], w1); _sqr2ni(z[2], z[3], w1);
+	}
+
+	static void _square4e(VComplexPair z[4], const TwiddleFactor & w1)
 	{
 		_fwd2(z[0], z[2], w1); _fwd2(z[1], z[3], w1);
-		_square2x2(z, w1);
+		_square2x2e(z, w1);
 		_bck2(z[0], z[2], w1); _bck2(z[1], z[3], w1);
 	}
 
-	static void _mul2x2(VComplexPair z[4], const VComplexPair zp[4], const TwiddleFactor & w1)
+	static void _square4o(VComplexPair z[4], const TwiddleFactor & w1)
+	{
+		_fwd2i(z[0], z[2], w1); _fwd2i(z[1], z[3], w1);
+		_square2x2o(z, w1);
+		_bck2i(z[0], z[2], w1); _bck2i(z[1], z[3], w1);
+	}
+
+	static void _mul2x2e(VComplexPair z[4], const VComplexPair zp[4], const TwiddleFactor & w1)
 	{
 		_mul2(z[0], z[1], zp[0], zp[1], w1); _mul2n(z[2], z[3], zp[2], zp[3], w1);
 	}
 
-	static void _fwd2x2(VComplexPair zp[4], const TwiddleFactor & w1)
+	static void _mul2x2o(VComplexPair z[4], const VComplexPair zp[4], const TwiddleFactor & w1)
+	{
+		_mul2i(z[0], z[1], zp[0], zp[1], w1); _mul2ni(z[2], z[3], zp[2], zp[3], w1);
+	}
+
+	static void _fwd2x2e(VComplexPair zp[4], const TwiddleFactor & w1)
 	{
 		_fwd2(zp[0], zp[2], w1); _fwd2(zp[1], zp[3], w1);
 	}
 
-	static void _mul4(VComplexPair z[4], const VComplexPair zp[4], const TwiddleFactor & w1)
+	static void _fwd2x2o(VComplexPair zp[4], const TwiddleFactor & w1)
+	{
+		_fwd2i(zp[0], zp[2], w1); _fwd2i(zp[1], zp[3], w1);
+	}
+
+	static void _mul4e(VComplexPair z[4], const VComplexPair zp[4], const TwiddleFactor & w1)
 	{
 		_fwd2(z[0], z[2], w1); _fwd2(z[1], z[3], w1);
-		_mul2x2(z, zp, w1);
+		_mul2x2e(z, zp, w1);
 		_bck2(z[0], z[2], w1); _bck2(z[1], z[3], w1);
+	}
+
+	static void _mul4o(VComplexPair z[4], const VComplexPair zp[4], const TwiddleFactor & w1)
+	{
+		_fwd2i(z[0], z[2], w1); _fwd2i(z[1], z[3], w1);
+		_mul2x2o(z, zp, w1);
+		_bck2i(z[0], z[2], w1); _bck2i(z[1], z[3], w1);
+	}
+
+	static void forward4_0(VComplexPair * const z, const size_t m)
+	{
+		for (size_t i = 0; i < m; ++i)
+		{
+			VComplexPair zl[4]; _load(4, zl, &z[i], m);
+			_forward4_0(zl);
+			_store(4, &z[i], m, zl);
+		}
+	}
+
+	static void backward4_0(VComplexPair * const z, const size_t m)
+	{
+		for (size_t i = 0; i < m; ++i)
+		{
+			VComplexPair zl[4]; _load(4, zl, &z[i], m);
+			_backward4_0(zl);
+			_store(4, &z[i], m, zl);
+		}
 	}
 
 	static void forward4(VComplexPair * const z, const TwiddleFactor * const w, const size_t m, const size_t s)
 	{
-		for (size_t j = 0; j < s; ++j)
+		for (size_t j = 0; j < s / 2; ++j)
 		{
-			const TwiddleFactor w1 = w[s + j], w2 = w[2 * (s + j)];
+			const TwiddleFactor w1 = w[s + j], w2e = w[2 * (s + j) + 0], w2o = w[2 * (s + j) + 1];
 
 			for (size_t i = 0; i < m; ++i)
 			{
-				const size_t k = 4 * m * j + i;
-				VComplexPair zl[4]; _load(4, zl, &z[k], m);
-				_forward4(zl, w1, w2);
-				_store(4, &z[k], m, zl);
+				const size_t k = 8 * m * j + i;
+				VComplexPair zl[4]; _load(4, zl, &z[k + 0 * m], m);
+				_forward4e(zl, w1, w2e);
+				_store(4, &z[k + 0 * m], m, zl);
+			}
+
+			for (size_t i = 0; i < m; ++i)
+			{
+				const size_t k = 8 * m * j + i;
+				VComplexPair zl[4]; _load(4, zl, &z[k + 4 * m], m);
+				_forward4o(zl, w1, w2o);
+				_store(4, &z[k + 4 * m], m, zl);
 			}
 		}
 	}
 
 	static void backward4(VComplexPair * const z, const TwiddleFactor * const w, const size_t m, const size_t s)
 	{
-		for (size_t j = 0; j < s; ++j)
+		for (size_t j = 0; j < s / 2; ++j)
 		{
-			const TwiddleFactor w1 = w[s + j], w2 = w[2 * (s + j)];
+			const TwiddleFactor w1 = w[s + j], w2e = w[2 * (s + j) + 0], w2o = w[2 * (s + j) + 1];
 
 			for (size_t i = 0; i < m; ++i)
 			{
-				const size_t k = 4 * m * j + i;
-				VComplexPair zl[4]; _load(4, zl, &z[k], m);
-				_backward4(zl, w1, w2);
-				_store(4, &z[k], m, zl);
+				const size_t k = 8 * m * j + i;
+				VComplexPair zl[4]; _load(4, zl, &z[k + 0 * m], m);
+				_backward4e(zl, w1, w2e);
+				_store(4, &z[k + 0 * m], m, zl);
+			}
+
+			for (size_t i = 0; i < m; ++i)
+			{
+				const size_t k = 8 * m * j + i;
+				VComplexPair zl[4]; _load(4, zl, &z[k + 4 * m], m);
+				_backward4o(zl, w1, w2o);
+				_store(4, &z[k + 4 * m], m, zl);
 			}
 		}
 	}
@@ -298,75 +427,140 @@ private:
 public:
 	static size_t forward(VComplexPair * const z, const TwiddleFactor * const w, const size_t n_4)
 	{
-		size_t m = 4 * n_4, s = 1;
+		forward4_0(z, n_4);
+		size_t m = n_4, s = 4;
 		for (; m >= 8; m /= 4, s *= 4) forward4(z, w, m / 4, s);
 		return m;
 	}
 
 	static void backward(VComplexPair * const z, const TwiddleFactor * const w, const size_t n_4, const size_t m0)
 	{
-		for (size_t m = m0, s = n_4 / m; s >= 1; m *= 4, s /= 4) backward4(z, w, m, s);
+		for (size_t m = m0, s = n_4 / m; s >= 4; m *= 4, s /= 4) backward4(z, w, m, s);
+		backward4_0(z, n_4);
 	}
 
-	static void square2(VComplexPair * const z, const TwiddleFactor * const w, const size_t n_4)
+	static void square2x2(VComplexPair * const z, const TwiddleFactor * const w, const size_t n_4)
 	{
-		for (size_t j = 0; j < n_4; ++j)
+		for (size_t j = 0; j < n_4 / 2; ++j)
 		{
 			const TwiddleFactor w1 = w[n_4 + j];
 
-			VComplexPair zl[4]; _load(4, zl, &z[4 * j], 1);
-			_square2x2(zl, w1);
-			_store(4, &z[4 * j], 1, zl);
+			VComplexPair zle[4]; _load(4, zle, &z[8 * j + 0], 1);
+			_square2x2e(zle, w1);
+			_store(4, &z[8 * j + 0], 1, zle);
+
+			VComplexPair zlo[4]; _load(4, zlo, &z[8 * j + 4], 1);
+			_square2x2o(zlo, w1);
+			_store(4, &z[8 * j + 4], 1, zlo);
 		}
 	}
 
 	static void square4(VComplexPair * const z, const TwiddleFactor * const w, const size_t n_4)
 	{
-		for (size_t j = 0; j < n_4; ++j)
+		for (size_t j = 0; j < n_4 / 2; ++j)
 		{
 			const TwiddleFactor w1 = w[n_4 + j];
 
-			VComplexPair zl[4]; _load(4, zl, &z[4 * j], 1);
-			_square4(zl, w1);
-			_store(4, &z[4 * j], 1, zl);
+			VComplexPair zle[4]; _load(4, zle, &z[8 * j + 0], 1);
+			_square4e(zle, w1);
+			_store(4, &z[8 * j + 0], 1, zle);
+
+			VComplexPair zlo[4]; _load(4, zlo, &z[8 * j + 4], 1);
+			_square4o(zlo, w1);
+			_store(4, &z[8 * j + 4], 1, zlo);
 		}
 	}
 
-	static void mul2(VComplexPair * const z, const VComplexPair * const zp, const TwiddleFactor * const w, const size_t n_4)
+	static void mul2x2(VComplexPair * const z, const VComplexPair * const zp, const TwiddleFactor * const w, const size_t n_4)
 	{
-		for (size_t j = 0; j < n_4; ++j)
+		for (size_t j = 0; j < n_4 / 2; ++j)
 		{
 			const TwiddleFactor w1 = w[n_4 + j];
 
-			VComplexPair zl[4]; _load(4, zl, &z[4 * j], 1);
-			VComplexPair zpl[4]; _load(4, zpl, &zp[4 * j], 1);
-			_mul2x2(zl, zpl, w1);
-			_store(4, &z[4 * j], 1, zl);
+			VComplexPair zle[4]; _load(4, zle, &z[8 * j + 0], 1);
+			VComplexPair zple[4]; _load(4, zple, &zp[8 * j + 0], 1);
+			_mul2x2e(zle, zple, w1);
+			_store(4, &z[8 * j + 0], 1, zle);
+
+			VComplexPair zlo[4]; _load(4, zlo, &z[8 * j + 4], 1);
+			VComplexPair zplo[4]; _load(4, zplo, &zp[8 * j + 4], 1);
+			_mul2x2o(zlo, zplo, w1);
+			_store(4, &z[8 * j + 4], 1, zlo);
 		}
 	}
 
 	static void fwd2(VComplexPair * const zp, const TwiddleFactor * const w, const size_t n_4)
 	{
-		for (size_t j = 0; j < n_4; ++j)
+		for (size_t j = 0; j < n_4 / 2; ++j)
 		{
 			const TwiddleFactor w1 = w[n_4 + j];
 
-			VComplexPair zl[4]; _load(4, zl, &zp[4 * j], 1);
-			_fwd2x2(zl, w1);
-			_store(4, &zp[4 * j], 1, zl);
+			VComplexPair zle[4]; _load(4, zle, &zp[8 * j + 0], 1);
+			_fwd2x2e(zle, w1);
+			_store(4, &zp[8 * j + 0], 1, zle);
+
+			VComplexPair zlo[4]; _load(4, zlo, &zp[8 * j + 4], 1);
+			_fwd2x2o(zlo, w1);
+			_store(4, &zp[8 * j + 4], 1, zlo);
 		}
 	}
 
 	static void mul4(VComplexPair * const z, const VComplexPair * const zp, const TwiddleFactor * const w, const size_t n_4)
 	{
-		for (size_t j = 0; j < n_4; ++j)
+		for (size_t j = 0; j < n_4 / 2; ++j)
 		{
 			const TwiddleFactor w1 = w[n_4 + j];
 
-			VComplexPair zl[4]; _load(4, zl, &z[4 * j], 1);
-			VComplexPair zpl[4]; _load(4, zpl, &zp[4 * j], 1);
-			_mul4(zl, zpl, w1);
-			_store(4, &z[4 * j], 1, zl);
+			VComplexPair zle[4]; _load(4, zle, &z[8 * j + 0], 1);
+			VComplexPair zple[4]; _load(4, zple, &zp[8 * j + 0], 1);
+			_mul4e(zle, zple, w1);
+			_store(4, &z[8 * j + 0], 1, zle);
+
+			VComplexPair zlo[4]; _load(4, zlo, &z[8 * j + 4], 1);
+			VComplexPair zplo[4]; _load(4, zplo, &zp[8 * j + 4], 1);
+			_mul4o(zlo, zplo, w1);
+			_store(4, &z[8 * j + 4], 1, zlo);
+		}
+	}
+
+	static double carry1(VComplexPair * const z, VComplexPair f[4], const size_t n_4, const double base, const double base_inv, const double g, const double t2_n)
+	{
+		VComplexPair err = VComplexPair(0.0);
+
+		for (size_t k = 0; k < n_4; ++k)
+		{
+			VComplexPair zl[4]; _load(4, zl, &z[k], n_4);
+			for (size_t i = 0; i < 4; ++i)
+			{
+				zl[i] = zl[i].adjust() * t2_n;
+				const VComplexPair t = zl[i].round();
+				err = err.max((zl[i] - t).abs());
+				f[i] = f[i].addmul(t, g);
+				zl[i].set(f[i].mod(base, base_inv));
+			}
+			_store(4, &z[k], n_4, zl);
+		}
+
+		return err.max().max();
+	}
+
+	static void carry2(VComplexPair * const z, VComplexPair f[4], const size_t n_4, const double base, const double base_inv)
+	{
+		while (true)
+		{
+			const VComplexPair t = f[3].shift(); f[3] = f[2]; f[2] = f[1]; f[1] = f[0]; f[0] = t;	// modulo z^n + 1
+
+			for (size_t k = 0; k < n_4; ++k)
+			{
+				VComplexPair zl[4]; _load(4, zl, &z[k], n_4);
+				for (size_t i = 0; i < 4; ++i)
+				{
+					f[i] += zl[i].adjust();
+					zl[i].set(f[i].mod(base, base_inv));
+				}
+				_store(4, &z[k], n_4, zl);
+				if (f[0].is_zero() && f[1].is_zero() && f[2].is_zero() && f[3].is_zero()) return;
+			}
 		}
 	}
 };
@@ -376,6 +570,7 @@ class transformCPU : public transform
 {
 private:
 	const size_t _num_regs;
+	const double _base, _base_inv;
 	VComplexPair * const _z;
 	VComplexPair * const _zp;
 	TwiddleFactor * const _w;
@@ -383,14 +578,15 @@ private:
 
 public:
 	transformCPU(const uint32_t b, const uint32_t n, const size_t num_regs) : transform(b, n, EKind::CPU),
-		_num_regs(num_regs), _z(new VComplexPair[num_regs * N]), _zp(new VComplexPair[N]), _w(new TwiddleFactor[N / 2])
+		_num_regs(num_regs), _base(b), _base_inv(1.0 / b),
+		_z(new VComplexPair[num_regs * N]), _zp(new VComplexPair[N]), _w(new TwiddleFactor[N / 2])
 	{
 		TwiddleFactor * const w = _w;
-		for (size_t s = 1; s < N / 2; s *= 2)
+		for (size_t s = 4; s < N / 2; s *= 2)
 		{
-			for (size_t j = 0; j < s; ++j)
+			for (size_t j = 0; j < s / 2; ++j)
 			{
-				w[s + j] = TwiddleFactor(bitrev(j, 4 * s) + 1, 2 * 4 * s);
+				w[s + j] = TwiddleFactor(bitrev(2 * j, 4 * s) + 1, 2 * 4 * s);
 			}
 		}
 
@@ -407,38 +603,14 @@ public:
 private:
 	void carry(const bool dup)
 	{
+		const double base = _base, base_inv = _base_inv;
 		VComplexPair * const z = _z;
 
-		const double base = get_b(), base_inv = 1.0 / base, t2_n = 2.0 / N;
-		const double g = dup ? 2 : 1;
+		VComplexPair f[4]; for (size_t i = 0; i < 4; ++i) f[i] = VComplexPair(0.0);
 
-		VComplexPair f(0.0), err(0.0);
-
-		for (size_t k = 0; k < N; ++k)
-		{
-			VComplexPair of = z[k].adjust() * t2_n;
-			const VComplexPair o = of.round();
-			err = err.max((of - o).abs());
-			f += o * g;
-
-			z[k].set(f.mod(base, base_inv));
-		}
-
-		_error = std::fmax(_error, err.max().max());
-
-		while (!f.is_zero())
-		{
-			f = f.shift();	// a[n] = -a[0]
-
-			for (size_t k = 0; k < N; ++k)
-			{
-				f += z[k].adjust();
-
-				z[k].set(f.mod(base, base_inv));
-
-				if (f.is_zero()) return;
-			}
-		}
+		const double err = VComplexPair::carry1(z, f, N / 4, base, base_inv, dup ? 2 : 1, 2.0 / N);
+		_error = std::fmax(_error, err);
+		VComplexPair::carry2(z, f, N / 4, base, base_inv);
 	}
 
 protected:
@@ -482,7 +654,7 @@ public:
 		const TwiddleFactor * const w = _w;
 
 		const size_t m0 = VComplexPair::forward(z, w, N / 4);
-		if (m0 == 4) VComplexPair::square4(z, w, N / 4); else VComplexPair::square2(z, w, N / 4);
+		if (m0 == 4) VComplexPair::square4(z, w, N / 4); else VComplexPair::square2x2(z, w, N / 4);
 		VComplexPair::backward(z, w, N / 4, m0);
 		carry(dup);
 	}
@@ -504,7 +676,7 @@ public:
 		const TwiddleFactor * const w = _w;
 
 		const size_t m0 = VComplexPair::forward(z, w, N / 4);
-		if (m0 == 4) VComplexPair::mul4(z, _zp, w, N / 4); else VComplexPair::mul2(z, _zp, w, N / 4);
+		if (m0 == 4) VComplexPair::mul4(z, _zp, w, N / 4); else VComplexPair::mul2x2(z, _zp, w, N / 4);
 		VComplexPair::backward(z, w, N / 4, m0);
 		carry(false);
 	}
