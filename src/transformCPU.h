@@ -13,28 +13,81 @@ Please give feedback to the authors if improvement is realized. It is distribute
 #include <immintrin.h>
 
 #include "transform.h"
+#include "alignment.h"
 
 #define finline	__attribute__((always_inline))
+
+#define CHECK_ERROR		true
 
 namespace transformCPU_namespace
 {
 
 typedef double	double_2 __attribute__ ((vector_size(2 * sizeof(double))));
+typedef double	double_4 __attribute__ ((vector_size(4 * sizeof(double))));
 typedef double	double_8 __attribute__ ((vector_size(8 * sizeof(double))));
 
-inline double_2 madd_2(const double_2 & x, const double y, const double_2 & z) { return x * y + z; }
-inline double_2 nmadd_2(const double_2 & x, const double y, const double_2 & z) { return z - x * y; }
-inline double_2 msub_2(const double_2 & x, const double y, const double_2 & z) { return x * y - z; }
+#define VSIZE	8
+#define VTYPE	double_8
 
-inline double_2 round_2(const double_2 & x) { return _mm_round_pd(x, _MM_FROUND_TO_NEAREST_INT | _MM_FROUND_NO_EXC); }
-
-inline double_2 abs_2(const double_2 & x)
+typedef union
 {
-	const long long m = (long long)(uint64_t(1) << 63);
-	return _mm_andnot_pd(_mm_castsi128_pd((__m128i){m, m}), x);
+	double_8	d8;
+	double_4	d4[2];
+	double_2	d2[4];
+} double_8u;
+
+#define vmadd(x, y, z)	(x * y + z)
+#define vnmadd(x, y, z) (z - x * y)
+#define vmsub(x, y, z) (x * y - z)
+
+inline void vround(VTYPE & y, const VTYPE & x)
+{
+#if defined(__AVX512F__)
+	y = _mm512_roundscale_pd(x, _MM_FROUND_TO_NEAREST_INT | _MM_FROUND_NO_EXC);
+#elif defined(__AVX__)
+	double_8u xu, r; xu.d8 = x;
+	for (size_t i = 0; i < 2; ++i) r.d4[i] = _mm256_round_pd(xu.d4[i], _MM_FROUND_TO_NEAREST_INT | _MM_FROUND_NO_EXC);
+	y = r.d8;
+#else
+	double_8u xu, r; xu.d8 = x;
+	for (size_t i = 0; i < 4; ++i) r.d2[i] = _mm_round_pd(xu.d2[i], _MM_FROUND_TO_NEAREST_INT | _MM_FROUND_NO_EXC);
+	y = r.d8;
+#endif
 }
 
-inline double_2 max_2(const double_2 & x, const double_2 & y) { return _mm_max_pd(x, y); }
+inline void vabs(VTYPE & y, const VTYPE & x)
+{
+#if defined(__AVX512F__)
+	y = _mm512_abs_pd(x);
+#elif defined(__AVX__)
+	const long long m = (long long)(uint64_t(1) << 63);
+	const __m256d mask = _mm256_castsi256_pd((__m256i){m, m, m, m});
+	double_8u xu, r; xu.d8 = x;
+	for (size_t i = 0; i < 2; ++i) r.d4[i] = _mm256_andnot_pd(mask, xu.d4[i]);
+	y = r.d8;
+#else
+	const long long m = (long long)(uint64_t(1) << 63);
+	const __m128d mask = _mm_castsi128_pd((__m128i){m, m});
+	double_8u xu, r; xu.d8 = x;
+	for (size_t i = 0; i < 4; ++i) r.d2[i] = _mm_andnot_pd(mask, xu.d2[i]);
+	y = r.d8;
+#endif
+}
+
+inline void vmax(VTYPE & z, const VTYPE & x, const VTYPE & y)
+{
+#if defined(__AVX512F__)
+	z = _mm512_max_pd(x, y);
+#elif defined(__AVX__)
+	double_8u xu, yu, r; xu.d8 = x; yu.d8 = y;
+	for (size_t i = 0; i < 2; ++i) r.d4[i] = _mm256_max_pd(xu.d4[i], yu.d4[i]);
+	z = r.d8;
+#else
+	double_8u xu, yu, r; xu.d8 = x; yu.d8 = y;
+	for (size_t i = 0; i < 4; ++i) r.d2[i] = _mm_max_pd(xu.d2[i], yu.d2[i]);
+	z = r.d8;
+#endif
+}
 
 class TwiddleFactor
 {
@@ -60,9 +113,9 @@ class VComplex
 {
 private:
 	static constexpr double _csqrt2_2 = 0.70710678118654752440084436210484903929;
-	double_2 _re, _im;
+	VTYPE _re, _im;
 
-	finline constexpr explicit VComplex(const double_2 & re, const double_2 & im) : _re(re), _im(im) {}
+	finline constexpr explicit VComplex(const VTYPE & re, const VTYPE & im) : _re(re), _im(im) {}
 
 public:
 	finline explicit VComplex() {}
@@ -92,8 +145,8 @@ public:
 	finline VComplex subi(const VComplex & rhs) const { return VComplex(_re + rhs._im, _im - rhs._re); }
 	// finline VComplex muli() const { return VComplex(-_im, _re); }
 
-	finline VComplex addmul(const VComplex & rhs, const double c) const { return VComplex(madd_2(rhs._re, c, _re), madd_2(rhs._im, c, _im)); }
-	finline VComplex submul(const VComplex & rhs, const double c) const { return VComplex(nmadd_2(rhs._re, c, _re), nmadd_2(rhs._im, c, _im)); }
+	finline VComplex addmul(const VComplex & rhs, const double c) const { return VComplex(vmadd(rhs._re, c, _re), vmadd(rhs._im, c, _im)); }
+	finline VComplex submul(const VComplex & rhs, const double c) const { return VComplex(vnmadd(rhs._re, c, _re), vnmadd(rhs._im, c, _im)); }
 
 	finline VComplex mulW_0() const { return VComplex((_re - _im) * _csqrt2_2, (_im + _re) * _csqrt2_2); }
 	finline VComplex mulWconj_0() const { return VComplex((_re + _im) * _csqrt2_2, (_im - _re) * _csqrt2_2); }
@@ -101,25 +154,25 @@ public:
 	finline VComplex mulW(const TwiddleFactor & rhs) const 
 	{
 		const double cs = rhs.cos(), tg = rhs.tan();
-		return VComplex(nmadd_2(_im, tg, _re) * cs, madd_2(_re, tg, _im) * cs);
+		return VComplex(vnmadd(_im, tg, _re) * cs, vmadd(_re, tg, _im) * cs);
 	}
 	finline VComplex mulWconj(const TwiddleFactor & rhs) const
 	{
 		const double cs = rhs.cos(), tg = rhs.tan();
-		return VComplex(madd_2(_im, tg, _re) * cs, nmadd_2(_re, tg, _im) * cs);
+		return VComplex(vmadd(_im, tg, _re) * cs, vnmadd(_re, tg, _im) * cs);
 	}
 	finline VComplex mulWconji(const TwiddleFactor & rhs) const
 	{
 		const double cs = rhs.cos(), tg = rhs.tan();
-		return VComplex(msub_2(_re, tg, _im) * cs, madd_2(_im, tg, _re) * cs);
+		return VComplex(vmsub(_re, tg, _im) * cs, vmadd(_im, tg, _re) * cs);
 	}
 
-	finline VComplex sqr() const { const double_2 t = _re * _im; return VComplex(_re * _re - _im * _im, t + t); }
+	finline VComplex sqr() const { const VTYPE t = _re * _im; return VComplex(_re * _re - _im * _im, t + t); }
 	finline VComplex mul(const VComplex & rhs) const { return VComplex(_re * rhs._re - _im * rhs._im, _re * rhs._im + _im * rhs._re); }
 
-	finline VComplex round() const { return VComplex(round_2(_re), round_2(_im)); }
-	finline VComplex abs() const { return VComplex(abs_2(_re), abs_2(_im)); }
-	finline VComplex max(const VComplex & rhs) const { return VComplex(max_2(_re, rhs._re), max_2(_im, rhs._im)); }
+	finline VComplex round() const { VComplex r; vround(r._re, _re); vround(r._im, _im); return r; }
+	finline VComplex abs() const { VComplex r; vabs(r._re, _re); vabs(r._im, _im); return r; }
+	finline VComplex max(const VComplex & rhs) const { VComplex r; vmax(r._re, _re, rhs._re); vmax(r._im, _im, rhs._im); return r; }
 	finline double max() const { return std::max(_re[0], _im[0]); }
 
 	finline VComplex shift() const { return VComplex(-_im, _re); }
@@ -394,8 +447,12 @@ public:
 		_store(4, z, 1, zl);
 	}
 
-	finline static void backward4_0_carry(VComplexPair * const z, const size_t m, VComplexPair f[4], VComplexPair & err,
-		const double base, const double base_inv, const double t2_n, const double g)
+	finline static void backward4_0_carry(VComplexPair * const z, const size_t m, VComplexPair f[4],
+		const double base, const double base_inv, const double t2_n, const double g
+#if defined(CHECK_ERROR)
+		, VComplexPair & err
+#endif
+	)
 	{
 		const TwiddleFactor w2 = TwiddleFactor::TF_1_16();
 
@@ -407,7 +464,9 @@ public:
 		{
 			zl[i] = zl[i].flatten() * t2_n;
 			const VComplexPair t = zl[i].round();
+#if defined(CHECK_ERROR)
 			err = err.max((zl[i] - t).abs());
+#endif
 			f[i] = f[i].addmul(t, g);
 			zl[i].set(f[i].mod(base, base_inv));
 		}
@@ -448,7 +507,9 @@ private:
 public:
 	transformCPU(const uint32_t b, const uint32_t n, const size_t num_regs) : transform(b, n, EKind::CPU),
 		_num_regs(num_regs), _base(b), _base_inv(1.0 / b),
-		_z(new VComplexPair[num_regs * N]), _zp(new VComplexPair[N]), _w(new TwiddleFactor[N / 2])
+		_z(static_cast<VComplexPair *>(align_new(num_regs * N * sizeof(VComplexPair), 2 * 1024 * 1024))),
+		_zp(static_cast<VComplexPair *>(align_new(N * sizeof(VComplexPair), 1024))),
+		_w(static_cast<TwiddleFactor *>(align_new(N / 2 * sizeof(TwiddleFactor), 1024)))
 	{
 		TwiddleFactor * const w = _w;
 		for (size_t s = 4; s < N / 2; s *= 2)
@@ -464,9 +525,9 @@ public:
 
 	virtual ~transformCPU()
 	{
-		delete[] _z;
-		delete[] _zp;
-		delete[] _w;
+		align_delete(_z);
+		align_delete(_zp);
+		align_delete(_w);
 	}
 
 protected:
@@ -677,18 +738,28 @@ private:
 	{
 		VComplexPair f[4]; for (size_t i = 0; i < 4; ++i) f[i] = VComplexPair(0.0);
 
-		const double t2_n = 2.0 / N, g = dup ? 2 : 1;
+#if defined(CHECK_ERROR)
 		VComplexPair err = VComplexPair(0.0);
-
-		for (size_t k = 0; k < N / 4; ++k) VComplexPair::backward4_0_carry(&z[k], N / 4, f, err, base, base_inv, t2_n, g);
-		const double error = err.max().max();
+#endif
+		for (size_t k = 0; k < N / 4; ++k)
+		{
+			VComplexPair::backward4_0_carry(&z[k], N / 4, f, base, base_inv, 2.0 / N, dup ? 2 : 1
+#if defined(CHECK_ERROR)
+				, err
+#endif
+			);
+		}
 
 		// modulo z^n + 1
 		const VComplexPair t = f[3].shift(); f[3] = f[2]; f[2] = f[1]; f[1] = f[0]; f[0] = t;
 
 		VComplexPair::carry_fix(z, N / 4, f, base, base_inv);
 
-		return error;
+#if defined(CHECK_ERROR)
+		return err.max().max();
+#else
+		return 0;
+#endif
 	}
 
 public:
