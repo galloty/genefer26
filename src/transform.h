@@ -46,6 +46,7 @@ public:
 private:
 	static transform * create_ocl(const uint32_t b, const uint32_t n, const size_t num_regs, const size_t device,
 								  const bool is_boinc, const bool get_boinc_ids);
+	static transform * create_avx10(const uint32_t b, const uint32_t n, const size_t num_regs);
 	static transform * create_512(const uint32_t b, const uint32_t n, const size_t num_regs);
 	static transform * create_fma(const uint32_t b, const uint32_t n, const size_t num_regs);
 	static transform * create_avx(const uint32_t b, const uint32_t n, const size_t num_regs);
@@ -83,7 +84,11 @@ public:
 		transform * ptransform = nullptr;
 
 		__builtin_cpu_init();
-		if (__builtin_cpu_supports("avx512f"))
+		if (__builtin_cpu_supports("avx10.2"))
+		{
+			ptransform = transform::create_avx10(b, n, num_regs);
+		}
+		else if (__builtin_cpu_supports("avx512f"))
 		{
 			ptransform = transform::create_512(b, n, num_regs);
 		}

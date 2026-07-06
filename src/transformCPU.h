@@ -26,7 +26,6 @@ typedef double	double_2 __attribute__ ((vector_size(2 * sizeof(double))));
 typedef double	double_4 __attribute__ ((vector_size(4 * sizeof(double))));
 typedef double	double_8 __attribute__ ((vector_size(8 * sizeof(double))));
 
-#define VSIZE	8
 #define VTYPE	double_8
 
 typedef union
