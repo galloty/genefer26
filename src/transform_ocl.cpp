@@ -15,7 +15,7 @@ size_t transform::display_devices()
 	return pfm.displayDevices();
 }
 
-transform * transform::create_ocl(const uint32_t b, const uint32_t n, const size_t num_regs, const size_t device,
+transform * transform::create_ocl(const vint32 & b, const uint32_t n, const size_t num_regs, const size_t device,
 								  const bool is_boinc, const bool get_boinc_ids)
 {
 	cl_platform_id boinc_platform_id = 0;
@@ -37,7 +37,9 @@ transform * transform::create_ocl(const uint32_t b, const uint32_t n, const size
 #endif
 
 	transform * ptransform = nullptr;
-	if (b <= 1000000000)
+	uint32_t b_max = 0; for (size_t i = 0; i < VSIZE; ++i) b_max = std::max(b_max, b[i]);
+
+	if (b_max <= 1000000000)
 	{
 		ptransform = new transformGPU<false>(b, n, num_regs, device, is_boinc, boinc_platform_id, boinc_device_id);
 	}

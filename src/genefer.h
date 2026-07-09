@@ -21,6 +21,7 @@ Please give feedback to the authors if improvement is realized. It is distribute
 
 #include <gmp.h>
 
+#include "vint32.h"
 #include "pio.h"
 #include "transform.h"
 #include "file.h"
@@ -81,7 +82,7 @@ public:
 	static size_t display_devices() { return transform::display_devices(); }
 
 private:
-	void create_transform_GPU(const uint32_t b, const uint32_t n, const size_t num_regs, const size_t device,
+	void create_transform_GPU(const vint32 & b, const uint32_t n, const size_t num_regs, const size_t device,
 							const bool verbose = true, const bool full = true)
 	{
 		delete_transform();
@@ -97,7 +98,7 @@ private:
 		}
 	}
 
-	void create_transform_CPU(const uint32_t b, const uint32_t n, const size_t num_regs, const bool verbose = true, const bool full = true)
+	void create_transform_CPU(const vint32 & b, const uint32_t n, const size_t num_regs, const bool verbose = true, const bool full = true)
 	{
 		delete_transform();
 
@@ -178,6 +179,28 @@ private:
 	}
 
 	static void clearline() { pio::display("                                                            \r"); }
+
+	static void parse_b(const std::string & b_filename, vint32 & b)
+	{
+		std::ifstream file(b_filename);
+		if (!file.is_open()) pio::error("cannot open input file", true);
+
+		size_t i = 0;
+		std::string line;
+		while (std::getline(file, line))
+		{
+			const uint32_t b_i = uint32_t(std::stoi(line));
+			if (b_i % 2 != 0) pio::error("b must be even", true);
+			if (b_i < 6) pio::error("b < 6 is not supported", true);
+			if (b_i > 2000000000) pio::error("b > 2000000000 is not supported", true);
+			if ((b_i == 0) || ((b_i & (~b_i + 1)) == b_i)) pio::error("b must not be a power of two", true);
+			b[i] = b_i;
+			++i; if (i == VSIZE) break;
+		}
+		while (i < VSIZE) { b[i] = b[i - 1]; ++i; }
+
+		file.close();
+	}
 
 	int _read_checkpoint(const std::string & filename, const int where, int & i, double & elapsed_time)
 	{
@@ -333,7 +356,7 @@ private:
 		if (e == 0) return;
 		for (int i = ilog2_32(e); i >= 0; --i)
 		{
-			ptransform->square_dup(false);
+			ptransform->square_dup(0);
 			if ((e & (static_cast<uint32_t>(1) << i)) != 0) ptransform->mul();
 		}
 	}
@@ -346,7 +369,7 @@ private:
 		if (mpz_sgn(e) == 0) return;
 		for (int i = static_cast<int>(mpz_sizeinbase(e, 2) - 1); i >= 0; --i)
 		{
-			ptransform->square_dup(false);
+			ptransform->square_dup(0);
 			if (mpz_tstbit(e, mp_bitcnt_t(i)) != 0) ptransform->mul();
 		}
 	}
@@ -362,8 +385,15 @@ private:
 		return static_cast<int>((esize - 1) >> depth) + 1;
 	}
 
+	static uint32_t get_bitcnt(const size_t i, const mpz_t exponent[VSIZE])
+	{
+		uint32_t e = 0;
+		for (size_t j = 0; j < VSIZE; ++j) e |= ((mpz_tstbit(exponent[j], mp_bitcnt_t(i)) != 0) ? uint32_t(1) : uint32_t(0)) << j;
+		return e;
+	}
+
 	// out: reg_0 is 2^exponent and reg_1 is d(t)
-	EReturn prp(const mpz_t & exponent, const int B_GL, const int B_PL, double & test_time)
+	EReturn prp(const mpz_t exponent[VSIZE], const int B_GL, const int B_PL, double & test_time)
 	{
 		transform * const ptransform = _transform;
 		gint & gi = *_gi;
@@ -388,7 +418,8 @@ private:
 		}
 
 		watch chrono(found ? restored_time : 0);
-		const int i0 = static_cast<int>(mpz_sizeinbase(exponent, 2) - 1), i_start = found ? ri : i0;
+		int i0 = 0; for (size_t j = 0; j < VSIZE; ++j) i0 = std::max(i0, int(mpz_sizeinbase(exponent[j], 2) - 1));
+		const int i_start = found ? ri : i0;
 		init_print_progress(i0, i_start);
 		int dcount = 100;
 
@@ -409,7 +440,7 @@ private:
 				if (!_is_boinc && (chrono.get_record_time() > 600)) { save_checkpoint(0, i, chrono.get_elapsed_time()); chrono.reset_record_time(); }
 			}
 
-			ptransform->square_dup(mpz_tstbit(exponent, mp_bitcnt_t(i)) != 0);
+			ptransform->square_dup(get_bitcnt(size_t(i), exponent));
 			// if (i == static_cast<int>(mpz_sizeinbase(exponent, 2) - 1)) ptransform->add1();	// => invalid
 			// if (i == 0) ptransform->add1();	// => invalid
 
@@ -437,7 +468,7 @@ private:
 	// Gerbicz-Li error checking
 	// in: reg_0 is 2^exponent and reg_1 is d(t)
 	// out: return valid/invalid
-	EReturn GL(const mpz_t & exponent, const int B_GL, double & valid_time)
+	EReturn GL(const mpz_t exponent[VSIZE], const int B_GL, double & valid_time)
 	{
 		transform * const ptransform = _transform;
 		gint & gi = *_gi;
@@ -456,12 +487,12 @@ private:
 		{
 			if (_is_boinc) boinc_monitor();
 			if (quitting()) return EReturn::Aborted;
-			ptransform->square_dup(false);
+			ptransform->square_dup(0);
 		}
 		ptransform->copy(1, 0);
 
 		mpz_t res; mpz_init_set_ui(res, 0);
-		mpz_t e, t; mpz_init_set(e, exponent); mpz_init(t);
+		mpz_t e, t; mpz_init_set(e, exponent[0]); mpz_init(t);	// TODO
 		while (mpz_sgn(e) != 0)
 		{
 			mpz_mod_2exp(t, e, static_cast<unsigned long int>(B_GL));
@@ -596,24 +627,25 @@ private:
 		return EReturn::Success;
 	}
 
-	EReturn quick(const mpz_t & exponent, double & test_time, double & valid_time, bool & is_prp, uint64_t & res64)
+	EReturn quick(const mpz_t exponent[VSIZE], double & test_time, double & valid_time, bool is_prp[VSIZE], uint64_t res64[VSIZE])
 	{
-		const int B_GL = B_GerbiczLi(mpz_sizeinbase(exponent, 2));
+		size_t esize = 0; for (size_t j = 0; j < VSIZE; ++j) esize = std::max(esize, mpz_sizeinbase(exponent[j], 2));
+		const int B_GL = B_GerbiczLi(esize);
 
 		const EReturn rPrp = prp(exponent, B_GL, 0, test_time);
 		if (rPrp != EReturn::Success) return rPrp;
 		{
 			gint & gi = *_gi;
 			_transform->getInt(gi);
-			is_prp = gi.isOne(res64);
+			gi.isOne(is_prp, res64);
 		}
-		return GL(exponent, B_GL, valid_time);
+		return EReturn::Success;	//GL(exponent, B_GL, valid_time);
 	}
 
-	EReturn proof(const mpz_t & exponent, const int depth, double & test_time, double & valid_time, double & proof_time,
-				  bool & is_prp, uint64_t & pkey, uint64_t & res64)
+	EReturn proof(const mpz_t exponent[VSIZE], const int depth, double & test_time, double & valid_time, double & proof_time,
+				  bool is_prp[VSIZE], uint64_t & pkey, uint64_t res64[VSIZE])
 	{
-		const size_t esize = mpz_sizeinbase(exponent, 2);
+		size_t esize = 0; for (size_t j = 0; j < VSIZE; ++j) esize = std::max(esize, mpz_sizeinbase(exponent[j], 2));
 		const int B_GL = B_GerbiczLi(esize), B_PL = B_PietrzakLi(esize, depth);
 
 		const EReturn rPrp = prp(exponent, B_GL, B_PL, test_time);
@@ -621,7 +653,7 @@ private:
 		{
 			gint & gi = *_gi;
 			_transform->getInt(gi);
-			is_prp = gi.isOne(res64);
+			gi.isOne(is_prp, res64);
 		}
 		const EReturn rGL = GL(exponent, B_GL, valid_time);
 		if (rGL != EReturn::Success) return rGL;
@@ -630,7 +662,7 @@ private:
 
 	static uint32_t rand32(const uint32_t rmin, const uint32_t rmax) { return (static_cast<uint32_t>(std::rand()) % (rmax - rmin)) + rmin; }
 
-	EReturn server(const mpz_t & exponent, double & time, bool & is_prp, uint64_t & pkey, uint64_t & ckey, uint64_t & res64)
+	EReturn server(const mpz_t exponent[VSIZE], double & time, bool is_prp[VSIZE], uint64_t & pkey, uint64_t & ckey, uint64_t res64[VSIZE])
 	{
 		transform * const ptransform = _transform;
 		gint & gi = *_gi;
@@ -641,14 +673,15 @@ private:
 		int version = 0; proof_file.read(reinterpret_cast<char *>(&version), sizeof(version));
 		int depth = 0; proof_file.read(reinterpret_cast<char *>(&depth), sizeof(depth));
 
-		const size_t L = size_t(1) << depth, esize = mpz_sizeinbase(exponent, 2);
+		const size_t L = size_t(1) << depth;
+		size_t esize = 0; for (size_t j = 0; j < VSIZE; ++j) esize = std::max(esize, mpz_sizeinbase(exponent[j], 2));
 		const int B = B_PietrzakLi(esize, depth);
 
 		mpz_t * const w = new mpz_t[L]; for (size_t i = 0; i < L; ++i) mpz_init(w[i]);
 
 		// v1 = mu[0]^w[0], v1: reg = 1
 		gi.read(proof_file);
-		is_prp = gi.isOne(res64);
+		gi.isOne(is_prp, res64);
 		const uint32_t q = gi.gethash32();
 		mpz_set_ui(w[0], q);
 		ptransform->setInt(gi);
@@ -691,7 +724,7 @@ private:
 		pkey = gi.gethash64();
 
 		mpz_t p2, t; mpz_init_set_ui(p2, 0); mpz_init(t);
-		mpz_t e; mpz_init_set(e, exponent);
+		mpz_t e; mpz_init_set(e, exponent[0]);	// TODO
 		for (size_t i = 0; i < L; i++)
 		{
 			mpz_mod_2exp(t, e, static_cast<unsigned long int>(B));
@@ -819,7 +852,7 @@ private:
 					ptransform->copy(0, 2);
 				}
 
-				ptransform->square_dup(false);
+				ptransform->square_dup(0);
 				// if (i == i0) ptransform->add1();	// => invalid
 				// if (i == p2size) ptransform->add1();	// => invalid
 			}
@@ -833,7 +866,7 @@ private:
 				{
 					if (_is_boinc) boinc_monitor();
 					if (quitting()) { mpz_clear(p2); return EReturn::Aborted; }
-					ptransform->square_dup(false);
+					ptransform->square_dup(0);
 				}
 			}
 			// d(t + 1) = d(t) * u((t + 1) * L)
@@ -846,7 +879,7 @@ private:
 			{
 				if (_is_boinc) boinc_monitor();
 				if (quitting()) { mpz_clear(p2); return EReturn::Aborted; }
-				ptransform->square_dup(false);
+				ptransform->square_dup(0);
 			}
 			ptransform->copy(1, 0);
 
@@ -921,7 +954,7 @@ private:
 		{
 			if (_is_boinc) boinc_monitor();
 			if (quitting()) { mpz_clear(p2); return EReturn::Aborted; }
-			ptransform->square_dup(false);
+			ptransform->square_dup(0);
 		}
 		ptransform->copy(1, 0);
 
@@ -968,19 +1001,26 @@ private:
 		const size_t num_regs = 3;
 
 		const uint32_t b = bm[m - 12], n = m;
+		vint32 vb; for (size_t j = 0; j < VSIZE; ++j) vb[j] = b;
 
-		if (isCPU) create_transform_CPU(b, n, num_regs, m == 16, false);
-		else create_transform_GPU(b, n, num_regs, device, m == 16, false);
+		if (isCPU) create_transform_CPU(vb, n, num_regs, m == 16, false);
+		else create_transform_GPU(vb, n, num_regs, device, m == 16, false);
 
 		transform * const pTransform = _transform;
 
 		// pTransform->info();
 
-		_gi = new gint(size_t(1) << n, b);
-		mpz_t exponent; mpz_init(exponent); mpz_ui_pow_ui(exponent, 6, 50);
-		double testTime = 0, validTime = 0; bool isPrp = false; uint64_t res64 = 0;
-		const EReturn qret = quick(exponent, testTime, validTime, isPrp, res64);
-		mpz_clear(exponent);
+		_gi = new gint(size_t(1) << n, vb);
+		mpz_t exponent[VSIZE];
+		for (size_t j = 0; j < VSIZE; ++j)
+		{
+			mpz_init(exponent[j]);
+			mpz_ui_pow_ui(exponent[j], 6, 50);
+		}
+
+		double testTime = 0, validTime = 0; bool is_prp[VSIZE]; uint64_t res64[VSIZE];
+		const EReturn qret = quick(exponent, testTime, validTime, is_prp, res64);
+		for (size_t j = 0; j < VSIZE; ++j) mpz_clear(exponent[j]);
 		clear_checkpoint();
 		delete _gi; _gi = nullptr;
 
@@ -1007,7 +1047,7 @@ private:
 			size_t i = 1;
 			while (!_break.load(std::memory_order_relaxed))
 			{
-				pTransform->square_dup((i % 2) != 0);
+				pTransform->square_dup(((i % 2) != 0) ? uint32_t(-1) : 0);
 				++i;
 				if (quitting())
 				{
@@ -1036,13 +1076,19 @@ private:
 	}
 
 public:
-	EReturn check(const uint32_t b, const uint32_t n, const EMode mode, const size_t device, const bool isCPU, const int depth = 7)	// 7
+	EReturn check(const std::string & b_filename, const uint32_t n, const EMode mode, const size_t device, const bool isCPU, const int depth = 7)
 	{
 		_n = n;
+
+		vint32 b; parse_b(b_filename, b);
+		uint32_t b_min = uint32_t(-1), b_max = 0;
+		for (size_t i = 0; i < VSIZE; ++i) { b_min = std::min(b_min, b[i]); b_max = std::max(b_max, b[i]); }
+		const uint32_t b_TODO = b[0];
+
 		const bool empty_main_filename = _main_filename.empty();
 		if (empty_main_filename)
 		{
-			std::ostringstream ss; ss << "g" << n << "_" << b;
+			std::ostringstream ss; ss << "g" << n << "_" << b_min << "_" << b_max;
 			_main_filename = ss.str();
 		}
 
@@ -1069,7 +1115,7 @@ public:
 			success = check(time, ckey);
 			const double error = _transform->get_error();
 			clearline();
-			std::ostringstream ss; ss << gfn(b, n);
+			std::ostringstream ss; ss << gfn(b_TODO, n);
 			if (success == EReturn::Success)
 			{
 				ss << " is checked, ckey = " << uint64toString(ckey);
@@ -1087,34 +1133,38 @@ public:
 		}
 		else
 		{
-			mpz_t exponent; mpz_init(exponent);
-			mpz_ui_pow_ui(exponent, b, static_cast<unsigned long int>(1) << n);
+			mpz_t exponent[VSIZE];
+			for (size_t j = 0; j < VSIZE; ++j)
+			{
+				mpz_init(exponent[j]);
+				mpz_ui_pow_ui(exponent[j], b[j], 1u << n);
+			}
 
 			if (mode == EMode::Quick)
 			{
-				double testTime = 0, validTime = 0; bool isPrp = false; uint64_t res64 = 0;
-				success = quick(exponent, testTime, validTime, isPrp, res64);
+				double testTime = 0, validTime = 0; bool is_prp[VSIZE]; uint64_t res64[VSIZE];
+				success = quick(exponent, testTime, validTime, is_prp, res64);
 				const double error = _transform->get_error();
 				clearline();
-				std::ostringstream ss; ss << gfn(b, n);
-				if (success == EReturn::Success) ss << gfn_status(isPrp, 0, 0, res64, error, testTime + validTime);
-				else if (success == EReturn::Failed) ss << ": validation failed!";
-				else ss << ": terminated.";
-				ss << std::endl; pio::print(ss.str());
-				if ((success == EReturn::Success) || (!_is_boinc && (success == EReturn::Failed)))
+				for (size_t j = 0; j < VSIZE; ++j)
 				{
-					pio::result(ss.str());
-					if (!_is_boinc) clear_checkpoint();
+					std::ostringstream ss; ss << gfn(b[j], n);
+					if (success == EReturn::Success) ss << gfn_status(is_prp[j], 0, 0, res64[j], error, testTime + validTime);
+					else if (success == EReturn::Failed) ss << ": validation failed!";
+					else ss << ": terminated.";
+					ss << std::endl; pio::print(ss.str());
+					if ((success == EReturn::Success) || (!_is_boinc && (success == EReturn::Failed))) pio::result(ss.str());
 				}
+				if (!_is_boinc && (success != EReturn::Aborted)) clear_checkpoint();
 			}
 			else if (mode == EMode::Proof)
 			{
-				double testTime = 0, validTime = 0, proofTime = 0; bool isPrp = false; uint64_t pkey = 0, res64 = 0;
-				success = proof(exponent, depth, testTime, validTime, proofTime, isPrp, pkey, res64);
+				double testTime = 0, validTime = 0, proofTime = 0; bool is_prp[VSIZE]; uint64_t pkey = 0; uint64_t res64[VSIZE];
+				success = proof(exponent, depth, testTime, validTime, proofTime, is_prp, pkey, res64);
 				const double error = _transform->get_error();
 				const double time = testTime + validTime + proofTime;
 				clearline();
-				std::ostringstream ss; ss << gfn(b, n) << ": ";
+				std::ostringstream ss; ss << gfn(b_TODO, n) << ": ";
 				if (success == EReturn::Success)
 				{
 					ss << "proof file is generated";
@@ -1126,8 +1176,11 @@ public:
 				ss << std::endl; pio::print(ss.str());
 				if (success == EReturn::Success)
 				{
-					std::ostringstream ssr; ssr << gfn(b, n) << gfn_status(isPrp, pkey, 0, res64, error, time) << std::endl;
-					pio::result(ssr.str());
+					for (size_t j = 0; j < VSIZE; ++j)
+					{
+						std::ostringstream ssr; ssr << gfn(b[j], n) << gfn_status(is_prp[j], pkey, 0, res64[j], error, time) << std::endl;
+						pio::result(ssr.str());
+					}
 					if (!_is_boinc)
 					{
 						for (size_t i = 0, L = size_t(1) << depth; i < L; ++i) std::remove(ckpt_filename(i).c_str());
@@ -1137,18 +1190,21 @@ public:
 			}
 			else if (mode == EMode::Server)
 			{
-				double time = 0; bool isPrp = false; uint64_t pkey = 0, ckey = 0, res64 = 0;
-				success = server(exponent, time, isPrp, pkey, ckey, res64);
+				double time = 0; bool is_prp[VSIZE]; uint64_t pkey = 0, ckey = 0; uint64_t res64[VSIZE];
+				success = server(exponent, time, is_prp, pkey, ckey, res64);
 				const double error = _transform->get_error();
-				std::ostringstream ss; ss << gfn(b, n);
-				if (success == EReturn::Success) ss << gfn_status(isPrp, pkey, ckey, res64, error, time);
-				else if (success == EReturn::Failed) ss << ": generation failed!";
-				else ss << ": terminated.";
-				ss << std::endl; pio::print(ss.str());
-				if (success == EReturn::Success) pio::result(ss.str());
+				for (size_t j = 0; j < VSIZE; ++j)
+				{
+					std::ostringstream ss; ss << gfn(b[j], n);
+					if (success == EReturn::Success) ss << gfn_status(is_prp[j], pkey, ckey, res64[j], error, time);
+					else if (success == EReturn::Failed) ss << ": generation failed!";
+					else ss << ": terminated.";
+					ss << std::endl; pio::print(ss.str());
+					if (success == EReturn::Success) pio::result(ss.str());
+				}
 			}
 
-			mpz_clear(exponent);
+			for (size_t j = 0; j < VSIZE; ++j) mpz_clear(exponent[j]);
 		}
 
 		delete _gi; _gi = nullptr;

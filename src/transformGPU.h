@@ -398,7 +398,7 @@ private:
 	device * _pdevice;
 
 public:
-	transformGPU(const uint32_t b, const uint32_t n, const size_t num_regs, const size_t d,	// device
+	transformGPU(const vint32 & b, const uint32_t n, const size_t num_regs, const size_t d,	// device
 				 const bool is_boinc, const cl_platform_id boinc_platform_id, const cl_device_id boinc_device_id)
 				: transform(b, n, EKind::GPU), _num_regs(num_regs), _size(size_t(1) << n),
 				_norm1(Zp1::norm(uint32(_size / 2))), _norm2(Zp2::norm(uint32(_size / 2))), _norm3(Zp3::norm(uint32(_size / 2))),
@@ -474,7 +474,7 @@ private:
 		return (n > P1P2P3 / 2) ? __int128_t(n - P1P2P3) : __int128_t(n);
 	}
 
-	void carry(const bool dup)
+	void carry(const uint32_t dup)
 	{
 		const size_t n = _size;
 		Zp1 * const z1 = _z1;
@@ -483,7 +483,7 @@ private:
 
 		// Not converted into Montgomery form such that output is converted out of MF
 		const Zp1 norm1 = _norm1; const Zp2 norm2 = _norm2;	const Zp3 norm3 = _norm3;
-		const int32 base = static_cast<int32>(get_b());
+		const int32 base = static_cast<int32>(get_b()[0]);	// TODO
 		__int128_t f = 0;
 
 		for (size_t k = 0; k < n; ++k)
@@ -492,7 +492,7 @@ private:
 			const Zp2 u2 = z2[k].mul(norm2);
 			const Zp3 u3 = z3[k].mul(norm3);
 			__int128_t l = garner3(u1, u2, u3);
-			if (dup) l += l;
+			if ((dup & 1) != 0) l += l;
 			f += l;
 			const __int128_t r = f / base;
 			const int32 i = int32(f - r * base);
@@ -554,7 +554,7 @@ public:
 		z3[0] = Zp3(a); for (size_t k = 1; k < size; ++k) z3[k] = Zp3(0);
 	}
 
-	void square_dup(const bool dup) override
+	void square_dup(const uint32_t dup) override
 	{
 		const size_t n_8 = _size / 8;
 

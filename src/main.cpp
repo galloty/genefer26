@@ -125,7 +125,7 @@ private:
 		std::ostringstream ss;
 		ss << "Usage: geneferv [options]  options may be specified in any order" << std::endl;
 		ss << "  -n <n>                   exponent of the GFN (5 <= n <= 17)" << std::endl;
-		ss << "  -b <b>                   base of the GFN (6 <= b <= 2000000000)" << std::endl;
+		ss << "  -b <filename>            list of the 8 bases (6 <= b <= 2000000000, one per line)" << std::endl;
 		ss << "  -q                       quick test" << std::endl;
 		ss << "  -p                       full test: a proof is generated" << std::endl;
 		ss << "  -s                       server job: convert the proof into a certificate and a 64-bit key" << std::endl;
@@ -181,7 +181,8 @@ public:
 
 		pio::print(header(args, true));
 
-		uint32_t b = 0, n = 0;
+		uint32_t n = 0;
+		std::string b_filename;
 		genefer::EMode mode = genefer::EMode::None;
 		size_t device = 0;
 		bool isCPU = false;
@@ -204,12 +205,7 @@ public:
 			}
 			if ((arg.substr(0, 2) == "-b") && (arg.substr(0, 3) != "-bo"))
 			{
-				const std::string bstr = ((arg == "-b") && (i + 1 < size)) ? args[++i] : arg.substr(2);
-				b = static_cast<uint32_t>(std::atoi(bstr.c_str()));
-				if (b % 2 != 0) throw std::runtime_error("b must be even");
-				if (b < 6) throw std::runtime_error("b < 6 is not supported");
-				if (b > 2000000000) throw std::runtime_error("b > 2000000000 is not supported");
-				if ((b == 0) || ((b & (~b + 1)) == b)) throw std::runtime_error("b must not be a power of two");
+				b_filename = ((arg == "-b") && (i + 1 < size)) ? args[++i] : arg.substr(2);
 			}
 			if (arg.substr(0, 2) == "-q")
 			{
@@ -289,26 +285,12 @@ public:
 			return;
 		}
 
-		if ((mode == genefer::EMode::None) || (b == 0) || (n == 0))
+		if ((mode == genefer::EMode::None) || (b_filename.empty()) || (n == 0))
 		{
 			// internal test
 			// const bool is_cpu = true;
-			// if (g.check(278,  8, genefer::EMode::Quick, device, is_cpu, 5) != genefer::EReturn::Success) return;
-			// if (g.check(1036, 9, genefer::EMode::Quick, device, is_cpu, 5) != genefer::EReturn::Success) return;
-			// if (g.check(824, 10, genefer::EMode::Quick, device, is_cpu, 5) != genefer::EReturn::Success) return;
-			// if (g.check(150, 11, genefer::EMode::Quick, device, is_cpu, 5) != genefer::EReturn::Success) return;
-			// if (g.check(280,  8, genefer::EMode::Quick, device, is_cpu, 5) != genefer::EReturn::Success) return;	// res64 = 299409D4B523A706
-			// if (g.check(1038, 9, genefer::EMode::Quick, device, is_cpu, 5) != genefer::EReturn::Success) return;	// res64 = 3094C4CA7735ADD3
-			// if (g.check(826, 10, genefer::EMode::Quick, device, is_cpu, 5) != genefer::EReturn::Success) return;	// res64 = 37029FAC6B01B206
-			// if (g.check(152, 11, genefer::EMode::Quick, device, is_cpu, 5) != genefer::EReturn::Success) return;	// res64 = BF2CCA847DF15730
-			// if (g.check(1000000116,  8, genefer::EMode::Quick, device, is_cpu, 5) != genefer::EReturn::Success) return;
-			// if (g.check(1000000512,  9, genefer::EMode::Quick, device, is_cpu, 5) != genefer::EReturn::Success) return;
-			// if (g.check(1000003008, 10, genefer::EMode::Quick, device, is_cpu, 5) != genefer::EReturn::Success) return;
-			// if (g.check(1000002456, 11, genefer::EMode::Quick, device, is_cpu, 5) != genefer::EReturn::Success) return;
-			// if (g.check(1000000118,  8, genefer::EMode::Quick, device, is_cpu, 5) != genefer::EReturn::Success) return;	// res64 = B868E017B86A68B5
-			// if (g.check(1000000514,  9, genefer::EMode::Quick, device, is_cpu, 5) != genefer::EReturn::Success) return;	// res64 = 769B5E36863A7C45
-			// if (g.check(1000003010, 10, genefer::EMode::Quick, device, is_cpu, 5) != genefer::EReturn::Success) return;	// res64 = 657DFDE7B538C7FC
-			// if (g.check(1000002458, 11, genefer::EMode::Quick, device, is_cpu, 5) != genefer::EReturn::Success) return;	// res64 = 56F6E0E8FF309AE2
+			// if (g.check("b8p.txt",  8, genefer::EMode::Quick, device, is_cpu, 5) != genefer::EReturn::Success) return;
+			// if (g.check("b9p.txt",  9, genefer::EMode::Quick, device, is_cpu, 5) != genefer::EReturn::Success) return;
 			// return;
 
 			pio::print(usage());
@@ -316,7 +298,7 @@ public:
 			return;
 		}
 
-		const genefer::EReturn ret = g.check(b, n, mode, device, isCPU);
+		const genefer::EReturn ret = g.check(b_filename, n, mode, device, isCPU);
 		if (b_boinc)
 		{
 			if (ret == genefer::EReturn::Success) boinc_finish(BOINC_SUCCESS);
