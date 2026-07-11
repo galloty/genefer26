@@ -11,7 +11,8 @@ Please give feedback to the authors if improvement is realized. It is distribute
 #include <cstdlib>
 #include <algorithm>
 
-#include "vint32.h"
+#include "vint.h"
+#include "alignment.h"
 #include "file.h"
 #include "pio.h"
 
@@ -19,22 +20,105 @@ class gint
 {
 private:
 	const size_t _size;
-	const vint32 _base;
-	int32_t * const _d;
+	const vuint32 _base;
+	vint32 * const _d;
 
 	enum class EState { Unknown, Balanced, Unbalanced };
 	EState _state;
+
+	class Vint64
+	{
+	private:
+		vint64 _l;
+
+		finline constexpr explicit Vint64(const vint64 & l) : _l(l) {}
+
+		finline int32_t _mod_pos(int64_t & x, const int32_t m)
+		{
+			int32_t r = int32_t(x % m); x /= m;
+			if (r < 0) { r += m; x -= 1; }
+			return r;
+		}
+
+		finline int32_t _mod_balanced(int64_t & x, const int32_t m)
+		{
+			int32_t r = int32_t(x % m); x /= m;
+			if (r > m / 2) { r -= m; x += 1; }
+			else if (r <= -(m / 2)) { r += m; x -= 1; }
+			return r;
+		}
+
+	public:
+		finline explicit Vint64() {}
+
+		finline int64_t & operator[](const size_t i) { return _l[i]; }
+
+		finline static Vint64 zero() { vint64 l; set_zero(l); return Vint64(l); }
+		finline bool is_zero() const { return cmp_zero(_l); }
+
+		finline Vint64 operator-() const { return Vint64(-_l); }
+
+		finline Vint64 & operator+=(const vint32 & rhs) { _l += __builtin_convertvector(rhs, vint64); return *this; }
+
+		finline void mod_pos(vint32 & y, const vint32 & m)
+		{
+			for (size_t i = 0; i < VSIZE; ++i) y[i] = _mod_pos(_l[i], m[i]);
+		}
+
+		finline void mod_balanced(vint32 & y, const vint32 & m)
+		{
+			for (size_t i = 0; i < VSIZE; ++i) y[i] = _mod_balanced(_l[i], m[i]);
+		}
+
+		finline void add_mod_pos(vint32 & y, const vint32 & m)
+		{
+			for (size_t i = 0; i < VSIZE; ++i)
+			{
+				if (_l[i] != 0) { _l[i] += y[i]; y[i] = _mod_pos(_l[i], m[i]); }
+			}
+		}
+
+		finline void add_mod_balanced(vint32 & y, const vint32 & m)
+		{
+			for (size_t i = 0; i < VSIZE; ++i)
+			{
+				if (_l[i] != 0) { _l[i] += y[i]; y[i] = _mod_balanced(_l[i], m[i]); }
+			}
+		}
+	};
+
+	class Vuint64
+	{
+	private:
+		vuint64 _l;
+
+		finline constexpr explicit Vuint64(const vuint64 & l) : _l(l) {}
+
+	public:
+		finline explicit Vuint64() {}
+		finline explicit Vuint64(const vint32 & rhs) : _l(__builtin_convertvector(rhs, vuint64)) {}
+		finline explicit Vuint64(const vuint32 & rhs) : _l(__builtin_convertvector(rhs, vuint64)) {}
+
+		finline const vuint64 & get() const { return _l; }
+
+		finline Vuint64 & operator+=(const Vuint64 & rhs) { _l += rhs._l; return *this; }
+		finline Vuint64 & operator*=(const Vuint64 & rhs) { _l *= rhs._l; return *this; }
+
+		finline Vuint64 operator*(const vint32 & rhs) const { return Vuint64(_l * __builtin_convertvector(rhs, vuint64)); }
+	};
 
 private:
 	static constexpr uint64_t rotl64(const uint64_t x, const uint8_t n) { return (x << n) | (x >> (-n & 63)); }
 
 public:
-	gint(const size_t size, const vint32 & base) : _size(size), _base(base), _d(new int32_t[size * VSIZE]), _state(EState::Unknown) {}
-	virtual ~gint() { delete[] _d; }
+	gint(const size_t size, const vuint32 & base) : _size(size), _base(base),
+				_d(static_cast<vint32 *>(align_new(size * sizeof(vint32), sizeof(vint32)))),
+				_state(EState::Unknown) {}
+	virtual ~gint() { align_delete(_d); }
 
 	size_t get_size() const { return _size; }
-	const vint32 & get_base() const { return _base; }
-	int32_t * data() const { return _d; }
+	const vuint32 & get_base() const { return _base; }
+	vint32 * data() const { return _d; }
 
 	void reset() { _state = EState::Unknown; }
 
@@ -43,56 +127,42 @@ public:
 		if (_state == EState::Unbalanced) return;
 		_state = EState::Unbalanced;
 
-		const size_t size = _size;
-		for (size_t j = 0; j < VSIZE; ++j)
-		{
-			const int32_t base = static_cast<int32_t>(_base[j]);
-			int32_t * const d = &_d[size * j];
+		std::cout << "unbalance" << std::endl;
 
-			int64_t f = 0;
+		const size_t size = _size;
+		const vint32 base = (vint32)_base;
+		vint32 * const d = _d;
+		Vint64 f = Vint64::zero();
+
+		for (size_t i = 0; i < size; ++i)
+		{
+			f += d[i];
+			f.mod_pos(d[i], base);
+		}
+
+		while (!f.is_zero())
+		{
+			f = -f;	// f * x^size = -f
 			for (size_t i = 0; i < size; ++i)
 			{
-				f += d[i];
-				int32_t r = static_cast<int32_t>(f % base);
-				if (r < 0) r += base;
-				d[i] = r;
-				f -= r;
-				f /= base;
+				f.add_mod_pos(d[i], base);
+				if (f.is_zero()) return;
 			}
 
-			while (f != 0)
+			bool is_zero_or_minus_one = true;
+			for (size_t j = 0; j < VSIZE; ++j)
 			{
-				f = -f;	// f * x^size = -f
-				for (size_t i = 0; i < size; ++i)
+				if (f[j] == 0) continue;
+				else if (f[j] == 1)
 				{
-					f += d[i];
-					int32_t r = static_cast<int32_t>(f % base);
-					if (r < 0) r += base;
-					d[i] = r;
-					f -= r;
-					f /= base;
-					if (f == 0) break;
+					bool is_minus_one = true; for (size_t i = 0; i < size; ++i) if (d[i][j] != 0) { is_minus_one = false; break; }
+					if (is_minus_one) { d[0][j] = -1; f[j] = 0; }	// -1 cannot be unbalanced
+					else { is_zero_or_minus_one = false; break; }
 				}
-
-				if (f == 1)
-				{
-					bool isMinusOne = true;
-					for (size_t i = 0; i < size; ++i)
-					{
-						if (d[i] != 0)
-						{
-							isMinusOne = false;
-							break;
-						}
-					}
-					if (isMinusOne)
-					{
-						// -1 cannot be unbalanced
-						d[0] = -1;
-						break;
-					}
-				}
+				else { is_zero_or_minus_one = false; break; }
 			}
+
+			if (is_zero_or_minus_one) return;
 		}
 	}
 
@@ -101,39 +171,26 @@ public:
 		if (_state == EState::Balanced) return;
 		_state = EState::Balanced;
 
-		const size_t size = _size;
-		for (size_t j = 0; j < VSIZE; ++j)
-		{
-			const int32_t base = static_cast<int32_t>(_base[j]);
-			int32_t * const d = &_d[size * j];
+		std::cout << "balance" << std::endl;
 
-			int64_t f = 0;
+		const size_t size = _size;
+		const vint32 base = (vint32)_base;
+		vint32 * const d = _d;
+		Vint64 f = Vint64::zero();
+
+		for (size_t i = 0; i < size; ++i)
+		{
+			f += d[i];
+			f.mod_balanced(d[i], base);
+		}
+
+		while (!f.is_zero())
+		{
+			f = -f;	// f * x^size = -f
 			for (size_t i = 0; i < size; ++i)
 			{
-				f += d[i];
-				int32_t r = static_cast<int32_t>(f % base);
-				if (r > base / 2) r -= base;
-				if (r <= -base / 2) r += base;
-				d[i] = r;
-				f -= r;
-				f /= base;
-			}
-
-			while (f != 0)
-			{
-				f = -f;	// f * x^size = -f
-
-				for (size_t i = 0; i < size; ++i)
-				{
-					f += d[i];
-					int32_t r = static_cast<int32_t>(f % base);
-					if (r > base / 2) r -= base;
-					if (r <= -base / 2) r += base;
-					d[i] = r;
-					f -= r;
-					f /= base;
-					if (f == 0) break;
-				}
+				f.add_mod_balanced(d[i], base);
+				if (f.is_zero()) return;
 			}
 		}
 	}
@@ -141,9 +198,9 @@ public:
 	void read(file & cFile)
 	{
 		uint32_t size; cFile.read(reinterpret_cast<char *>(&size), sizeof(size));
-		vint32 base; cFile.read(reinterpret_cast<char *>(&base), sizeof(base));
-		if ((size_t(size) != _size) || !is_equal(base, _base)) cFile.error("bad file");
-		cFile.read(reinterpret_cast<char *>(_d), _size * VSIZE * sizeof(int32_t));
+		vuint32 base; cFile.read(reinterpret_cast<char *>(&base), sizeof(base));
+		if ((size_t(size) != _size) || !cmp(base, _base)) cFile.error("bad file");
+		cFile.read(reinterpret_cast<char *>(_d), _size * sizeof(vint32));
 		_state = EState::Unbalanced;
 	}
 
@@ -153,44 +210,44 @@ public:
 		const uint32_t size = static_cast<uint32_t>(_size);
 		cFile.write(reinterpret_cast<const char *>(&size), sizeof(size));
 		cFile.write(reinterpret_cast<const char *>(&_base), sizeof(_base));
-		cFile.write(reinterpret_cast<const char *>(_d), _size * VSIZE * sizeof(int32_t));
+		cFile.write(reinterpret_cast<const char *>(_d), _size * sizeof(vint32));
 	}
 
-	void isOne(bool b[VSIZE], uint64_t res64[VSIZE])
+	void is_one(bool b[VSIZE], vuint64 & res64)
 	{
 		unbalance();
+
 		const size_t size = _size;
-		for (size_t j = 0; j < VSIZE; ++j)
+		const vuint32 base = _base;
+		const vint32 * const d = _d;
+
+		std::cout << "toto" << std::endl;
+
+		Vuint64 r64 = Vuint64(d[0]), bi = Vuint64(base);
+		vint32 one; one = (d[0] == 1);
+		for (size_t i = 1; i < size; ++i)
 		{
-			const uint32_t base = _base[j];
-			const int32_t * const d = &_d[size * j];
-
-			bool one = (d[0] == 1);
-			if (one) for (size_t i = 1; i < size; ++i) one &= (d[i] == 0);
-			b[j] = one;
-
-			uint64_t r64 = 0, b = 1;
-			for (size_t i = 0; i < size; ++i)
-			{
-				r64 += static_cast<uint32_t>(d[i]) * b;
-				b *= base;
-			}
-			res64[j] = r64;
+			r64 += bi * d[i];
+			bi *= Vuint64(base);
+			one &= (d[i] == 0);
 		}
+		res64 = r64.get();
+
+		for (size_t j = 0; j < VSIZE; ++j) b[j] = (one[j] == -1);
 	}
 
 	uint64_t gethash64()
 	{
 		unbalance();
 		const size_t size = _size;
+		const vint32 * const d = _d;
 		uint64_t hash = 0;
 		for (size_t j = 0; j < VSIZE; ++j)
 		{
-			const int32_t * const d = &_d[size * j];
 			bool is_zero = true;
 			for (size_t i = 0; i < size; ++i)
 			{
-				const uint32_t a_i = static_cast<uint32_t>(d[i]);
+				const uint32_t a_i = static_cast<uint32_t>(d[i][j]);
 				hash += a_i;
 				hash ^= rotl64(a_i + 0xc39d8a0552b073e8ull, (17 * static_cast<uint64_t>(a_i) + 5) % 64);
 				is_zero &= (a_i == 0);

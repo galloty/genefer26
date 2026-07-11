@@ -14,94 +14,20 @@ Please give feedback to the authors if improvement is realized. It is distribute
 
 #include "transform.h"
 #include "alignment.h"
+#include "vdouble.h"
 
-#define finline	__attribute__((always_inline))
+#ifndef finline
+#define finline	__attribute__((always_inline)) inline
+#endif
 
 #define CHECK_ERROR		true
 
 namespace transformCPU_namespace
 {
 
-typedef double	double_2 __attribute__ ((vector_size(2 * sizeof(double))));
-typedef double	double_4 __attribute__ ((vector_size(4 * sizeof(double))));
-typedef double	double_8 __attribute__ ((vector_size(8 * sizeof(double))));
-
-typedef union
-{
-	double_8	d8;
-	double_4	d4[2];
-	double_2	d2[4];
-} double_8u;
-
 #define vmadd(x, y, z)	(x * y + z)
 #define vnmadd(x, y, z) (z - x * y)
-#define vmsub(x, y, z) (x * y - z)
-
-inline bool cmp_zero(const double_8 & x)
-{
-#if defined(__AVX512F__)
-	return (_mm512_cmp_pd_mask(x, _mm512_setzero_pd(), _CMP_NEQ_OQ) == 0);
-#elif defined(__AVX__)
-	double_8u xu; xu.d8 = x;
-	bool b = true;
-	for (size_t i = 0; i < 2; ++i) b &= (_mm256_movemask_pd(_mm256_cmp_pd(xu.d4[i], _mm256_setzero_pd(), _CMP_NEQ_OQ)) == 0);
-	return b;
-#else
-	double_8u xu; xu.d8 = x;
-	bool b = true;
-	for (size_t i = 0; i < 4; ++i) b &= (_mm_movemask_pd(_mm_cmpneq_pd(xu.d2[i], _mm_setzero_pd())) == 0);
-	return b;
-#endif
-}
-
-inline void vround(double_8 & y, const double_8 & x)
-{
-#if defined(__AVX512F__)
-	y = _mm512_roundscale_pd(x, _MM_FROUND_TO_NEAREST_INT | _MM_FROUND_NO_EXC);
-#elif defined(__AVX__)
-	double_8u xu, r; xu.d8 = x;
-	for (size_t i = 0; i < 2; ++i) r.d4[i] = _mm256_round_pd(xu.d4[i], _MM_FROUND_TO_NEAREST_INT | _MM_FROUND_NO_EXC);
-	y = r.d8;
-#else
-	double_8u xu, r; xu.d8 = x;
-	for (size_t i = 0; i < 4; ++i) r.d2[i] = _mm_round_pd(xu.d2[i], _MM_FROUND_TO_NEAREST_INT | _MM_FROUND_NO_EXC);
-	y = r.d8;
-#endif
-}
-
-inline void vabs(double_8 & y, const double_8 & x)
-{
-#if defined(__AVX512F__)
-	y = _mm512_abs_pd(x);
-#elif defined(__AVX__)
-	const long long m = (long long)(uint64_t(1) << 63);
-	const __m256d mask = _mm256_castsi256_pd((__m256i){m, m, m, m});
-	double_8u xu, r; xu.d8 = x;
-	for (size_t i = 0; i < 2; ++i) r.d4[i] = _mm256_andnot_pd(mask, xu.d4[i]);
-	y = r.d8;
-#else
-	const long long m = (long long)(uint64_t(1) << 63);
-	const __m128d mask = _mm_castsi128_pd((__m128i){m, m});
-	double_8u xu, r; xu.d8 = x;
-	for (size_t i = 0; i < 4; ++i) r.d2[i] = _mm_andnot_pd(mask, xu.d2[i]);
-	y = r.d8;
-#endif
-}
-
-inline void vmax(double_8 & z, const double_8 & x, const double_8 & y)
-{
-#if defined(__AVX512F__)
-	z = _mm512_max_pd(x, y);
-#elif defined(__AVX__)
-	double_8u xu, yu, r; xu.d8 = x; yu.d8 = y;
-	for (size_t i = 0; i < 2; ++i) r.d4[i] = _mm256_max_pd(xu.d4[i], yu.d4[i]);
-	z = r.d8;
-#else
-	double_8u xu, yu, r; xu.d8 = x; yu.d8 = y;
-	for (size_t i = 0; i < 4; ++i) r.d2[i] = _mm_max_pd(xu.d2[i], yu.d2[i]);
-	z = r.d8;
-#endif
-}
+#define vmsub(x, y, z)  (x * y - z)
 
 class TwiddleFactor
 {
@@ -123,51 +49,37 @@ public:
 	static TwiddleFactor TF_1_16() { TwiddleFactor r; r._z = double_2{0.92387953251128675612818318939678828682, 0.41421356237309504880168872420969807857}; return r; }
 };
 
-using VScalar = double_8;
-
 class VComplex
 {
 private:
 	static constexpr double _csqrt2_2 = 0.70710678118654752440084436210484903929;
-	VScalar _re, _im;
-
-	finline constexpr explicit VComplex(const VScalar & re, const VScalar & im) : _re(re), _im(im) {}
+	vdouble _re, _im;
 
 public:
 	finline explicit VComplex() {}
-	finline explicit VComplex(const double f) /*: _re{f}, _im{0}*/ { for (size_t i = 0; i < VSIZE; ++i) { _re[i] = f; _im[i] = 0; } }
-	finline explicit VComplex(const vint32 & b) { for (size_t i = 0; i < VSIZE; ++i) { _re[i] = b[i]; _im[i] = 1.0 / b[i]; } }
+	finline constexpr explicit VComplex(const vdouble & re, const vdouble & im) : _re(re), _im(im) {}
+	finline explicit VComplex(const double f) { set1(_re, f); set1(_im, 0); }
+	finline explicit VComplex(const vuint32 & b) { int_to_double(_re, (vint32)b); _im = 1 / _re; }
 
-	finline double real(const size_t index) const { return _re[index]; }
-	finline double imag(const size_t index) const { return _im[index]; }
+	finline const vdouble & real() const { return _re; }
+	finline const vdouble & imag() const { return _im; }
 
-	finline const VScalar & re() const { return _re; }
-	finline const VScalar & im() const { return _im; }
-
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wuninitialized"
-#if !defined(__clang__)
-#pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
-#endif
-	finline void set(const size_t index, const double re, const double im) { _re[index] = re; _im[index] = im; }
-#pragma GCC diagnostic pop
-
-	finline bool is_zero() const { return (cmp_zero(_re) && cmp_zero(_im)); }
+	finline bool is_zero() const { return (cmp_zero(_re) & cmp_zero(_im)); }
 
 	finline VComplex & operator+=(const VComplex & rhs) { _re += rhs._re; _im += rhs._im; return *this; }
 	finline VComplex & operator-=(const VComplex & rhs) { _re -= rhs._re; _im -= rhs._im; return *this; }
 	finline VComplex & operator*=(const double rhs) { _re *= rhs; _im *= rhs; return *this; }
-	finline VComplex & operator*=(const VScalar & rhs) { _re *= rhs; _im *= rhs; return *this; }
+	finline VComplex & operator*=(const vdouble & rhs) { _re *= rhs; _im *= rhs; return *this; }
 
 	finline VComplex operator+(const VComplex & rhs) const { return VComplex(_re + rhs._re, _im + rhs._im); }
 	finline VComplex operator-(const VComplex & rhs) const { return VComplex(_re - rhs._re, _im - rhs._im); }
 	finline VComplex operator*(const double rhs) const { return VComplex(_re * rhs, _im * rhs); }
-	finline VComplex operator*(const VScalar & rhs) const { return VComplex(_re * rhs, _im * rhs); }
+	finline VComplex operator*(const vdouble & rhs) const { return VComplex(_re * rhs, _im * rhs); }
 	finline VComplex addi(const VComplex & rhs) const { return VComplex(_re - rhs._im, _im + rhs._re); }
 	finline VComplex subi(const VComplex & rhs) const { return VComplex(_re + rhs._im, _im - rhs._re); }
 	// finline VComplex muli() const { return VComplex(-_im, _re); }
 
-	finline VComplex submul(const VComplex & rhs, const VScalar & c) const { return VComplex(vnmadd(rhs._re, c, _re), vnmadd(rhs._im, c, _im)); }
+	finline VComplex submul(const VComplex & rhs, const vdouble & c) const { return VComplex(vnmadd(rhs._re, c, _re), vnmadd(rhs._im, c, _im)); }
 
 	finline VComplex mulW_0() const { return VComplex((_re - _im) * _csqrt2_2, (_im + _re) * _csqrt2_2); }
 	finline VComplex mulWconj_0() const { return VComplex((_re + _im) * _csqrt2_2, (_im - _re) * _csqrt2_2); }
@@ -188,7 +100,7 @@ public:
 		return VComplex(vmsub(_re, tg, _im) * cs, vmadd(_im, tg, _re) * cs);
 	}
 
-	finline VComplex sqr() const { const VScalar t = _re * _im; return VComplex(_re * _re - _im * _im, t + t); }
+	finline VComplex sqr() const { const vdouble t = _re * _im; return VComplex(_re * _re - _im * _im, t + t); }
 	finline VComplex mul(const VComplex & rhs) const { return VComplex(_re * rhs._re - _im * rhs._im, _re * rhs._im + _im * rhs._re); }
 
 	finline VComplex round() const { VComplex r; vround(r._re, _re); vround(r._im, _im); return r; }
@@ -218,17 +130,17 @@ public:
 		_l = rhs - h; _h = h;
 	}
 
-	finline bool is_zero() const { return (_l.is_zero() && _h.is_zero()); }
+	finline bool is_zero() const { return (_l.is_zero() & _h.is_zero()); }
 
 	finline VComplexPair & operator+=(const VComplexPair & rhs) { _l += rhs._l; _h += rhs._h; return *this; }
 	finline VComplexPair & operator-=(const VComplexPair & rhs) { _l -= rhs._l; _h -= rhs._h; return *this; }
 	finline VComplexPair & operator*=(const double rhs) { _l *= rhs; _h *= rhs; return *this; }
-	finline VComplexPair & operator*=(const VScalar & rhs) { _l *= rhs; _h *= rhs; return *this; }
+	finline VComplexPair & operator*=(const vdouble & rhs) { _l *= rhs; _h *= rhs; return *this; }
 
 	finline VComplexPair operator+(const VComplexPair & rhs) const { return VComplexPair(_l + rhs._l, _h + rhs._h); }
 	finline VComplexPair operator-(const VComplexPair & rhs) const { return VComplexPair(_l - rhs._l, _h - rhs._h); }
 	finline VComplexPair operator*(const double rhs) const { return VComplexPair(_l * rhs, _h * rhs); }
-	finline VComplexPair operator*(const VScalar rhs) const { return VComplexPair(_l * rhs, _h * rhs); }
+	finline VComplexPair operator*(const vdouble rhs) const { return VComplexPair(_l * rhs, _h * rhs); }
 	finline VComplexPair addi(const VComplexPair & rhs) const { return VComplexPair(_l.addi(rhs._l), _h.addi(rhs._h)); }
 	finline VComplexPair subi(const VComplexPair & rhs) const { return VComplexPair(_l.subi(rhs._l), _h.subi(rhs._h)); }
 	// finline VComplexPair muli() const { return VComplexPair(_l.muli(), _h.muli()); }
@@ -254,14 +166,14 @@ public:
 
 	finline VComplex mod(const VComplex & m)
 	{
-		const VComplex h_m = (_h * m.im()).round(), rh_m = _h.submul(h_m, m.re());
+		const VComplex h_m = (_h * m.imag()).round(), rh_m = _h.submul(h_m, m.real());
 		_h = h_m;
 
-		const VComplex l_m = (_l * m.im()).round(), rl_m = _l.submul(l_m, m.re()) + rh_m * split;
-		const VComplex rl_m2 = (rl_m * m.im()).round();
+		const VComplex l_m = (_l * m.imag()).round(), rl_m = _l.submul(l_m, m.real()) + rh_m * split;
+		const VComplex rl_m2 = (rl_m * m.imag()).round();
 		_l = l_m + rl_m2;
 
-		return rl_m.submul(rl_m2, m.re());
+		return rl_m.submul(rl_m2, m.real());
 	}
 
 private:
@@ -468,7 +380,7 @@ public:
 	}
 
 	finline static void backward4_0_carry(VComplexPair * const z, const size_t m, VComplexPair f[4],
-		const VComplex & base, const double t2_n, const VScalar & g
+		const VComplex & base, const double t2_n, const vdouble & g
 #if defined(CHECK_ERROR)
 		, VComplexPair & err
 #endif
@@ -525,11 +437,11 @@ private:
 	double _error;
 
 public:
-	transformCPU(const vint32 & b, const uint32_t n, const size_t num_regs) : transform(b, n, EKind::CPU),
+	transformCPU(const vuint32 & b, const uint32_t n, const size_t num_regs) : transform(b, n, EKind::CPU),
 		_num_regs(num_regs), _base(b),
 		_z(static_cast<VComplexPair *>(align_new(num_regs * N * sizeof(VComplexPair), 2 * 1024 * 1024))),
-		_zp(static_cast<VComplexPair *>(align_new(N * sizeof(VComplexPair), 1024))),
-		_w(static_cast<TwiddleFactor *>(align_new(N / 2 * sizeof(TwiddleFactor), 1024)))
+		_zp(static_cast<VComplexPair *>(align_new(N * sizeof(VComplexPair), sizeof(VComplexPair)))),
+		_w(static_cast<TwiddleFactor *>(align_new(N / 2 * sizeof(TwiddleFactor), sizeof(TwiddleFactor))))
 	{
 		TwiddleFactor * const w = _w;
 		for (size_t s = 4; s < N / 2; s *= 2)
@@ -551,37 +463,27 @@ public:
 	}
 
 protected:
-	void getZi(int32_t * const zi) const override
+	void getZi(vint32 * const d) const override
 	{
 		const VComplexPair * const z = _z;
 
-		for (size_t j = 0; j < VSIZE; ++j)
+		for (size_t k = 0; k < N; ++k)
 		{
-			int32_t * const d = &zi[2 * N * j];
-
-			for (size_t k = 0; k < N; ++k)
-			{
-				const VComplex zk = z[k].get();
-				d[k + 0 * N] = std::lround(zk.real(j));
-				d[k + 1 * N] = std::lround(zk.imag(j));
-			}
+			const VComplex zk = z[k].get();
+			double_to_int(d[k + 0 * N], zk.real());
+			double_to_int(d[k + 1 * N], zk.imag());
 		}
 	}
 
-	void setZi(const int32_t * const zi) override
+	void setZi(const vint32 * const d) override
 	{
 		VComplexPair * const z = _z;
 
-		for (size_t j = 0; j < VSIZE; ++j)
+		for (size_t k = 0; k < N; ++k)
 		{
-			const int32_t * const d = &zi[2 * N * j];
-
-			for (size_t k = 0; k < N; ++k)
-			{
-				VComplex zk = z[k].get();
-				zk.set(j, static_cast<double>(d[k + 0 * N]), static_cast<double>(d[k + 1 * N]));
-				z[k].set(zk);
-			}
+			vdouble re; int_to_double(re, d[k + 0 * N]);
+			vdouble im; int_to_double(im, d[k + 1 * N]);
+			z[k].set(VComplex(re, im));
 		}
 	}
 
@@ -767,7 +669,7 @@ private:
 	{
 		VComplexPair f[4]; for (size_t i = 0; i < 4; ++i) f[i] = VComplexPair(0.0);
 
-		VScalar g; for (size_t j = 0; j < VSIZE; ++j) g[j] = ((dup & (1u << j)) != 0) ? 2 : 1;
+		vdouble g; for (size_t j = 0; j < VSIZE; ++j) g[j] = ((dup & (1u << j)) != 0) ? 2 : 1;
 
 #if defined(CHECK_ERROR)
 		VComplexPair err = VComplexPair(0.0);
@@ -879,7 +781,7 @@ public:
 	double get_error() const override { return _error; }
 };
 
-inline transform * create_transformCPU(const vint32 & b, const uint32_t n, const size_t num_regs)
+inline transform * create_transformCPU(const vuint32 & b, const uint32_t n, const size_t num_regs)
 {
 	transform * ptransform = nullptr;
 	if      (n ==  5) ptransform = new transformCPU<(1 <<  4)>(b, n, num_regs);

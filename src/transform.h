@@ -11,7 +11,7 @@ Please give feedback to the authors if improvement is realized. It is distribute
 #include <string>
 #include <sstream>
 
-#include "vint32.h"
+#include "vint.h"
 #include "gint.h"
 #include "file.h"
 
@@ -21,14 +21,14 @@ protected:
 	enum class EKind { GPU, CPU };
 
 private:
-	const vint32 _b;
+	const vuint32 _b;
 	const uint32_t _n;
 	const EKind _kind;
 	std::string _type;
 
 protected:
-	virtual void getZi(int32_t * const zi) const = 0;
-	virtual void setZi(const int32_t * const zi) = 0;
+	virtual void getZi(vint32 * const zi) const = 0;
+	virtual void setZi(const vint32 * const zi) = 0;
 
 public:
 	virtual void set(const uint32_t a) = 0;					// r_0 = a
@@ -45,20 +45,20 @@ public:
 	virtual double get_error() const { return 0; }
 
 private:
-	static transform * create_ocl(const vint32 & b, const uint32_t n, const size_t num_regs, const size_t device,
+	static transform * create_ocl(const vuint32 & b, const uint32_t n, const size_t num_regs, const size_t device,
 								  const bool is_boinc, const bool get_boinc_ids);
-	static transform * create_avx10(const vint32 & b, const uint32_t n, const size_t num_regs);
-	static transform * create_512(const vint32 & b, const uint32_t n, const size_t num_regs);
-	static transform * create_fma(const vint32 & b, const uint32_t n, const size_t num_regs);
-	static transform * create_avx(const vint32 & b, const uint32_t n, const size_t num_regs);
-	static transform * create_sse4(const vint32 & b, const uint32_t n, const size_t num_regs);
+	static transform * create_avx10(const vuint32 & b, const uint32_t n, const size_t num_regs);
+	static transform * create_512(const vuint32 & b, const uint32_t n, const size_t num_regs);
+	static transform * create_fma(const vuint32 & b, const uint32_t n, const size_t num_regs);
+	static transform * create_avx(const vuint32 & b, const uint32_t n, const size_t num_regs);
+	static transform * create_sse4(const vuint32 & b, const uint32_t n, const size_t num_regs);
 
 public:
-	transform(const vint32 & b, const uint32_t n, const EKind kind) : _b(b), _n(n), _kind(kind) {}
+	transform(const vuint32 & b, const uint32_t n, const EKind kind) : _b(b), _n(n), _kind(kind) {}
 	virtual ~transform() {}
 
 protected:
-	const vint32 & get_b() const { return _b; }
+	const vuint32 & get_b() const { return _b; }
 	uint32_t get_n() const { return _n; }
 	EKind get_kind() const { return _kind; }
 	void set_type(const std::string & type) { _type = type; }
@@ -71,7 +71,7 @@ protected:
 	}
 
 public:
-	static transform * create_gpu(const vint32 & b, const uint32_t n, const size_t num_regs, const size_t device,
+	static transform * create_gpu(const vuint32 & b, const uint32_t n, const size_t num_regs, const size_t device,
 								  const bool isBoinc, const bool get_boinc_ids)
 	{
 		transform * const ptransform = transform::create_ocl(b, n, num_regs, device, isBoinc, get_boinc_ids);
@@ -80,7 +80,7 @@ public:
 		return ptransform;
 	}
 
-	static transform * create_cpu(const vint32 & b, const uint32_t n, const size_t num_regs)
+	static transform * create_cpu(const vuint32 & b, const uint32_t n, const size_t num_regs)
 	{
 		transform * ptransform = nullptr;
 
@@ -122,14 +122,14 @@ public:
 
 	void getInt(gint & g) const
 	{
-		if ((g.get_size() != (size_t(1) << _n)) || !is_equal(g.get_base(), _b)) throw std::runtime_error("getInt");
+		if ((g.get_size() != (size_t(1) << _n)) || !cmp(g.get_base(), _b)) throw std::runtime_error("getInt");
 		getZi(g.data());
 		g.reset();
 	}
 
 	void setInt(gint & g)
 	{
-		if ((g.get_size() != (size_t(1) << _n)) || !is_equal(g.get_base(), _b)) throw std::runtime_error("setInt");
+		if ((g.get_size() != (size_t(1) << _n)) || !cmp(g.get_base(), _b)) throw std::runtime_error("setInt");
 		g.balance();
 		setZi(g.data());
 	}

@@ -21,7 +21,7 @@ Please give feedback to the authors if improvement is realized. It is distribute
 
 #include <gmp.h>
 
-#include "vint32.h"
+#include "vint.h"
 #include "pio.h"
 #include "transform.h"
 #include "file.h"
@@ -82,7 +82,7 @@ public:
 	static size_t display_devices() { return transform::display_devices(); }
 
 private:
-	void create_transform_GPU(const vint32 & b, const uint32_t n, const size_t num_regs, const size_t device,
+	void create_transform_GPU(const vuint32 & b, const uint32_t n, const size_t num_regs, const size_t device,
 							const bool verbose = true, const bool full = true)
 	{
 		delete_transform();
@@ -98,7 +98,7 @@ private:
 		}
 	}
 
-	void create_transform_CPU(const vint32 & b, const uint32_t n, const size_t num_regs, const bool verbose = true, const bool full = true)
+	void create_transform_CPU(const vuint32 & b, const uint32_t n, const size_t num_regs, const bool verbose = true, const bool full = true)
 	{
 		delete_transform();
 
@@ -144,14 +144,13 @@ private:
 		return ss.str();
 	}
 
-	static std::string gfn_status(const bool isPrp, const uint64_t pkey, const uint64_t ckey, const uint64_t res64, const double error, const double time)
+	static std::string gfn_status(const bool isPrp, const uint64_t pkey, const uint64_t ckey, const uint64_t res64)
 	{
 		std::ostringstream ss; ss << " is ";
 		if (isPrp) ss << "a probable prime"; else ss << "composite, res64 = " << uint64toString(res64);
 		if (pkey != 0) ss << ", pkey = " << uint64toString(pkey);
 		if (ckey != 0) ss << ", ckey = " << uint64toString(ckey);
-		if (error != 0) ss << ", error = " << std::setprecision(4) << error;
-		ss << ", time = " << timer::format_time(time) << ".";
+		ss << ".";
 		return ss.str();
 	}
 
@@ -180,7 +179,7 @@ private:
 
 	static void clearline() { pio::display("                                                            \r"); }
 
-	static void parse_b(const std::string & b_filename, vint32 & b)
+	static void parse_b(const std::string & b_filename, vuint32 & b)
 	{
 		std::ifstream file(b_filename);
 		if (!file.is_open()) pio::error("cannot open input file", true);
@@ -627,7 +626,7 @@ private:
 		return EReturn::Success;
 	}
 
-	EReturn quick(const mpz_t exponent[VSIZE], double & test_time, double & valid_time, bool is_prp[VSIZE], uint64_t res64[VSIZE])
+	EReturn quick(const mpz_t exponent[VSIZE], double & test_time, double & valid_time, bool is_prp[VSIZE], vuint64 & res64)
 	{
 		size_t esize = 0; for (size_t j = 0; j < VSIZE; ++j) esize = std::max(esize, mpz_sizeinbase(exponent[j], 2));
 		const int B_GL = B_GerbiczLi(esize);
@@ -637,13 +636,13 @@ private:
 		{
 			gint & gi = *_gi;
 			_transform->getInt(gi);
-			gi.isOne(is_prp, res64);
+			gi.is_one(is_prp, res64);
 		}
 		return EReturn::Success;	//GL(exponent, B_GL, valid_time);
 	}
 
 	EReturn proof(const mpz_t exponent[VSIZE], const int depth, double & test_time, double & valid_time, double & proof_time,
-				  bool is_prp[VSIZE], uint64_t & pkey, uint64_t res64[VSIZE])
+				  bool is_prp[VSIZE], uint64_t & pkey, vuint64 & res64)
 	{
 		size_t esize = 0; for (size_t j = 0; j < VSIZE; ++j) esize = std::max(esize, mpz_sizeinbase(exponent[j], 2));
 		const int B_GL = B_GerbiczLi(esize), B_PL = B_PietrzakLi(esize, depth);
@@ -653,7 +652,7 @@ private:
 		{
 			gint & gi = *_gi;
 			_transform->getInt(gi);
-			gi.isOne(is_prp, res64);
+			gi.is_one(is_prp, res64);
 		}
 		const EReturn rGL = GL(exponent, B_GL, valid_time);
 		if (rGL != EReturn::Success) return rGL;
@@ -662,7 +661,7 @@ private:
 
 	static uint32_t rand32(const uint32_t rmin, const uint32_t rmax) { return (static_cast<uint32_t>(std::rand()) % (rmax - rmin)) + rmin; }
 
-	EReturn server(const mpz_t exponent[VSIZE], double & time, bool is_prp[VSIZE], uint64_t & pkey, uint64_t & ckey, uint64_t res64[VSIZE])
+	EReturn server(const mpz_t exponent[VSIZE], double & time, bool is_prp[VSIZE], uint64_t & pkey, uint64_t & ckey, vuint64 & res64)
 	{
 		transform * const ptransform = _transform;
 		gint & gi = *_gi;
@@ -681,7 +680,7 @@ private:
 
 		// v1 = mu[0]^w[0], v1: reg = 1
 		gi.read(proof_file);
-		gi.isOne(is_prp, res64);
+		gi.is_one(is_prp, res64);
 		const uint32_t q = gi.gethash32();
 		mpz_set_ui(w[0], q);
 		ptransform->setInt(gi);
@@ -1001,7 +1000,7 @@ private:
 		const size_t num_regs = 3;
 
 		const uint32_t b = bm[m - 12], n = m;
-		vint32 vb; for (size_t j = 0; j < VSIZE; ++j) vb[j] = b;
+		vuint32 vb; for (size_t j = 0; j < VSIZE; ++j) vb[j] = b;
 
 		if (isCPU) create_transform_CPU(vb, n, num_regs, m == 16, false);
 		else create_transform_GPU(vb, n, num_regs, device, m == 16, false);
@@ -1018,7 +1017,7 @@ private:
 			mpz_ui_pow_ui(exponent[j], 6, 50);
 		}
 
-		double testTime = 0, validTime = 0; bool is_prp[VSIZE]; uint64_t res64[VSIZE];
+		double testTime = 0, validTime = 0; bool is_prp[VSIZE]; vuint64 res64;
 		const EReturn qret = quick(exponent, testTime, validTime, is_prp, res64);
 		for (size_t j = 0; j < VSIZE; ++j) mpz_clear(exponent[j]);
 		clear_checkpoint();
@@ -1080,7 +1079,7 @@ public:
 	{
 		_n = n;
 
-		vint32 b; parse_b(b_filename, b);
+		vuint32 b; parse_b(b_filename, b);
 		uint32_t b_min = uint32_t(-1), b_max = 0;
 		for (size_t i = 0; i < VSIZE; ++i) { b_min = std::min(b_min, b[i]); b_max = std::max(b_max, b[i]); }
 		const uint32_t b_TODO = b[0];
@@ -1142,24 +1141,30 @@ public:
 
 			if (mode == EMode::Quick)
 			{
-				double testTime = 0, validTime = 0; bool is_prp[VSIZE]; uint64_t res64[VSIZE];
+				double testTime = 0, validTime = 0; bool is_prp[VSIZE]; vuint64 res64;
 				success = quick(exponent, testTime, validTime, is_prp, res64);
 				const double error = _transform->get_error();
 				clearline();
-				for (size_t j = 0; j < VSIZE; ++j)
+				std::ostringstream ss;
+				if (success == EReturn::Failed) ss << "Validation failed!";
+				else if (success == EReturn::Aborted) ss << "Test was aborted.";
+				if (success == EReturn::Success)
 				{
-					std::ostringstream ss; ss << gfn(b[j], n);
-					if (success == EReturn::Success) ss << gfn_status(is_prp[j], 0, 0, res64[j], error, testTime + validTime);
-					else if (success == EReturn::Failed) ss << ": validation failed!";
-					else ss << ": terminated.";
-					ss << std::endl; pio::print(ss.str());
+					ss << "Test succeeded";
+					if (error != 0) ss << ", error = " << std::setprecision(4) << error;
+					ss << ", time = " << timer::format_time(testTime + validTime) << "." << std::endl;;
+					for (size_t j = 0; j < VSIZE; ++j)
+					{
+						ss << gfn(b[j], n) << gfn_status(is_prp[j], 0, 0, res64[j]) << std::endl;
+					}
+					pio::print(ss.str());
 					if ((success == EReturn::Success) || (!_is_boinc && (success == EReturn::Failed))) pio::result(ss.str());
 				}
 				if (!_is_boinc && (success != EReturn::Aborted)) clear_checkpoint();
 			}
 			else if (mode == EMode::Proof)
 			{
-				double testTime = 0, validTime = 0, proofTime = 0; bool is_prp[VSIZE]; uint64_t pkey = 0; uint64_t res64[VSIZE];
+				double testTime = 0, validTime = 0, proofTime = 0; bool is_prp[VSIZE]; uint64_t pkey = 0; vuint64 res64;
 				success = proof(exponent, depth, testTime, validTime, proofTime, is_prp, pkey, res64);
 				const double error = _transform->get_error();
 				const double time = testTime + validTime + proofTime;
@@ -1178,7 +1183,7 @@ public:
 				{
 					for (size_t j = 0; j < VSIZE; ++j)
 					{
-						std::ostringstream ssr; ssr << gfn(b[j], n) << gfn_status(is_prp[j], pkey, 0, res64[j], error, time) << std::endl;
+						std::ostringstream ssr; ssr << gfn(b[j], n) << gfn_status(is_prp[j], pkey, 0, res64[j]/*, error, time*/) << std::endl;
 						pio::result(ssr.str());
 					}
 					if (!_is_boinc)
@@ -1190,13 +1195,13 @@ public:
 			}
 			else if (mode == EMode::Server)
 			{
-				double time = 0; bool is_prp[VSIZE]; uint64_t pkey = 0, ckey = 0; uint64_t res64[VSIZE];
+				double time = 0; bool is_prp[VSIZE]; uint64_t pkey = 0, ckey = 0; vuint64 res64;
 				success = server(exponent, time, is_prp, pkey, ckey, res64);
 				const double error = _transform->get_error();
 				for (size_t j = 0; j < VSIZE; ++j)
 				{
 					std::ostringstream ss; ss << gfn(b[j], n);
-					if (success == EReturn::Success) ss << gfn_status(is_prp[j], pkey, ckey, res64[j], error, time);
+					if (success == EReturn::Success) ss << gfn_status(is_prp[j], pkey, ckey, res64[j]/*, error, time*/);
 					else if (success == EReturn::Failed) ss << ": generation failed!";
 					else ss << ": terminated.";
 					ss << std::endl; pio::print(ss.str());
