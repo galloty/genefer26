@@ -33,25 +33,26 @@ private:
 
 		finline constexpr explicit Vint64(const vint64 & l) : _l(l) {}
 
-		finline int32_t _mod_pos(int64_t & x, const int32_t m)
+		finline int32_t _mod_pos(const size_t i, const int32_t m)
 		{
-			int32_t r = int32_t(x % m); x /= m;
-			if (r < 0) { r += m; x -= 1; }
+			int32_t r = int32_t(_l[i] % m); _l[i] /= m;
+			if (r < 0) { r += m; _l[i] -= 1; }
 			return r;
 		}
 
-		finline int32_t _mod_balanced(int64_t & x, const int32_t m)
+		finline int32_t _mod_balanced(const size_t i, const int32_t m)
 		{
-			int32_t r = int32_t(x % m); x /= m;
-			if (r > m / 2) { r -= m; x += 1; }
-			else if (r <= -(m / 2)) { r += m; x -= 1; }
+			int32_t r = int32_t(_l[i] % m); _l[i] /= m;
+			if (r > m / 2) { r -= m; _l[i] += 1; }
+			else if (r <= -(m / 2)) { r += m; _l[i] -= 1; }
 			return r;
 		}
 
 	public:
 		finline explicit Vint64() {}
 
-		finline int64_t & operator[](const size_t i) { return _l[i]; }
+		finline int64_t operator[](const size_t i) const { return _l[i]; }
+		finline void set(const size_t i, const int64_t x) { _l[i] = x; }
 
 		finline static Vint64 zero() { vint64 l; set_zero(l); return Vint64(l); }
 		finline bool is_zero() const { return cmp_zero(_l); }
@@ -62,19 +63,19 @@ private:
 
 		finline void mod_pos(vint32 & y, const vint32 & m)
 		{
-			for (size_t i = 0; i < VSIZE; ++i) y[i] = _mod_pos(_l[i], m[i]);
+			for (size_t i = 0; i < VSIZE; ++i) y[i] = _mod_pos(i, m[i]);
 		}
 
 		finline void mod_balanced(vint32 & y, const vint32 & m)
 		{
-			for (size_t i = 0; i < VSIZE; ++i) y[i] = _mod_balanced(_l[i], m[i]);
+			for (size_t i = 0; i < VSIZE; ++i) y[i] = _mod_balanced(i, m[i]);
 		}
 
 		finline void add_mod_pos(vint32 & y, const vint32 & m)
 		{
 			for (size_t i = 0; i < VSIZE; ++i)
 			{
-				if (_l[i] != 0) { _l[i] += y[i]; y[i] = _mod_pos(_l[i], m[i]); }
+				if (_l[i] != 0) { _l[i] += y[i]; y[i] = _mod_pos(i, m[i]); }
 			}
 		}
 
@@ -82,7 +83,7 @@ private:
 		{
 			for (size_t i = 0; i < VSIZE; ++i)
 			{
-				if (_l[i] != 0) { _l[i] += y[i]; y[i] = _mod_balanced(_l[i], m[i]); }
+				if (_l[i] != 0) { _l[i] += y[i]; y[i] = _mod_balanced(i, m[i]); }
 			}
 		}
 	};
@@ -92,10 +93,9 @@ private:
 	private:
 		vuint64 _l;
 
-		finline constexpr explicit Vuint64(const vuint64 & l) : _l(l) {}
-
 	public:
 		finline explicit Vuint64() {}
+		finline constexpr explicit Vuint64(const vuint64 & l) : _l(l) {}
 		finline explicit Vuint64(const vint32 & rhs) : _l(__builtin_convertvector(rhs, vuint64)) {}
 		finline explicit Vuint64(const vuint32 & rhs) : _l(__builtin_convertvector(rhs, vuint64)) {}
 
@@ -105,6 +105,12 @@ private:
 		finline Vuint64 & operator*=(const Vuint64 & rhs) { _l *= rhs._l; return *this; }
 
 		finline Vuint64 operator*(const vint32 & rhs) const { return Vuint64(_l * __builtin_convertvector(rhs, vuint64)); }
+
+		finline void get_hash32(vuint32 & hash32) const
+		{
+			const vuint32 r = __builtin_convertvector(_l, vuint32) ^ __builtin_convertvector(_l >> 32, vuint32);
+			hash32 = (r >= 2) ? r : 2;
+		}
 	};
 
 private:
@@ -156,7 +162,7 @@ public:
 				else if (f[j] == 1)
 				{
 					bool is_minus_one = true; for (size_t i = 0; i < size; ++i) if (d[i][j] != 0) { is_minus_one = false; break; }
-					if (is_minus_one) { d[0][j] = -1; f[j] = 0; }	// -1 cannot be unbalanced
+					if (is_minus_one) { d[0][j] = -1; f.set(j, 0); }	// -1 cannot be unbalanced
 					else { is_zero_or_minus_one = false; break; }
 				}
 				else { is_zero_or_minus_one = false; break; }
@@ -236,14 +242,16 @@ public:
 		for (size_t j = 0; j < VSIZE; ++j) b[j] = (one[j] == -1);
 	}
 
-	uint64_t gethash64()
+	void gethash64(vuint64 & hash64)
 	{
 		unbalance();
+
 		const size_t size = _size;
 		const vint32 * const d = _d;
-		uint64_t hash = 0;
+
 		for (size_t j = 0; j < VSIZE; ++j)
 		{
+			uint64_t hash = 0;
 			bool is_zero = true;
 			for (size_t i = 0; i < size; ++i)
 			{
@@ -253,13 +261,13 @@ public:
 				is_zero &= (a_i == 0);
 			}
 			if (is_zero) pio::error("value is zero", true);
+			hash64[j] = hash;
 		}
-		return hash;
 	}
 
-	uint32_t gethash32()
+	void gethash32(vuint32 & hash32)
 	{
-		const uint64_t hash = gethash64();
-		return std::max(static_cast<uint32_t>(2), static_cast<uint32_t>(hash) ^ static_cast<uint32_t>(hash >> 32));
+		vuint64 hash64; gethash64(hash64);
+		Vuint64 t(hash64); t.get_hash32(hash32);
 	}
 };

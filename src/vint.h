@@ -23,6 +23,7 @@ typedef uint32_t	uint32_8 __attribute__ ((vector_size(8 * sizeof(uint32_t))));
 typedef int64_t		int64_2  __attribute__ ((vector_size(2 * sizeof(int64_t))));
 typedef int64_t		int64_4  __attribute__ ((vector_size(4 * sizeof(int64_t))));
 typedef int64_t		int64_8  __attribute__ ((vector_size(8 * sizeof(int64_t))));
+typedef uint64_t	uint64_2 __attribute__ ((vector_size(2 * sizeof(uint64_t))));
 typedef uint64_t	uint64_8 __attribute__ ((vector_size(8 * sizeof(uint64_t))));
 
 #define VSIZE	8
@@ -51,6 +52,12 @@ typedef union
 	int64_2	i2[4];
 } int64_8u;
 
+typedef union
+{
+	uint64_8	i8;
+	// uint64_4	i4[2];
+	uint64_2	i2[4];
+} uint64_8u;
 
 finline void set1(vint32 & x, const int32_t a)
 {
@@ -88,10 +95,34 @@ finline bool cmp(const vuint32 & x, const vuint32 & y)
 #endif
 }
 
+finline bool cmp(const vuint64 & x, const vuint64 & y)
+{
+// #if defined(__AVX2__)
+// TODO
+// 	return (_mm256_movemask_epi8(_mm256_cmpeq_epi32((__m256i)x, (__m256i)y)) == (int)0xffffffff);
+// #else
+	uint64_8u xu, yu; xu.i8 = x; yu.i8 = y;
+	int m = (int)0xffff;
+	for (size_t i = 0; i < 4; ++i) m &= _mm_movemask_epi8(_mm_cmpeq_epi32((__m128i)xu.i2[i], (__m128i)yu.i2[i]));
+	return (m == (int)0xffff);
+// #endif
+}
+
 finline bool cmp_zero(const vint64 & x)
 {
+// #if defined(__AVX2__)
+// TODO
+// #else
 	int64_8u xu; xu.i8 = x;
 	int m = (int)0xffff;
 	for (size_t i = 0; i < 4; ++i) m &= _mm_movemask_epi8(_mm_cmpeq_epi32((__m128i)xu.i2[i], _mm_setzero_si128()));
 	return (m == (int)0xffff);
+// #endif
+}
+
+finline uint32_t reduce_max(const vuint32 & x)
+{
+// TODO
+	uint32_t x_max = 0; for (size_t j = 0; j < VSIZE; ++j) x_max = std::max(x_max, x[j]);
+	return x_max;
 }

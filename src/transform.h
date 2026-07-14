@@ -34,7 +34,7 @@ public:
 	virtual void set(const uint32_t a) = 0;					// r_0 = a
 	virtual void square_dup(const uint32_t dup) = 0;		// r_0 = r_0^2 or 2*r_0^2
 	virtual void init_multiplicand(const size_t src) = 0;	// r_m = transform(r_src)
-	virtual void mul() = 0;									// r_0 *= r_m
+	virtual void mul_mask(const uint8_t mask) = 0	;		// r_0 *= r_m
 
 	virtual void copy(const size_t dst, const size_t src) const = 0;	// r_dst = r_src
 
@@ -43,6 +43,8 @@ public:
 
 	virtual size_t get_cache_size() const = 0;
 	virtual double get_error() const { return 0; }
+
+	virtual void cosmic_ray() = 0;
 
 private:
 	static transform * create_ocl(const vuint32 & b, const uint32_t n, const size_t num_regs, const size_t device,
@@ -114,10 +116,10 @@ public:
 
 	const std::string get_type() const { return _type; }
 
-	void mul(const size_t src)
+	void mul(const size_t src, const uint8_t mask = 0xff)
 	{
 		init_multiplicand(src);
-		mul();
+		mul_mask(mask);
 	}
 
 	void getInt(gint & g) const

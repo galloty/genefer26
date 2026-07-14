@@ -377,7 +377,7 @@ typedef Zp<P1, Q1, R1, RSQ1, H1, IM1, SQRTI1, ISQRTI1> Zp1;
 typedef Zp<P2, Q2, R2, RSQ2, H2, IM2, SQRTI2, ISQRTI2> Zp2;
 typedef Zp<P3, Q3, R3, RSQ3, H3, IM3, SQRTI3, ISQRTI3> Zp3;
 
-template<bool is32>
+template<bool IS32>
 class transformGPU : public transform
 {
 private:
@@ -605,7 +605,7 @@ public:
 		Zp3::fwd(zp3, w3, n_8, m0);
 	}
 
-	void mul() override
+	void mul_mask(const uint8_t mask) override
 	{
 		const size_t n_8 = _size / 8;
 
@@ -674,4 +674,6 @@ public:
 
 	size_t get_cache_size() const override { return (sizeof(Zp1) + sizeof(Zp2) + sizeof(Zp3)) * _size; }
 	double get_error() const override { return 0.0; }
+
+	void cosmic_ray() override { Zp1 & z = _z1[_size / 2]; z = z.add(Zp1(1)); }
 };

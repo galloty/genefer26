@@ -58,6 +58,16 @@ finline bool cmp_zero(const double_8 & x)
 #endif
 }
 
+finline void vmul_mask(double_8 & z, const double_8 & x, const double_8 & y, const uint8_t mask)
+{
+	// TODO
+	z = x;
+	for (size_t j = 0; j < VSIZE; ++j)
+	{
+		if (((mask >> j) & 1) != 0) z[j] *= y[j];
+	}
+}
+
 finline void vround(double_8 & y, const double_8 & x)
 {
 #if defined(__AVX512F__)

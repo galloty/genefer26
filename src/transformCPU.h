@@ -102,6 +102,12 @@ public:
 
 	finline VComplex sqr() const { const vdouble t = _re * _im; return VComplex(_re * _re - _im * _im, t + t); }
 	finline VComplex mul(const VComplex & rhs) const { return VComplex(_re * rhs._re - _im * rhs._im, _re * rhs._im + _im * rhs._re); }
+	finline VComplex mulm(const VComplex & rhs, const uint8_t mask) const
+	{
+		vdouble t0, t1; vmul_mask(t0, _re, rhs._re, mask); vmul_mask(t1, _im, rhs._im, mask);
+		vdouble t2, t3; vmul_mask(t2, _re, rhs._im, mask); vmul_mask(t3, _im, rhs._re, mask);
+		return VComplex(t0 - t1, t2 + t3);
+	}
 
 	finline VComplex round() const { VComplex r; vround(r._re, _re); vround(r._im, _im); return r; }
 	finline VComplex abs() const { VComplex r; vabs(r._re, _re); vabs(r._im, _im); return r; }
@@ -153,6 +159,7 @@ public:
 
 	finline VComplexPair sqr() const { return VComplexPair(_l.sqr(), _l.mul(_h + _h) + _h.sqr()); }
 	finline VComplexPair mul(const VComplexPair & rhs) const { return VComplexPair(_l.mul(rhs._l), _l.mul(rhs._h) + _h.mul(rhs.get())); }
+	finline VComplexPair mulm(const VComplexPair & rhs, const uint8_t mask) const { return VComplexPair(_l.mulm(rhs._l, mask), _l.mulm(rhs._h, mask) + _h.mulm(rhs.get(), mask)); }
 
 	finline VComplexPair flatten() const { return VComplexPair(_l, _h * split_inv); }
 	finline VComplexPair elevate() const { return VComplexPair(_l, _h * split); }
@@ -229,21 +236,21 @@ private:
 		const VComplexPair t = z1.sqr().mulW(w); z1 = z0.mul(z1 + z1); z0 = z0.sqr().subi(t);
 	}
 
-	finline static void _mul2(VComplexPair & z0, VComplexPair & z1, const VComplexPair & zp0, const VComplexPair & zp1, const TwiddleFactor & w) 
+	finline static void _mul2(VComplexPair & z0, VComplexPair & z1, const VComplexPair & zp0, const VComplexPair & zp1, const uint8_t mask, const TwiddleFactor & w) 
 	{
-		const VComplexPair t = z1.mul(zp1).mulW(w); z1 = z0.mul(zp1) + zp0.mul(z1); z0 = z0.mul(zp0) + t;
+		const VComplexPair t = z1.mulm(zp1, mask).mulW(w); z1 = z0.mulm(zp1, mask) + z1.mulm(zp0, mask); z0 = z0.mulm(zp0, mask) + t;
 	}
-	finline static void _mul2i(VComplexPair & z0, VComplexPair & z1, const VComplexPair & zp0, const VComplexPair & zp1, const TwiddleFactor & w) 
+	finline static void _mul2i(VComplexPair & z0, VComplexPair & z1, const VComplexPair & zp0, const VComplexPair & zp1, const uint8_t mask, const TwiddleFactor & w) 
 	{
-		const VComplexPair t = z1.mul(zp1).mulW(w); z1 = z0.mul(zp1) + zp0.mul(z1); z0 = z0.mul(zp0).addi(t);
+		const VComplexPair t = z1.mulm(zp1, mask).mulW(w); z1 = z0.mulm(zp1, mask) + z1.mulm(zp0, mask); z0 = z0.mulm(zp0, mask).addi(t);
 	}
-	finline static void _mul2n(VComplexPair & z0, VComplexPair & z1, const VComplexPair & zp0, const VComplexPair & zp1, const TwiddleFactor & w)
+	finline static void _mul2n(VComplexPair & z0, VComplexPair & z1, const VComplexPair & zp0, const VComplexPair & zp1, const uint8_t mask, const TwiddleFactor & w)
 	{
-		const VComplexPair t = z1.mul(zp1).mulW(w); z1 = z0.mul(zp1) + zp0.mul(z1); z0 = z0.mul(zp0) - t;
+		const VComplexPair t = z1.mulm(zp1, mask).mulW(w); z1 = z0.mulm(zp1, mask) + z1.mulm(zp0, mask); z0 = z0.mulm(zp0, mask) - t;
 	}
-	finline static void _mul2ni(VComplexPair & z0, VComplexPair & z1, const VComplexPair & zp0, const VComplexPair & zp1, const TwiddleFactor & w)
+	finline static void _mul2ni(VComplexPair & z0, VComplexPair & z1, const VComplexPair & zp0, const VComplexPair & zp1, const uint8_t mask, const TwiddleFactor & w)
 	{
-		const VComplexPair t = z1.mul(zp1).mulW(w); z1 = z0.mul(zp1) + zp0.mul(z1); z0 = z0.mul(zp0).subi(t);
+		const VComplexPair t = z1.mulm(zp1, mask).mulW(w); z1 = z0.mulm(zp1, mask) + z1.mulm(zp0, mask); z0 = z0.mulm(zp0, mask).subi(t);
 	}
 
 public:
@@ -329,19 +336,19 @@ public:
 		_store(4, z, 1, zl);
 	}
 
-	finline static void mul2x2e(VComplexPair * const z, const VComplexPair * const zp, const TwiddleFactor & w1)
+	finline static void mul2x2e(VComplexPair * const z, const VComplexPair * const zp, const uint8_t mask, const TwiddleFactor & w1)
 	{
 		VComplexPair zpl[4]; _load(4, zpl, zp, 1);
 		VComplexPair zl[4]; _load(4, zl, z, 1);
-		_mul2(zl[0], zl[1], zpl[0], zpl[1], w1); _mul2n(zl[2], zl[3], zpl[2], zpl[3], w1);
+		_mul2(zl[0], zl[1], zpl[0], zpl[1], mask, w1); _mul2n(zl[2], zl[3], zpl[2], zpl[3], mask, w1);
 		_store(4, z, 1, zl);
 	}
 
-	finline static void mul2x2o(VComplexPair * const z, const VComplexPair * const zp, const TwiddleFactor & w1)
+	finline static void mul2x2o(VComplexPair * const z, const VComplexPair * const zp, const uint8_t mask, const TwiddleFactor & w1)
 	{
 		VComplexPair zpl[4]; _load(4, zpl, zp, 1);
 		VComplexPair zl[4]; _load(4, zl, z, 1);
-		_mul2i(zl[0], zl[1], zpl[0], zpl[1], w1); _mul2ni(zl[2], zl[3], zpl[2], zpl[3], w1);
+		_mul2i(zl[0], zl[1], zpl[0], zpl[1], mask, w1); _mul2ni(zl[2], zl[3], zpl[2], zpl[3], mask, w1);
 		_store(4, z, 1, zl);
 	}
 
@@ -359,22 +366,22 @@ public:
 		_store(4, z, 1, zl);
 	}
 
-	finline static void mul4e(VComplexPair * const z, const VComplexPair * const zp, const TwiddleFactor & w1)
+	finline static void mul4e(VComplexPair * const z, const VComplexPair * const zp, const uint8_t mask, const TwiddleFactor & w1)
 	{
 		VComplexPair zpl[4]; _load(4, zpl, zp, 1);
 		VComplexPair zl[4]; _load(4, zl, z, 1);
 		_fwd2(zl[0], zl[2], w1); _fwd2(zl[1], zl[3], w1);
-		_mul2(zl[0], zl[1], zpl[0], zpl[1], w1); _mul2n(zl[2], zl[3], zpl[2], zpl[3], w1);
+		_mul2(zl[0], zl[1], zpl[0], zpl[1], mask, w1); _mul2n(zl[2], zl[3], zpl[2], zpl[3], mask, w1);
 		_bck2(zl[0], zl[2], w1); _bck2(zl[1], zl[3], w1);
 		_store(4, z, 1, zl);
 	}
 
-	finline static void mul4o(VComplexPair * const z, const VComplexPair * const zp, const TwiddleFactor & w1)
+	finline static void mul4o(VComplexPair * const z, const VComplexPair * const zp, const uint8_t mask, const TwiddleFactor & w1)
 	{
 		VComplexPair zpl[4]; _load(4, zpl, zp, 1);
 		VComplexPair zl[4]; _load(4, zl, z, 1);
 		_fwd2i(zl[0], zl[2], w1); _fwd2i(zl[1], zl[3], w1);
-		_mul2i(zl[0], zl[1], zpl[0], zpl[1], w1); _mul2ni(zl[2], zl[3], zpl[2], zpl[3], w1);
+		_mul2i(zl[0], zl[1], zpl[0], zpl[1], mask, w1); _mul2ni(zl[2], zl[3], zpl[2], zpl[3], mask, w1);
 		_bck2i(zl[0], zl[2], w1); _bck2i(zl[1], zl[3], w1);
 		_store(4, z, 1, zl);
 	}
@@ -603,7 +610,7 @@ private:
 		}
 	}
 
-	static void mul_e(VComplexPair * const z, const VComplexPair * const zp, const TwiddleFactor * const w, const size_t m, const size_t sj)
+	static void mul_e(VComplexPair * const z, const VComplexPair * const zp, const uint8_t mask, const TwiddleFactor * const w, const size_t m, const size_t sj)
 	{
 		const TwiddleFactor w1 = w[sj], w20 = w[2 * sj + 0];
 
@@ -611,30 +618,30 @@ private:
 
 		if (m > 4)
 		{
-			mul_e(&z[0 * m], &zp[0 * m], w, m / 4, 4 * sj + 0);
-			mul_o(&z[1 * m], &zp[1 * m], w, m / 4, 4 * sj + 0);
-			mul_e(&z[2 * m], &zp[2 * m], w, m / 4, 4 * sj + 1);
-			mul_o(&z[3 * m], &zp[3 * m], w, m / 4, 4 * sj + 1);
+			mul_e(&z[0 * m], &zp[0 * m], mask, w, m / 4, 4 * sj + 0);
+			mul_o(&z[1 * m], &zp[1 * m], mask, w, m / 4, 4 * sj + 0);
+			mul_e(&z[2 * m], &zp[2 * m], mask, w, m / 4, 4 * sj + 1);
+			mul_o(&z[3 * m], &zp[3 * m], mask, w, m / 4, 4 * sj + 1);
 		}
 		else if (m == 4)
 		{
 			const TwiddleFactor w40 = w[4 * sj + 0], w41 = w[4 * sj + 1];
 
-			VComplexPair::mul4e(&z[0], &zp[0], w40);
-			VComplexPair::mul4o(&z[4], &zp[4], w40);
-			VComplexPair::mul4e(&z[8], &zp[8], w41);
-			VComplexPair::mul4o(&z[12], &zp[12], w41);
+			VComplexPair::mul4e(&z[0], &zp[0], mask, w40);
+			VComplexPair::mul4o(&z[4], &zp[4], mask, w40);
+			VComplexPair::mul4e(&z[8], &zp[8], mask, w41);
+			VComplexPair::mul4o(&z[12], &zp[12], mask, w41);
 		}
 		else // if (m == 2)
 		{
-			VComplexPair::mul2x2e(&z[0], &zp[0], w20);
-			VComplexPair::mul2x2o(&z[4], &zp[4], w20);
+			VComplexPair::mul2x2e(&z[0], &zp[0], mask, w20);
+			VComplexPair::mul2x2o(&z[4], &zp[4], mask, w20);
 		}
 
 		for (size_t i = 0; i < m; ++i) VComplexPair::backward4e(&z[i], m, w1, w20);
 	}
 
-	static void mul_o(VComplexPair * const z, const VComplexPair * const zp, const TwiddleFactor * const w, const size_t m, const size_t sj)
+	static void mul_o(VComplexPair * const z, const VComplexPair * const zp, const uint8_t mask, const TwiddleFactor * const w, const size_t m, const size_t sj)
 	{
 		const TwiddleFactor w1 = w[sj], w21 = w[2 * sj + 1];
 
@@ -642,24 +649,24 @@ private:
 
 		if (m > 4)
 		{
-			mul_e(&z[0 * m], &zp[0 * m], w, m / 4, 4 * sj + 2);
-			mul_o(&z[1 * m], &zp[1 * m], w, m / 4, 4 * sj + 2);
-			mul_e(&z[2 * m], &zp[2 * m], w, m / 4, 4 * sj + 3);
-			mul_o(&z[3 * m], &zp[3 * m], w, m / 4, 4 * sj + 3);
+			mul_e(&z[0 * m], &zp[0 * m], mask, w, m / 4, 4 * sj + 2);
+			mul_o(&z[1 * m], &zp[1 * m], mask, w, m / 4, 4 * sj + 2);
+			mul_e(&z[2 * m], &zp[2 * m], mask, w, m / 4, 4 * sj + 3);
+			mul_o(&z[3 * m], &zp[3 * m], mask, w, m / 4, 4 * sj + 3);
 		}
 		else if (m == 4)
 		{
 			const TwiddleFactor w42 = w[4 * sj + 2], w43 = w[4 * sj + 3];
 
-			VComplexPair::mul4e(&z[0], &zp[0], w42);
-			VComplexPair::mul4o(&z[4], &zp[4], w42);
-			VComplexPair::mul4e(&z[8], &zp[8], w43);
-			VComplexPair::mul4o(&z[12], &zp[12], w43);
+			VComplexPair::mul4e(&z[0], &zp[0], mask, w42);
+			VComplexPair::mul4o(&z[4], &zp[4], mask, w42);
+			VComplexPair::mul4e(&z[8], &zp[8], mask, w43);
+			VComplexPair::mul4o(&z[12], &zp[12], mask, w43);
 		}
 		else // if (m == 2)
 		{
-			VComplexPair::mul2x2e(&z[0], &zp[0], w21);
-			VComplexPair::mul2x2o(&z[4], &zp[4], w21);
+			VComplexPair::mul2x2e(&z[0], &zp[0], mask, w21);
+			VComplexPair::mul2x2o(&z[4], &zp[4], mask, w21);
 		}
 
 		for (size_t i = 0; i < m; ++i) VComplexPair::backward4o(&z[i], m, w1, w21);
@@ -733,17 +740,17 @@ public:
 		forward_o(&zp[3 * (N / 4)], w, N / 16, 4 + 1);
 	}
 
-	void mul() override
+	void mul_mask(const uint8_t mask) override
 	{
 		VComplexPair * const z = _z;
 		const VComplexPair * const zp = _zp;
 		const TwiddleFactor * const w = _w;
 
 		forward4_0(z);
-		mul_e(&z[0 * (N / 4)], &zp[0 * (N / 4)], w, N / 16, 4 + 0);
-		mul_o(&z[1 * (N / 4)], &zp[1 * (N / 4)], w, N / 16, 4 + 0);
-		mul_e(&z[2 * (N / 4)], &zp[2 * (N / 4)], w, N / 16, 4 + 1);
-		mul_o(&z[3 * (N / 4)], &zp[3 * (N / 4)], w, N / 16, 4 + 1);
+		mul_e(&z[0 * (N / 4)], &zp[0 * (N / 4)], mask, w, N / 16, 4 + 0);
+		mul_o(&z[1 * (N / 4)], &zp[1 * (N / 4)], mask, w, N / 16, 4 + 0);
+		mul_e(&z[2 * (N / 4)], &zp[2 * (N / 4)], mask, w, N / 16, 4 + 1);
+		mul_o(&z[3 * (N / 4)], &zp[3 * (N / 4)], mask, w, N / 16, 4 + 1);
 		const double err = backward4_0_carry(z, _base, 0);
 		_error = std::max(_error, err);
 	}
@@ -779,6 +786,8 @@ public:
 
 	size_t get_cache_size() const override { return N * sizeof(VComplexPair); }
 	double get_error() const override { return _error; }
+
+	void cosmic_ray() override { const VComplex z = _z[N / 2].get(); vdouble x = z.real(), y = z.imag(); x[3] += 1; _z[N / 2].set(VComplex(x, y)); }
 };
 
 inline transform * create_transformCPU(const vuint32 & b, const uint32_t n, const size_t num_regs)
