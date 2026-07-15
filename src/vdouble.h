@@ -58,13 +58,30 @@ finline bool cmp_zero(const double_8 & x)
 #endif
 }
 
-finline void vmul_mask(double_8 & z, const double_8 & x, const double_8 & y, const uint8_t mask)
+finline void vset_mask(double_8 & y, const double_8 & x, const uint8_t mask)
 {
 	// TODO
-	z = x;
 	for (size_t j = 0; j < VSIZE; ++j)
 	{
-		if (((mask >> j) & 1) != 0) z[j] *= y[j];
+		if (((mask >> j) & 1) != 0) y[j] = x[j];
+	}
+}
+
+finline void vmul_mask_1(double_8 & y, const double_8 & x, const uint8_t mask)
+{
+	// TODO
+	for (size_t j = 0; j < VSIZE; ++j)
+	{
+		if (((mask >> j) & 1) != 0) y[j] *= x[j];
+	}
+}
+
+finline void vmul_mask_0(double_8 & y, const double_8 & x, const uint8_t mask)
+{
+	// TODO
+	for (size_t j = 0; j < VSIZE; ++j)
+	{
+		if (((mask >> j) & 1) != 0) y[j] *= x[j]; else y[j] = 0;
 	}
 }
 

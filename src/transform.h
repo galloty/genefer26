@@ -37,6 +37,7 @@ public:
 	virtual void mul_mask(const uint8_t mask) = 0	;		// r_0 *= r_m
 
 	virtual void copy(const size_t dst, const size_t src) const = 0;	// r_dst = r_src
+	virtual void copy_mask(const size_t dst, const size_t src, const uint8_t mask) const = 0;
 
 	virtual bool read_checkpoint(file & cfile, const size_t num_regs) = 0;
 	virtual void save_checkpoint(file & cfile, const size_t num_regs) const = 0;
@@ -116,10 +117,10 @@ public:
 
 	const std::string get_type() const { return _type; }
 
-	void mul(const size_t src, const uint8_t mask = 0xff)
+	void mul(const size_t src)
 	{
 		init_multiplicand(src);
-		mul_mask(mask);
+		mul_mask(0xff);
 	}
 
 	void getInt(gint & g) const

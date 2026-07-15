@@ -605,7 +605,7 @@ public:
 		Zp3::fwd(zp3, w3, n_8, m0);
 	}
 
-	void mul_mask(const uint8_t mask) override
+	void mul_mask(const uint8_t mask) override	// TODO
 	{
 		const size_t n_8 = _size / 8;
 
@@ -645,6 +645,11 @@ public:
 		const Zp3 * const z3_src = &_z3[src * size];
 		Zp3 * const z3_dst =  &_z3[dst * size];
 		for (size_t k = 0; k < size; ++k) z3_dst[k] = z3_src[k];
+	}
+
+	void copy_mask(const size_t dst, const size_t src, const uint8_t mask) const override	// TODO
+	{
+		copy(dst, src);
 	}
 
 	bool read_checkpoint(file & cFile, const size_t nregs) override

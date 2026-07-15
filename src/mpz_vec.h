@@ -23,6 +23,9 @@ public:
 	mpz_vec() { for (size_t j = 0; j < SIZE; ++j) mpz_init(_z[j]); }
 	virtual ~mpz_vec() { for (size_t j = 0; j < SIZE; ++j) mpz_clear(_z[j]); }
 
+	const mpz_t & operator[](const size_t i) const { return _z[i]; }
+	mpz_t & operator[](const size_t i) { return _z[i]; }
+
 	void set_ui(const vuint32 & n)
 	{
 		for (size_t j = 0; j < VSIZE; ++j) mpz_set_ui(_z[j], n[j]);
@@ -33,14 +36,14 @@ public:
 		for (size_t j = 0; j < VSIZE; ++j) mpz_ui_pow_ui(_z[j], b[j], 1u << n);
 	}
 
-	void set_GL_residue(const mpz_vec & rhs, const int B_GL)
+	void set_GL_residue(const mpz_vec & exponent, const int B_GL)
 	{
 		for (size_t j = 0; j < SIZE; ++j) mpz_set_ui(_z[j], 0);
 
 		mpz_t e, t; mpz_inits(e, t, nullptr);
 		for (size_t j = 0; j < VSIZE; ++j)
 		{
-			mpz_set(e, rhs._z[j]);
+			mpz_set(e, exponent._z[j]);
 
 			while (mpz_sgn(e) != 0)
 			{
@@ -52,9 +55,33 @@ public:
 		mpz_clears(e, t, nullptr);
 	}
 
+	void set_PL_residue(const mpz_vec & exponent, const int B_PL, const mpz_vec * const w, const size_t L)
+	{
+		for (size_t j = 0; j < SIZE; ++j) mpz_set_ui(_z[j], 0);
+
+		mpz_t e, t; mpz_inits(e, t, nullptr);
+		for (size_t j = 0; j < VSIZE; ++j)
+		{
+			mpz_set(e, exponent._z[j]);
+
+			for (size_t i = 0; i < L; i++)
+			{
+				mpz_mod_2exp(t, e, static_cast<unsigned long int>(B_PL));
+				mpz_addmul(_z[j], t, w[i][j]);
+				mpz_div_2exp(e, e, static_cast<unsigned long int>(B_PL));
+			}
+		}
+		mpz_clears(e, t, nullptr);
+	}
+
 	void mul_ui(const mpz_vec & rhs, const vuint32 & n)
 	{
 		for (size_t j = 0; j < VSIZE; ++j) mpz_mul_ui(_z[j], rhs._z[j], n[j]);
+	}
+
+	void mul_2exp(const mpz_vec & rhs, const unsigned long int e)
+	{
+		for (size_t j = 0; j < VSIZE; ++j) mpz_mul_2exp(_z[j], rhs._z[j], e);
 	}
 
 	int get_max_index() const	// TODO get_size => + 1
@@ -66,8 +93,22 @@ public:
 
 	uint32_t get_bit_mask(const size_t i) const
 	{
-		uint32_t m = 0;
-		for (size_t j = 0; j < SIZE; ++j) m |= ((mpz_tstbit(_z[j], mp_bitcnt_t(i)) != 0) ? uint32_t(1) : uint32_t(0)) << j;
-		return m;
+		uint32_t mask = 0;
+		for (size_t j = 0; j < SIZE; ++j) mask |= ((mpz_tstbit(_z[j], mp_bitcnt_t(i)) != 0) ? 1u : 0u) << j;
+		return mask;
+	}
+
+	uint32_t cmp_sub(const mpz_vec & rhs)
+	{
+		uint32_t mask = 0;
+		for (size_t j = 0; j < SIZE; ++j)
+		{
+			if (mpz_cmp(_z[j], rhs._z[j]) > 0)
+			{
+				mpz_sub(_z[j], _z[j], rhs._z[j]);
+				mask |= 1u << j;
+			}
+		}
+		return mask;
 	}
 };

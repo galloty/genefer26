@@ -70,6 +70,17 @@ finline void set1(vint32 & x, const int32_t a)
 #endif
 }
 
+finline void set1(vuint32 & x, const uint32_t a)
+{
+#if defined(__AVX__)
+	x = (uint32_8)_mm256_set1_epi32(int(a));
+#else
+	uint32_8u xu;
+	for (size_t i = 0; i < 2; ++i) xu.i4[i] = (uint32_4)_mm_set1_epi32(int(a));
+	x = xu.i8;
+#endif
+}
+
 finline void set_zero(vint64 & x)
 {
 #if defined(__AVX__)

@@ -632,8 +632,10 @@ private:
 	EReturn proof(const mpzv & exponent, const int depth, double & test_time, double & valid_time, double & proof_time,
 				  bool is_prp[VSIZE], vuint64 & pkey, vuint64 & res64)
 	{
-		size_t esize = size_t(exponent.get_max_index() + 1);
+		const size_t esize = size_t(exponent.get_max_index() + 1);
 		const int B_GL = B_GerbiczLi(esize), B_PL = B_PietrzakLi(esize, depth);
+
+		std::cout << "B_PL = " << B_PL << std::endl;
 
 		const EReturn rPrp = prp(exponent, B_GL, B_PL, test_time);
 		if (rPrp != EReturn::Success) return rPrp;
@@ -649,9 +651,9 @@ private:
 
 	static uint32_t rand32(const uint32_t rmin, const uint32_t rmax) { return (static_cast<uint32_t>(std::rand()) % (rmax - rmin)) + rmin; }
 
-	EReturn server(const mpzv & exponent, double & time, bool is_prp[VSIZE], uint64_t & pkey, uint64_t & ckey, vuint64 & res64)
+	EReturn server(const mpzv & exponent, double & time, bool is_prp[VSIZE], vuint64 & pkey, vuint64 & ckey, vuint64 & res64)
 	{
-/*		transform * const ptransform = _transform;
+		transform * const ptransform = _transform;
 		gint & gi = *_gi;
 
 		watch chrono;
@@ -661,16 +663,16 @@ private:
 		int depth = 0; proof_file.read(reinterpret_cast<char *>(&depth), sizeof(depth));
 
 		const size_t L = size_t(1) << depth;
-		size_t esize = 0; for (size_t j = 0; j < VSIZE; ++j) esize = std::max(esize, mpz_sizeinbase(exponent[j], 2));
-		const int B = B_PietrzakLi(esize, depth);
+		const size_t esize = size_t(exponent.get_max_index() + 1);
+		const int B_PL = B_PietrzakLi(esize, depth);
 
-		mpz_t * const w = new mpz_t[L]; for (size_t i = 0; i < L; ++i) mpz_init(w[i]);
+		mpzv * const w = new mpzv[L];
 
 		// v1 = mu[0]^w[0], v1: reg = 1
 		gi.read(proof_file);
 		gi.is_one(is_prp, res64);
-		const uint32_t q = gi.gethash32();
-		mpz_set_ui(w[0], q);
+		vuint32 q; gi.gethash32(q);
+		w[0].set_ui(q);
 		ptransform->setInt(gi);
 		power(0, q);
 		ptransform->copy(1, 0);
@@ -683,7 +685,7 @@ private:
 		{
 			// mu[k]: reg = 3
 			gi.read(proof_file);
-			const uint32_t q = gi.gethash32();
+			vuint32 q; gi.gethash32(q);
 			ptransform->setInt(gi);
 			ptransform->copy(3, 0);
 
@@ -698,7 +700,7 @@ private:
 			ptransform->copy(2, 0);
 
 			const size_t i = size_t(1) << (depth - k);
-			for (size_t j = 0; j < L; j += 2 * i) mpz_mul_ui(w[i + j], w[j], q);
+			for (size_t j = 0; j < L; j += 2 * i) w[i + j].mul_ui(w[j], q);
 
 			if (quitting()) return EReturn::Aborted;
 		}
@@ -708,35 +710,23 @@ private:
 		// pkey = hash64(v1);
 		ptransform->copy(0, 1);
 		ptransform->getInt(gi);
-		pkey = gi.gethash64();
+		gi.gethash64(pkey);
 
-		mpz_t p2, t; mpz_init_set_ui(p2, 0); mpz_init(t);
-		mpz_t e; mpz_init_set(e, exponent[0]);	// TODO
-		for (size_t i = 0; i < L; i++)
-		{
-			mpz_mod_2exp(t, e, static_cast<unsigned long int>(B));
-			mpz_addmul(p2, t, w[i]);
-			mpz_div_2exp(e, e, static_cast<unsigned long int>(B));
-		}
-		mpz_clear(e);
+		mpzv p2; p2.set_PL_residue(exponent, B_PL, w, L);
 
-		for (size_t i = 0; i < L; ++i) mpz_clear(w[i]);
 		delete[] w;
 
 		// encode
 		std::srand(static_cast<unsigned int>(std::time(nullptr))); std::rand();	// use current time as seed for random generator
-		const uint32_t rnd1 = rand32(2, 64), rnd2 = rand32(16, 256), rnd3 = rand32(4, 65536);
+		vuint32 rnd1, rnd2, rnd3; set1(rnd1, rand32(2, 64)); set1(rnd2, rand32(16, 256)); set1(rnd3, rand32(4, 65536));
 
-		mpz_set_ui(t, rnd1);
-		mpz_mul_2exp(t, t, static_cast<unsigned long int>(B));
-		if (mpz_cmp(p2, t) > 0)
-		{
-			mpz_sub(p2, p2, t);
-			ptransform->set(2);
-			power(0, rnd1);
-			ptransform->mul(2);
-			ptransform->copy(2, 0);
-		}
+		mpzv t; t.set_ui(rnd1); t.mul_2exp(t, static_cast<unsigned long int>(B_PL));
+
+		ptransform->set(2);
+		power(0, rnd1);
+		ptransform->mul(2);
+		const uint32_t mask = p2.cmp_sub(t);
+		ptransform->copy_mask(2, 0, uint8_t(mask));
 
 		power(1, rnd2);
 		ptransform->copy(1, 0);
@@ -744,32 +734,30 @@ private:
 		power(0, rnd3);
 		ptransform->mul(1);
 		ptransform->getInt(gi);
-		ckey = gi.gethash64();
+		gi.gethash64(ckey);
 
 		power(2, rnd2);
 		ptransform->getInt(gi);
-		mpz_mul_ui(p2, p2, rnd2);
-		mpz_add_ui(p2, p2, rnd3);
+		p2.mul_ui(p2, rnd2);
+		p2.mul_ui(p2, rnd3);
 
 		{
 			file cert_file(cert_filename(), "wb", true);
 			int version = 1;
 			cert_file.write(reinterpret_cast<const char *>(&version), sizeof(version));
-			cert_file.write(reinterpret_cast<const char *>(&B), sizeof(B));
+			cert_file.write(reinterpret_cast<const char *>(&B_PL), sizeof(B_PL));
 			gi.write(cert_file);
 			cert_file.write(p2);
 			cert_file.write_crc32();
 		}
 
-		mpz_clear(p2);  mpz_clear(t);
-
-		time = chrono.get_elapsed_time();*/
+		time = chrono.get_elapsed_time();
 		return EReturn::Success;
 	}
 
-	EReturn check(double & time, uint64_t & ckey)
+	EReturn check(double & time, vuint64 & ckey)
 	{
-/*		transform * const ptransform = _transform;
+		transform * const ptransform = _transform;
 		gint & gi = *_gi;
 
 		int ri = 0; double restored_time = 0;
@@ -784,23 +772,24 @@ private:
 			pio::print(ss.str());
 		}
 
-		int B = 0;
-		mpz_t p2; mpz_init(p2);
+		int B_PL = 0;
+		mpzv p2;
 		{
 			file cert_file(cert_filename(), "rb", true);
 			int version = 0; cert_file.read(reinterpret_cast<char *>(&version), sizeof(version));
-			cert_file.read(reinterpret_cast<char *>(&B), sizeof(B));
+			cert_file.read(reinterpret_cast<char *>(&B_PL), sizeof(B_PL));
 			gi.read(cert_file);
 			cert_file.read(p2);
 			cert_file.check_crc32();
 		}
-		const int p2size = static_cast<int>(mpz_sizeinbase(p2, 2));
+
+		const int p2size = p2.get_max_index() + 1;
 
 		// Gerbicz test for v2^{2^B} and Gerbicz-Li test for 2^p2
-		const int L = B_GerbiczLi(static_cast<size_t>(B)), GL = B_GerbiczLi(static_cast<size_t>(p2size));
+		const int L = B_GerbiczLi(static_cast<size_t>(B_PL)), GL = B_GerbiczLi(static_cast<size_t>(p2size));
 
 		watch chrono(found ? restored_time : 0);
-		const int i0 = p2size + B - 1;
+		const int i0 = p2size + B_PL - 1;
 		init_print_progress(i0, found ? ri : i0);
 		int dcount = 100;
 
@@ -819,7 +808,6 @@ private:
 				if (quitting())	// || (i == p2size + B/2))	// test context
 				{
 					save_checkpoint(1, i, chrono.get_elapsed_time());
-					mpz_clear(p2);
 					return EReturn::Aborted;
 				}
 
@@ -840,19 +828,19 @@ private:
 				}
 
 				ptransform->square_dup(0);
-				// if (i == i0) ptransform->add1();	// => invalid
-				// if (i == p2size) ptransform->add1();	// => invalid
+				// if (i == i0) ptransform->cosmic_ray();	// => invalid
+				// if (i == p2size) ptransform->cosmic_ray();	// => invalid
 			}
 
 			ptransform->copy(2, 0);	// v2
 
 			// u((t + 1) * L)
-			if (B % L != 0)
+			if (B_PL % L != 0)
 			{
-				for (int i = L - (B % L); i > 0; --i)
+				for (int i = L - (B_PL % L); i > 0; --i)
 				{
 					if (_is_boinc) boinc_monitor();
-					if (quitting()) { mpz_clear(p2); return EReturn::Aborted; }
+					if (quitting()) return EReturn::Aborted;
 					ptransform->square_dup(0);
 				}
 			}
@@ -865,7 +853,7 @@ private:
 			for (int i = L; i > 0; --i)
 			{
 				if (_is_boinc) boinc_monitor();
-				if (quitting()) { mpz_clear(p2); return EReturn::Aborted; }
+				if (quitting()) return EReturn::Aborted;
 				ptransform->square_dup(0);
 			}
 			ptransform->copy(1, 0);
@@ -876,12 +864,12 @@ private:
 
 			// u(0) * d(t)^{2^L} ?= d(t + 1)
 			ptransform->getInt(gi);
-			const uint64_t h1 = gi.gethash64();
+			vuint64 h1; gi.gethash64(h1);
 			ptransform->copy(0, 3);
 			ptransform->getInt(gi);
-			const uint64_t h2 = gi.gethash64();
+			vuint64 h2; gi.gethash64(h2);
 
-			if (h1 != h2) { mpz_clear(p2); return EReturn::Failed; }
+			if (!cmp(h1, h2)) return EReturn::Failed;
 		}
 
 		// 2^p2
@@ -897,7 +885,6 @@ private:
 			if (quitting())	// || (i == p2size/2))	// test context
 			{
 				save_checkpoint(1, i, chrono.get_elapsed_time());
-				mpz_clear(p2);
 				return EReturn::Aborted;
 			}
 
@@ -908,9 +895,9 @@ private:
 				if (!_is_boinc && (chrono.get_record_time() > 600)) { save_checkpoint(1, i, chrono.get_elapsed_time()); chrono.reset_record_time(); }
 			}
 
-			ptransform->square_dup(mpz_tstbit(p2, mp_bitcnt_t(i)) != 0);
-			// if (i == p2size - 1) ptransform->add1();	// => invalid
-			// if (i == 0) ptransform->add1();	// => invalid
+			ptransform->square_dup(p2.get_bit_mask(size_t(i)));
+			// if (i == p2size - 1) ptransform->cosmic_ray();	// => invalid
+			// if (i == 0) ptransform->cosmic_ray();	// => invalid
 
 			if ((i % GL == 0) && (i / GL != 0))
 			{
@@ -928,7 +915,7 @@ private:
 
 		// ckey = hash64(v1')
 		ptransform->getInt(gi);
-		ckey = gi.gethash64();
+		gi.gethash64(ckey);
 
 		// d(t + 1) = d(t) * result
 		ptransform->copy(0, 3);
@@ -940,44 +927,35 @@ private:
 		for (int i = GL - 1; i >= 0; --i)
 		{
 			if (_is_boinc) boinc_monitor();
-			if (quitting()) { mpz_clear(p2); return EReturn::Aborted; }
+			if (quitting()) return EReturn::Aborted;
 			ptransform->square_dup(0);
 		}
 		ptransform->copy(1, 0);
 
-		mpz_t res, t; mpz_init_set_ui(res, 0); mpz_init(t);
-		while (mpz_sgn(p2) != 0)
-		{
-			mpz_mod_2exp(t, p2, static_cast<unsigned long int>(GL));
-			mpz_add(res, res, t);
-			mpz_div_2exp(p2, p2, static_cast<unsigned long int>(GL));
-		}
-		mpz_clear(p2); mpz_clear(t);
+		mpzv res; res.set_GL_residue(p2, GL);
 
 		// 2^res
 		ptransform->set(1);
-		for (int i = static_cast<int>(mpz_sizeinbase(res, 2)) - 1; i >= 0; --i)
+		for (int i = res.get_max_index(); i >= 0; --i)
 		{
 			if (_is_boinc) boinc_monitor();
 			if (quitting()) return EReturn::Aborted;
-			ptransform->square_dup(mpz_tstbit(res, mp_bitcnt_t(i)) != 0);
+			ptransform->square_dup(res.get_bit_mask(size_t(i)));
 		}
-
-		mpz_clear(res);
 
 		// d(t)^{2^GL} * 2^res
 		ptransform->mul(1);
 
 		// d(t)^{2^GL} * 2^res ?= d(t + 1)
 		ptransform->getInt(gi);
-		const uint64_t h1 = gi.gethash64();
+		vuint64 h1; gi.gethash64(h1);
 		ptransform->copy(0, 2);
 		ptransform->getInt(gi);
-		const uint64_t h2 = gi.gethash64();
+		vuint64 h2; gi.gethash64(h2);
 
-		if (h1 != h2) return EReturn::Failed;
+		if (!cmp(h1, h2)) return EReturn::Failed;
 
-		time = chrono.get_elapsed_time();*/
+		time = chrono.get_elapsed_time();
 		return EReturn::Success;
 	}
 
@@ -1065,7 +1043,6 @@ public:
 		vuint32 b; parse_b(b_filename, b);
 		uint32_t b_min = uint32_t(-1), b_max = 0;
 		for (size_t i = 0; i < VSIZE; ++i) { b_min = std::min(b_min, b[i]); b_max = std::max(b_max, b[i]); }
-		const uint32_t b_TODO = b[0];
 
 		const bool empty_main_filename = _main_filename.empty();
 		if (empty_main_filename)
@@ -1093,23 +1070,25 @@ public:
 
 		if (mode == EMode::Check)
 		{
-			double time = 0; uint64_t ckey = 0;
+			double time = 0; vuint64 ckey;
 			success = check(time, ckey);
 			const double error = _transform->get_error();
 			clearline();
-			std::ostringstream ss; ss << gfn(b_TODO, n);
-			if (success == EReturn::Success)
+			std::ostringstream ss;
+			if (success == EReturn::Failed) ss << "Check failed!";
+			else if (success == EReturn::Aborted) ss << "Test was aborted.";
+			else if (success == EReturn::Success)
 			{
-				ss << " is checked, ckey = " << uint64toString(ckey);
+				ss << "Test succeeded";
 				if (error != 0) ss << ", error = " << std::setprecision(4) << error;
 				ss << ", time = " << timer::format_time(time) << ".";
 			}
-			else if (success == EReturn::Failed) ss << ": check failed!";
-			else ss << ": terminated.";
 			ss << std::endl; pio::print(ss.str());
 			if (success == EReturn::Success)
 			{
-				pio::result(ss.str());
+				std::ostringstream ssr;
+				for (size_t j = 0; j < VSIZE; ++j) ssr << gfn(b[j], n) << ",  ckey = " << uint64toString(ckey[j]) << std::endl;
+				pio::result(ssr.str());
 				if (!_is_boinc) clear_checkpoint();
 			}
 		}
@@ -1119,18 +1098,18 @@ public:
 
 			if (mode == EMode::Quick)
 			{
-				double testTime = 0, validTime = 0; bool is_prp[VSIZE]; vuint64 res64;
-				success = quick(exponent, testTime, validTime, is_prp, res64);
+				double test_time = 0, valid_time = 0; bool is_prp[VSIZE]; vuint64 res64;
+				success = quick(exponent, test_time, valid_time, is_prp, res64);
 				const double error = _transform->get_error();
 				clearline();
 				std::ostringstream ss;
 				if (success == EReturn::Failed) ss << "Validation failed!";
 				else if (success == EReturn::Aborted) ss << "Test was aborted.";
-				if (success == EReturn::Success)
+				else if (success == EReturn::Success)
 				{
 					ss << "Test succeeded";
 					if (error != 0) ss << ", error = " << std::setprecision(4) << error;
-					ss << ", time = " << timer::format_time(testTime + validTime) << "." << std::endl;;
+					ss << ", time = " << timer::format_time(test_time + valid_time) << "." << std::endl;
 					for (size_t j = 0; j < VSIZE; ++j) ss << gfn(b[j], n) << gfn_status(is_prp[j], 0, 0, res64[j]) << std::endl;
 				}
 				pio::print(ss.str());
@@ -1139,15 +1118,15 @@ public:
 			}
 			else if (mode == EMode::Proof)
 			{
-				double testTime = 0, validTime = 0, proofTime = 0; bool is_prp[VSIZE]; vuint64 pkey, res64;
-				success = proof(exponent, depth, testTime, validTime, proofTime, is_prp, pkey, res64);
+				double test_time = 0, valid_time = 0, proof_time = 0; bool is_prp[VSIZE]; vuint64 pkey, res64;
+				success = proof(exponent, depth, test_time, valid_time, proof_time, is_prp, pkey, res64);
 				const double error = _transform->get_error();
-				const double time = testTime + validTime + proofTime;
+				const double time = test_time + valid_time + proof_time;
 				clearline();
 				std::ostringstream ss;
 				if (success == EReturn::Failed) ss << "Validation failed!";
 				else if (success == EReturn::Aborted) ss << "Test was aborted.";
-				if (success == EReturn::Success)
+				else if (success == EReturn::Success)
 				{
 					ss << "Proof file is generated";
 					if (error != 0) ss << ", error = " << std::setprecision(4) << error;
@@ -1168,17 +1147,25 @@ public:
 			}
 			else if (mode == EMode::Server)
 			{
-				double time = 0; bool is_prp[VSIZE]; uint64_t pkey = 0, ckey = 0; vuint64 res64;
+				double time = 0; bool is_prp[VSIZE]; vuint64 pkey, ckey, res64;
 				success = server(exponent, time, is_prp, pkey, ckey, res64);
 				const double error = _transform->get_error();
-				for (size_t j = 0; j < VSIZE; ++j)
+				std::ostringstream ss;
+				if (success == EReturn::Failed) ss << "Generation failed!";
+				else if (success == EReturn::Aborted) ss << "Test was aborted.";
+				else if (success == EReturn::Success)
 				{
-					std::ostringstream ss; ss << gfn(b[j], n);
-					if (success == EReturn::Success) ss << gfn_status(is_prp[j], pkey, ckey, res64[j]/*, error, time*/);
-					else if (success == EReturn::Failed) ss << ": generation failed!";
-					else ss << ": terminated.";
-					ss << std::endl; pio::print(ss.str());
-					if (success == EReturn::Success) pio::result(ss.str());
+					ss << "Certificate is generated";
+					if (error != 0) ss << ", error = " << std::setprecision(4) << error;
+					ss << ", time = " << timer::format_time(time) << ".";
+				}
+				ss << std::endl; pio::print(ss.str());
+				if (success == EReturn::Success)
+				{
+					std::ostringstream ssr;
+					for (size_t j = 0; j < VSIZE; ++j) ssr << gfn(b[j], n) << gfn_status(is_prp[j], pkey[j], ckey[j], res64[j]) << std::endl;
+					pio::print(ssr.str());
+					if (success == EReturn::Success) pio::result(ssr.str());
 				}
 			}
 		}

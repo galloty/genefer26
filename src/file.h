@@ -12,6 +12,7 @@ Please give feedback to the authors if improvement is realized. It is distribute
 #include <gmp.h>
 
 #include "pio.h"
+#include "mpz_vec.h"
 
 class file
 {
@@ -106,22 +107,26 @@ public:
 		return false;
 	}
 
-	bool read(mpz_t & z)
+	bool read(mpz_vec<VSIZE> & z)
 	{
-		const size_t ret = mpz_inp_raw(z, _cfile);
-		_crc32 = _crc32 ^ static_cast<uint32_t>(mpz_fdiv_ui(z, 0xfedcba98));	// fake crc32
-		if (ret != 0) return true;
-		error("failure of a read operation");
-		return false;
+		for (size_t i = 0; i < VSIZE; ++i)
+		{
+			const size_t ret = mpz_inp_raw(z[i], _cfile);
+			_crc32 = _crc32 ^ static_cast<uint32_t>(mpz_fdiv_ui(z[i], 0xfedcba98));	// fake crc32
+			if (ret == 0) { error("failure of a read operation"); return false;}
+		}
+		return true;
 	}
 
-	bool write(const mpz_t & z)
+	bool write(const mpz_vec<VSIZE> & z)
 	{
-		const size_t ret = mpz_out_raw(_cfile, z);
-		_crc32 = _crc32 ^ static_cast<uint32_t>(mpz_fdiv_ui(z, 0xfedcba98));	// fake crc32
-		if (ret != 0) return true;
-		error("failure of a write operation");
-		return false;
+		for (size_t i = 0; i < VSIZE; ++i)
+		{
+			const size_t ret = mpz_out_raw(_cfile, z[i]);
+			_crc32 = _crc32 ^ static_cast<uint32_t>(mpz_fdiv_ui(z[i], 0xfedcba98));	// fake crc32
+			if (ret == 0) { error("failure of a write operation"); return false; }
+		}
+		return true;
 	}
 
 	bool print(const char * const str)
