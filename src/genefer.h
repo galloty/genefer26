@@ -355,7 +355,19 @@ private:
 		return m;
 	}
 
-	void power(const size_t reg, const vuint32 & e) const
+	void power(const size_t reg, const uint32_t e) const
+	{
+		transform * const ptransform = _transform;
+		ptransform->init_multiplicand(reg);
+		ptransform->set(1);
+		for (int i = ilog2_32(e); i >= 0; --i)
+		{
+			ptransform->square_dup(0);
+			if ((e & (1u << i)) != 0) ptransform->mul_mask(0xff);
+		}
+	}
+	
+	void power_v(const size_t reg, const vuint32 & e) const
 	{
 		transform * const ptransform = _transform;
 		ptransform->init_multiplicand(reg);
@@ -368,7 +380,7 @@ private:
 		}
 	}
 
-	void powerz(const size_t reg, const mpzv & e) const
+	void power_zv(const size_t reg, const mpzv & e) const
 	{
 		transform * const ptransform = _transform;
 		ptransform->init_multiplicand(reg);
@@ -544,7 +556,7 @@ private:
 		// v1 = mu[0]^w[0]
 		vuint32 q; gi.gethash32(q);
 		ptransform->setInt(gi);
-		power(0, q);
+		power_v(0, q);
 		ptransform->copy(2, 0);
 
 		const size_t L = size_t(1) << depth;
@@ -563,7 +575,7 @@ private:
 			ckpt_file.check_crc32();
 			ptransform->setInt(gi);
 
-			powerz(0, w[0]);
+			power_zv(0, w[0]);
 // s += mpz_sizeinbase(w[0], 2);
 			ptransform->copy(1, 0);
 
@@ -575,7 +587,7 @@ private:
 				ckpt_file.check_crc32();
 				ptransform->setInt(gi);
 
-				powerz(0, w[j]);
+				power_zv(0, w[j]);
 // s += mpz_sizeinbase(w[j], 2);
 				ptransform->mul(1);
 				ptransform->copy(1, 0);
@@ -592,7 +604,7 @@ private:
 			gi.write(proof_file);
 			vuint32 q; gi.gethash32(q);
 			// v1 = v1 * mu[k]^w[k]
-			power(0, q);
+			power_v(0, q);
 			ptransform->mul(2);
 			ptransform->copy(2, 0);
 
@@ -649,7 +661,7 @@ private:
 		return PL(depth, proof_time, pkey);
 	}
 
-	static uint32_t rand32(const uint32_t rmin, const uint32_t rmax) { return (static_cast<uint32_t>(std::rand()) % (rmax - rmin)) + rmin; }
+	static uint32_t rand32(const uint32_t rmin, const uint32_t rmax) { return (rmax + rmin) / 2; }	// { return (static_cast<uint32_t>(std::rand()) % (rmax - rmin)) + rmin; }
 
 	EReturn server(const mpzv & exponent, double & time, bool is_prp[VSIZE], vuint64 & pkey, vuint64 & ckey, vuint64 & res64)
 	{
@@ -674,7 +686,7 @@ private:
 		vuint32 q; gi.gethash32(q);
 		w[0].set_ui(q);
 		ptransform->setInt(gi);
-		power(0, q);
+		power_v(0, q);
 		ptransform->copy(1, 0);
 
 		// v2 = 1, v2: reg = 2
@@ -690,12 +702,12 @@ private:
 			ptransform->copy(3, 0);
 
 			// v1 = v1 * mu[k]^w[k]
-			power(0, q);
+			power_v(0, q);
 			ptransform->mul(1);
 			ptransform->copy(1, 0);
 
 			// v2 = v2^w[k] * mu[k]
-			power(2, q);
+			power_v(2, q);
 			ptransform->mul(3);
 			ptransform->copy(2, 0);
 
@@ -718,14 +730,15 @@ private:
 
 		// encode
 		std::srand(static_cast<unsigned int>(std::time(nullptr))); std::rand();	// use current time as seed for random generator
-		vuint32 rnd1, rnd2, rnd3; set1(rnd1, rand32(2, 64)); set1(rnd2, rand32(16, 256)); set1(rnd3, rand32(4, 65536));
+		const uint32_t rnd1 = rand32(2, 64), rnd2 = rand32(16, 256), rnd3 = rand32(4, 65536);
 
-		mpzv t; t.set_ui(rnd1); t.mul_2exp(t, static_cast<unsigned long int>(B_PL));
+		mpz_t t; mpz_init_set_ui(t, rnd1); mpz_mul_2exp(t, t, static_cast<unsigned long int>(B_PL));
+		const uint32_t mask = p2.cmp_sub(t);
+		mpz_clear(t);
 
 		ptransform->set(2);
 		power(0, rnd1);
 		ptransform->mul(2);
-		const uint32_t mask = p2.cmp_sub(t);
 		ptransform->copy_mask(2, 0, uint8_t(mask));
 
 		power(1, rnd2);
@@ -738,8 +751,8 @@ private:
 
 		power(2, rnd2);
 		ptransform->getInt(gi);
-		p2.mul_ui(p2, rnd2);
-		p2.mul_ui(p2, rnd3);
+		vuint32 vrnd2; set1(vrnd2, rnd2); p2.mul_ui(p2, vrnd2);
+		vuint32 vrnd3; set1(vrnd3, rnd3); p2.add_ui(p2, vrnd3);
 
 		{
 			file cert_file(cert_filename(), "wb", true);
@@ -805,7 +818,7 @@ private:
 			{
 				if (_is_boinc) boinc_monitor(1, i, chrono);
 
-				if (quitting())	// || (i == p2size + B/2))	// test context
+				if (quitting())	// || (i == p2size + B/2))	// test checkpoint
 				{
 					save_checkpoint(1, i, chrono.get_elapsed_time());
 					return EReturn::Aborted;
@@ -1087,7 +1100,7 @@ public:
 			if (success == EReturn::Success)
 			{
 				std::ostringstream ssr;
-				for (size_t j = 0; j < VSIZE; ++j) ssr << gfn(b[j], n) << ",  ckey = " << uint64toString(ckey[j]) << std::endl;
+				for (size_t j = 0; j < VSIZE; ++j) ssr << gfn(b[j], n) << ", ckey = " << uint64toString(ckey[j]) << std::endl;
 				pio::result(ssr.str());
 				if (!_is_boinc) clear_checkpoint();
 			}

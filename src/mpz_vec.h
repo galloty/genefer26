@@ -74,6 +74,11 @@ public:
 		mpz_clears(e, t, nullptr);
 	}
 
+	void add_ui(const mpz_vec & rhs, const vuint32 & n)
+	{
+		for (size_t j = 0; j < VSIZE; ++j) mpz_add_ui(_z[j], rhs._z[j], n[j]);
+	}
+
 	void mul_ui(const mpz_vec & rhs, const vuint32 & n)
 	{
 		for (size_t j = 0; j < VSIZE; ++j) mpz_mul_ui(_z[j], rhs._z[j], n[j]);
@@ -98,14 +103,14 @@ public:
 		return mask;
 	}
 
-	uint32_t cmp_sub(const mpz_vec & rhs)
+	uint32_t cmp_sub(const mpz_t & rhs)
 	{
 		uint32_t mask = 0;
 		for (size_t j = 0; j < SIZE; ++j)
 		{
-			if (mpz_cmp(_z[j], rhs._z[j]) > 0)
+			if (mpz_cmp(_z[j], rhs) > 0)
 			{
-				mpz_sub(_z[j], _z[j], rhs._z[j]);
+				mpz_sub(_z[j], _z[j], rhs);
 				mask |= 1u << j;
 			}
 		}
