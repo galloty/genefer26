@@ -647,8 +647,6 @@ private:
 		const size_t esize = size_t(exponent.get_max_index() + 1);
 		const int B_GL = B_GerbiczLi(esize), B_PL = B_PietrzakLi(esize, depth);
 
-		std::cout << "B_PL = " << B_PL << std::endl;
-
 		const EReturn rPrp = prp(exponent, B_GL, B_PL, test_time);
 		if (rPrp != EReturn::Success) return rPrp;
 		{
@@ -740,6 +738,7 @@ private:
 		power(0, rnd1);
 		ptransform->mul(2);
 		ptransform->copy_mask(2, 0, uint8_t(mask));
+		std::cout << "mask = " << mask << std::endl;
 
 		power(1, rnd2);
 		ptransform->copy(1, 0);

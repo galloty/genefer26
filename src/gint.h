@@ -31,7 +31,7 @@ private:
 	private:
 		vint64 _l;
 
-		finline constexpr explicit Vint64(const vint64 & l) : _l(l) {}
+		finline explicit Vint64(const vint64 & l) : _l(l) {}
 
 		finline int32_t _mod_pos(const size_t i, const int32_t m)
 		{
@@ -95,7 +95,7 @@ private:
 
 	public:
 		finline explicit Vuint64() {}
-		finline constexpr explicit Vuint64(const vuint64 & l) : _l(l) {}
+		finline explicit Vuint64(const vuint64 & l) : _l(l) {}
 		finline explicit Vuint64(const vint32 & rhs) : _l(__builtin_convertvector(rhs, vuint64)) {}
 		finline explicit Vuint64(const vuint32 & rhs) : _l(__builtin_convertvector(rhs, vuint64)) {}
 

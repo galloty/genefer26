@@ -31,6 +31,8 @@ namespace transformCPU_namespace
 
 class TwiddleFactor
 {
+	typedef double	double_2 __attribute__ ((vector_size(2 * sizeof(double))));
+
 private:
 	double_2 _z;
 
@@ -53,35 +55,35 @@ class VComplex
 {
 private:
 	static constexpr double _csqrt2_2 = 0.70710678118654752440084436210484903929;
-	vdouble _re, _im;
+	Double_8 _re, _im;
 
 public:
 	finline explicit VComplex() {}
-	finline constexpr explicit VComplex(const vdouble & re, const vdouble & im) : _re(re), _im(im) {}
-	finline explicit VComplex(const double f) { set1(_re, f); set1(_im, 0); }
-	finline explicit VComplex(const vuint32 & b) { int_to_double(_re, (vint32)b); _im = 1 / _re; }
+	finline explicit VComplex(const Double_8 & re, const Double_8 & im) : _re(re), _im(im) {}
+	finline explicit VComplex(const double f) : _re(f), _im(0) {}
+	finline explicit VComplex(const vuint32 & b) : _re(b), _im(_re.inverse()) {}
 
-	finline const vdouble & real() const { return _re; }
-	finline const vdouble & imag() const { return _im; }
+	finline const Double_8 & real() const { return _re; }
+	finline const Double_8 & imag() const { return _im; }
 
-	finline void setm(const VComplex & rhs, const uint8_t mask) { vset_mask(_re, rhs._re, mask); vset_mask(_im, rhs._im, mask); }
+	finline void setm(const VComplex & rhs, const uint8_t mask) { _re.copy_mask(rhs._re, _re, mask); _im.copy_mask(rhs._im, _im, mask); }
 
-	finline bool is_zero() const { return (cmp_zero(_re) & cmp_zero(_im)); }
+	finline bool is_zero() const { return (_re.is_zero() & _im.is_zero()); }
 
 	finline VComplex & operator+=(const VComplex & rhs) { _re += rhs._re; _im += rhs._im; return *this; }
 	finline VComplex & operator-=(const VComplex & rhs) { _re -= rhs._re; _im -= rhs._im; return *this; }
 	finline VComplex & operator*=(const double rhs) { _re *= rhs; _im *= rhs; return *this; }
-	finline VComplex & operator*=(const vdouble & rhs) { _re *= rhs; _im *= rhs; return *this; }
+	finline VComplex & operator*=(const Double_8 & rhs) { _re *= rhs; _im *= rhs; return *this; }
 
 	finline VComplex operator+(const VComplex & rhs) const { return VComplex(_re + rhs._re, _im + rhs._im); }
 	finline VComplex operator-(const VComplex & rhs) const { return VComplex(_re - rhs._re, _im - rhs._im); }
 	finline VComplex operator*(const double rhs) const { return VComplex(_re * rhs, _im * rhs); }
-	finline VComplex operator*(const vdouble & rhs) const { return VComplex(_re * rhs, _im * rhs); }
+	finline VComplex operator*(const Double_8 & rhs) const { return VComplex(_re * rhs, _im * rhs); }
 	finline VComplex addi(const VComplex & rhs) const { return VComplex(_re - rhs._im, _im + rhs._re); }
 	finline VComplex subi(const VComplex & rhs) const { return VComplex(_re + rhs._im, _im - rhs._re); }
 	// finline VComplex muli() const { return VComplex(-_im, _re); }
 
-	finline VComplex submul(const VComplex & rhs, const vdouble & c) const { return VComplex(vnmadd(rhs._re, c, _re), vnmadd(rhs._im, c, _im)); }
+	finline VComplex submul(const VComplex & rhs, const Double_8 & c) const { return VComplex(vnmadd(rhs._re, c, _re), vnmadd(rhs._im, c, _im)); }
 
 	finline VComplex mulW_0() const { return VComplex((_re - _im) * _csqrt2_2, (_im + _re) * _csqrt2_2); }
 	finline VComplex mulWconj_0() const { return VComplex((_re + _im) * _csqrt2_2, (_im - _re) * _csqrt2_2); }
@@ -102,25 +104,29 @@ public:
 		return VComplex(vmsub(_re, tg, _im) * cs, vmadd(_im, tg, _re) * cs);
 	}
 
-	finline VComplex sqr() const { const vdouble t = _re * _im; return VComplex(_re * _re - _im * _im, t + t); }
+	finline VComplex sqr() const { const Double_8 t = _re * _im; return VComplex(_re * _re - _im * _im, t + t); }
 	finline VComplex mul(const VComplex & rhs) const { return VComplex(_re * rhs._re - _im * rhs._im, _re * rhs._im + _im * rhs._re); }
 	finline VComplex mulm(const VComplex & rhs, const uint8_t mask) const
 	{
-		vdouble t0 = _re, t1 = _im; vmul_mask_1(t0, rhs._re, mask); vmul_mask_0(t1, rhs._im, mask);
-		vdouble t2 = _re, t3 = _im; vmul_mask_0(t2, rhs._im, mask); vmul_mask_1(t3, rhs._re, mask);
+		// Double_8 t0 = _re, t1 = _im; vmul_mask_1(t0, rhs._re, mask); vmul_mask_0(t1, rhs._im, mask);
+		// Double_8 t2 = _re, t3 = _im; vmul_mask_0(t2, rhs._im, mask); vmul_mask_1(t3, rhs._re, mask);
+		const Double_8 t0 = _re.mul_mask(rhs._re, mask), t1 = _im.mul_maskz(rhs._im, mask);
+		const Double_8 t2 = _re.mul_maskz(rhs._im, mask), t3 = _im.mul_mask(rhs._re, mask);
 		return VComplex(t0 - t1, t2 + t3);
 	}
 	finline VComplex mulmz(const VComplex & rhs, const uint8_t mask) const
 	{
-		vdouble t0 = _re, t1 = _im; vmul_mask_0(t0, rhs._re, mask); vmul_mask_0(t1, rhs._im, mask);
-		vdouble t2 = _re, t3 = _im; vmul_mask_0(t2, rhs._im, mask); vmul_mask_0(t3, rhs._re, mask);
+		// Double_8 t0 = _re, t1 = _im; vmul_mask_0(t0, rhs._re, mask); vmul_mask_0(t1, rhs._im, mask);
+		// Double_8 t2 = _re, t3 = _im; vmul_mask_0(t2, rhs._im, mask); vmul_mask_0(t3, rhs._re, mask);
+		Double_8 t0 = _re.mul_maskz(rhs._re, mask), t1 = _im.mul_maskz(rhs._im, mask);
+		Double_8 t2 = _re.mul_maskz(rhs._im, mask), t3 = _im.mul_maskz(rhs._re, mask);
 		return VComplex(t0 - t1, t2 + t3);
 	}
 
-	finline VComplex round() const { VComplex r; vround(r._re, _re); vround(r._im, _im); return r; }
-	finline VComplex abs() const { VComplex r; vabs(r._re, _re); vabs(r._im, _im); return r; }
-	finline VComplex max(const VComplex & rhs) const { VComplex r; vmax(r._re, _re, rhs._re); vmax(r._im, _im, rhs._im); return r; }
-	finline double max() const { return std::max(_re[0], _im[0]); }
+	finline VComplex round() const { return VComplex(_re.round(), _im.round()); }
+	finline VComplex abs() const { return VComplex(_re.abs(), _im.abs()); }
+	finline VComplex max(const VComplex & rhs) const { return VComplex(_re.max(rhs._re), _im.max(rhs._im)); }
+	finline double max() const { return std::max(_re.max(), _im.max()); }
 
 	finline VComplex shift() const { return VComplex(-_im, _re); }
 };
@@ -131,7 +137,7 @@ private:
 	static constexpr double split = 1 << 20, split_inv = 1.0 / split;
 	VComplex _l, _h;
 
-	finline constexpr explicit VComplexPair(const VComplex & l, const VComplex & h) : _l(l), _h(h) {}
+	finline explicit VComplexPair(const VComplex & l, const VComplex & h) : _l(l), _h(h) {}
 
 public:
 	finline explicit VComplexPair() {}
@@ -154,12 +160,12 @@ public:
 	finline VComplexPair & operator+=(const VComplexPair & rhs) { _l += rhs._l; _h += rhs._h; return *this; }
 	finline VComplexPair & operator-=(const VComplexPair & rhs) { _l -= rhs._l; _h -= rhs._h; return *this; }
 	finline VComplexPair & operator*=(const double rhs) { _l *= rhs; _h *= rhs; return *this; }
-	finline VComplexPair & operator*=(const vdouble & rhs) { _l *= rhs; _h *= rhs; return *this; }
+	finline VComplexPair & operator*=(const Double_8 & rhs) { _l *= rhs; _h *= rhs; return *this; }
 
 	finline VComplexPair operator+(const VComplexPair & rhs) const { return VComplexPair(_l + rhs._l, _h + rhs._h); }
 	finline VComplexPair operator-(const VComplexPair & rhs) const { return VComplexPair(_l - rhs._l, _h - rhs._h); }
 	finline VComplexPair operator*(const double rhs) const { return VComplexPair(_l * rhs, _h * rhs); }
-	finline VComplexPair operator*(const vdouble rhs) const { return VComplexPair(_l * rhs, _h * rhs); }
+	finline VComplexPair operator*(const Double_8 rhs) const { return VComplexPair(_l * rhs, _h * rhs); }
 	finline VComplexPair addi(const VComplexPair & rhs) const { return VComplexPair(_l.addi(rhs._l), _h.addi(rhs._h)); }
 	finline VComplexPair subi(const VComplexPair & rhs) const { return VComplexPair(_l.subi(rhs._l), _h.subi(rhs._h)); }
 	// finline VComplexPair muli() const { return VComplexPair(_l.muli(), _h.muli()); }
@@ -401,7 +407,7 @@ public:
 	}
 
 	finline static void backward4_0_carry(VComplexPair * const z, const size_t m, VComplexPair f[4],
-		const VComplex & base, const double t2_n, const vdouble & g
+		const VComplex & base, const double t2_n, const Double_8 & g
 #if defined(CHECK_ERROR)
 		, VComplexPair & err
 #endif
@@ -491,8 +497,8 @@ protected:
 		for (size_t k = 0; k < N; ++k)
 		{
 			const VComplex zk = z[k].get();
-			double_to_int(d[k + 0 * N], zk.real());
-			double_to_int(d[k + 1 * N], zk.imag());
+			zk.real().to_int(d[k + 0 * N]);
+			zk.imag().to_int(d[k + 1 * N]);
 		}
 	}
 
@@ -502,9 +508,7 @@ protected:
 
 		for (size_t k = 0; k < N; ++k)
 		{
-			vdouble re; int_to_double(re, d[k + 0 * N]);
-			vdouble im; int_to_double(im, d[k + 1 * N]);
-			z[k].set(VComplex(re, im));
+			z[k].set(VComplex(Double_8(d[k + 0 * N]), Double_8(d[k + 1 * N])));
 		}
 	}
 
@@ -690,7 +694,7 @@ private:
 	{
 		VComplexPair f[4]; for (size_t i = 0; i < 4; ++i) f[i] = VComplexPair(0.0);
 
-		vdouble g; for (size_t j = 0; j < VSIZE; ++j) g[j] = ((dup & (1u << j)) != 0) ? 2 : 1;
+		Double_8 g; g.copy_mask(Double_8(2), Double_8(1), uint8_t(dup));
 
 #if defined(CHECK_ERROR)
 		VComplexPair err = VComplexPair(0.0);
@@ -820,7 +824,7 @@ public:
 	size_t get_cache_size() const override { return N * sizeof(VComplexPair); }
 	double get_error() const override { return _error; }
 
-	void cosmic_ray() override { const VComplex z = _z[N / 2].get(); vdouble x = z.real(), y = z.imag(); x[3] += 1; _z[N / 2].set(VComplex(x, y)); }
+	void cosmic_ray() override { const VComplex z = _z[N / 2].get(); Double_8 x = z.real(); x.cosmic_ray(); _z[N / 2].set(VComplex(x, z.imag())); }
 };
 
 inline transform * create_transformCPU(const vuint32 & b, const uint32_t n, const size_t num_regs)
