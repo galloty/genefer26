@@ -605,6 +605,31 @@ public:
 		Zp3::fwd(zp3, w3, n_8, m0);
 	}
 
+	void mul() override
+	{
+		const size_t n_8 = _size / 8;
+
+		Zp1 * const z1 = _z1;
+		const Zp1 * const w1 = _w1;
+		const size_t m0 = Zp1::forward(z1, w1, n_8);
+		Zp1::mul(z1, _zp1, w1, n_8, m0);
+		Zp1::backward(z1, w1, n_8, m0);
+
+		Zp2 * const z2 = _z2;
+		const Zp2 * const w2 = _w2;
+		Zp2::forward(z2, w2, n_8);
+		Zp2::mul(z2, _zp2, w2, n_8, m0);
+		Zp2::backward(z2, w2, n_8, m0);
+
+		Zp3 * const z3 = _z3;
+		const Zp3 * const w3 = _w3;
+		Zp3::forward(z3, w3, n_8);
+		Zp3::mul(z3, _zp3, w3, n_8, m0);
+		Zp3::backward(z3, w3, n_8, m0);
+
+		carry(false);
+	}
+
 	void mul_mask(const uint8_t mask) override	// TODO
 	{
 		const size_t n_8 = _size / 8;

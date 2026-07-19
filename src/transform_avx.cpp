@@ -7,12 +7,13 @@ Please give feedback to the authors if improvement is realized. It is distribute
 
 #include <stdexcept>
 
-#define transformCPU_namespace	transformCPU_avx
+#define arch_namespace	arch_avx_namespace
+
 #include "transformCPU.h"
 
 transform * transform::create_avx(const vuint32 & b, const uint32_t n, const size_t num_regs)
 {
-	transform * ptransform = transformCPU_avx::create_transformCPU(b, n, num_regs);
+	transform * ptransform = arch_avx_namespace::create_transformCPU(b, n, num_regs);
 	ptransform->set_type("AVX");
 	return ptransform;
 }

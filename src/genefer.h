@@ -363,7 +363,7 @@ private:
 		for (int i = ilog2_32(e); i >= 0; --i)
 		{
 			ptransform->square_dup(0);
-			if ((e & (1u << i)) != 0) ptransform->mul_mask(0xff);
+			if ((e & (1u << i)) != 0) ptransform->mul();
 		}
 	}
 	

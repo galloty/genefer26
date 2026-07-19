@@ -34,7 +34,8 @@ public:
 	virtual void set(const uint32_t a) = 0;					// r_0 = a
 	virtual void square_dup(const uint32_t dup) = 0;		// r_0 = r_0^2 or 2*r_0^2
 	virtual void init_multiplicand(const size_t src) = 0;	// r_m = transform(r_src)
-	virtual void mul_mask(const uint8_t mask) = 0	;		// r_0 *= r_m
+	virtual void mul() = 0;									// r_0 *= r_m
+	virtual void mul_mask(const uint8_t mask) = 0;
 
 	virtual void copy(const size_t dst, const size_t src) const = 0;	// r_dst = r_src
 	virtual void copy_mask(const size_t dst, const size_t src, const uint8_t mask) const = 0;
@@ -120,13 +121,13 @@ public:
 	void mul(const size_t src)
 	{
 		init_multiplicand(src);
-		mul_mask(0xff);
+		mul();
 	}
 
 	void getInt(gint & g) const
 	{
 		if ((g.get_size() != (size_t(1) << _n)) || !cmp(g.get_base(), _b)) throw std::runtime_error("getInt");
-		getZi(g.data());
+		getZi(g.data());	// We have |d[k]| <= b
 		g.reset();
 	}
 

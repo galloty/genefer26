@@ -26,68 +26,6 @@ private:
 	enum class EState { Unknown, Balanced, Unbalanced };
 	EState _state;
 
-	class Vint64
-	{
-	private:
-		vint64 _l;
-
-		finline explicit Vint64(const vint64 & l) : _l(l) {}
-
-		finline int32_t _mod_pos(const size_t i, const int32_t m)
-		{
-			int32_t r = int32_t(_l[i] % m); _l[i] /= m;
-			if (r < 0) { r += m; _l[i] -= 1; }
-			return r;
-		}
-
-		finline int32_t _mod_balanced(const size_t i, const int32_t m)
-		{
-			int32_t r = int32_t(_l[i] % m); _l[i] /= m;
-			if (r > m / 2) { r -= m; _l[i] += 1; }
-			else if (r <= -(m / 2)) { r += m; _l[i] -= 1; }
-			return r;
-		}
-
-	public:
-		finline explicit Vint64() {}
-
-		finline int64_t operator[](const size_t i) const { return _l[i]; }
-		finline void set(const size_t i, const int64_t x) { _l[i] = x; }
-
-		finline static Vint64 zero() { vint64 l; set_zero(l); return Vint64(l); }
-		finline bool is_zero() const { return cmp_zero(_l); }
-
-		finline Vint64 operator-() const { return Vint64(-_l); }
-
-		finline Vint64 & operator+=(const vint32 & rhs) { _l += __builtin_convertvector(rhs, vint64); return *this; }
-
-		finline void mod_pos(vint32 & y, const vint32 & m)
-		{
-			for (size_t i = 0; i < VSIZE; ++i) y[i] = _mod_pos(i, m[i]);
-		}
-
-		finline void mod_balanced(vint32 & y, const vint32 & m)
-		{
-			for (size_t i = 0; i < VSIZE; ++i) y[i] = _mod_balanced(i, m[i]);
-		}
-
-		finline void add_mod_pos(vint32 & y, const vint32 & m)
-		{
-			for (size_t i = 0; i < VSIZE; ++i)
-			{
-				if (_l[i] != 0) { _l[i] += y[i]; y[i] = _mod_pos(i, m[i]); }
-			}
-		}
-
-		finline void add_mod_balanced(vint32 & y, const vint32 & m)
-		{
-			for (size_t i = 0; i < VSIZE; ++i)
-			{
-				if (_l[i] != 0) { _l[i] += y[i]; y[i] = _mod_balanced(i, m[i]); }
-			}
-		}
-	};
-
 	class Vuint64
 	{
 	private:
@@ -138,37 +76,45 @@ public:
 		const size_t size = _size;
 		const vint32 base = (vint32)_base;
 		vint32 * const d = _d;
-		Vint64 f = Vint64::zero();
+		vint32 f; set1(f, 0);
 
+		// We have -base <= d[i] <= base, -1 <= f <= 1
 		for (size_t i = 0; i < size; ++i)
 		{
-			f += d[i];
-			f.mod_pos(d[i], base);
-		}
-
-		while (!f.is_zero())
-		{
-			f = -f;	// f * x^size = -f
-			for (size_t i = 0; i < size; ++i)
-			{
-				f.add_mod_pos(d[i], base);
-				if (f.is_zero()) return;
-			}
-
-			bool is_zero_or_minus_one = true;
+			vint32 r = d[i] + f;
+			set1(f, 0);
 			for (size_t j = 0; j < VSIZE; ++j)
 			{
-				if (f[j] == 0) continue;
-				else if (f[j] == 1)
-				{
-					bool is_minus_one = true; for (size_t i = 0; i < size; ++i) if (d[i][j] != 0) { is_minus_one = false; break; }
-					if (is_minus_one) { d[0][j] = -1; f.set(j, 0); }	// -1 cannot be unbalanced
-					else { is_zero_or_minus_one = false; break; }
-				}
-				else { is_zero_or_minus_one = false; break; }
+				if (r[j] >= base[j]) { r[j] -= base[j]; f[j] += 1; }
+				else if (r[j] < 0) { r[j] += base[j]; f[j] -= 1; }
 			}
 
-			if (is_zero_or_minus_one) return;
+			d[i] = r;
+		}
+
+		for (size_t j = 0; j < VSIZE; ++j)
+		{
+			while (f[j] != 0)
+			{
+				f[j] = -f[j];	// f * x^size = -f
+
+				for (size_t i = 0; i < size; ++i)
+				{
+					int32_t r = d[i][j] + f[j];
+					f[j] = 0;
+					if (r >= base[j]) { r -= base[j]; f[j] += 1; }
+					else if (r < 0) { r += base[j]; f[j] -= 1; }
+					d[i][j] = r;
+					if (f[j] == 0) break;
+				}
+
+				if (f[j] == 1)
+				{
+					bool is_minus_one = true;
+					for (size_t i = 0; i < size; ++i) if (d[i][j] != 0) { is_minus_one = false; break; }
+					if (is_minus_one) { d[0][j] = -1; f[j] = 0; }	// -1 cannot be unbalanced
+				}
+			}
 		}
 	}
 
@@ -182,23 +128,23 @@ public:
 		const size_t size = _size;
 		const vint32 base = (vint32)_base;
 		vint32 * const d = _d;
-		Vint64 f = Vint64::zero();
+		vint32 f; set1(f, 0);
 
+		// We have -base <= d[i] <= base, -1 <= f <= 1
 		for (size_t i = 0; i < size; ++i)
 		{
-			f += d[i];
-			f.mod_balanced(d[i], base);
+			vint32 r = d[i] + f;
+			set1(f, 0);
+			for (size_t j = 0; j < VSIZE; ++j)
+			{
+				if (r[j] > base[j] / 2) { r[j] -= base[j]; f[j] += 1; }
+				else if (r[j] < -base[j] / 2) { r[j] += base[j]; f[j] -= 1; }
+			}
+
+			d[i] = r;
 		}
 
-		while (!f.is_zero())
-		{
-			f = -f;	// f * x^size = -f
-			for (size_t i = 0; i < size; ++i)
-			{
-				f.add_mod_balanced(d[i], base);
-				if (f.is_zero()) return;
-			}
-		}
+		d[0] -= f;	// f * x^size = -f
 	}
 
 	void read(file & cFile)
@@ -226,8 +172,6 @@ public:
 		const size_t size = _size;
 		const vuint32 base = _base;
 		const vint32 * const d = _d;
-
-		std::cout << "toto" << std::endl;
 
 		Vuint64 r64 = Vuint64(d[0]), bi = Vuint64(base);
 		vint32 one; one = (d[0] == 1);

@@ -13,6 +13,10 @@ Please give feedback to the authors if improvement is realized. It is distribute
 
 #include "vint.h"
 
+#ifndef finline
+#define finline	__attribute__((always_inline)) inline
+#endif
+
 #define DEF_MASK4()	static const __m256i mask4[16] = \
 	{ \
 		_mm256_set_epi64x(0,       0, 0, 0), _mm256_set_epi64x(0,       0, 0, -1ll), _mm256_set_epi64x(0,       0, -1ll, 0), _mm256_set_epi64x(0,       0, -1ll, -1ll), \
@@ -23,6 +27,9 @@ Please give feedback to the authors if improvement is realized. It is distribute
 
 #define DEF_MASK2()	static const __m128i mask2[4] = \
 	{ _mm_set_epi64x(0, 0), _mm_set_epi64x(0, -1ll), _mm_set_epi64x(-1ll, 0), _mm_set_epi64x(-1ll, -1ll) }
+
+namespace arch_namespace
+{
 
 class Double_8
 {
@@ -58,20 +65,20 @@ public:
 #endif
 	}
 
-	finline bool is_zero() const
-	{
-		bool b = true;
-#if defined(__AVX512F__)
-		b = (_mm512_cmp_pd_mask((__m512d)_x, _mm512_setzero_pd(), _CMP_NEQ_OQ) == 0);
-#elif defined(__AVX__)
-		double_8u xu; xu.d8 = _x;
-		for (size_t i = 0; i < 2; ++i) b &= (_mm256_movemask_pd(_mm256_cmp_pd((__m256d)xu.d4[i], _mm256_setzero_pd(), _CMP_NEQ_OQ)) == 0);
-#else
-		double_8u xu; xu.d8 = _x;
-		for (size_t i = 0; i < 4; ++i) b &= (_mm_movemask_pd(_mm_cmpneq_pd((__m128d)xu.d2[i], _mm_setzero_pd())) == 0);
-#endif
-		return b;
-	}
+// 	finline bool is_zero() const
+// 	{
+// 		bool b = true;
+// #if defined(__AVX512F__)
+// 		b = (_mm512_cmp_pd_mask((__m512d)_x, _mm512_setzero_pd(), _CMP_NEQ_OQ) == 0);
+// #elif defined(__AVX__)
+// 		double_8u xu; xu.d8 = _x;
+// 		for (size_t i = 0; i < 2; ++i) b &= (_mm256_movemask_pd(_mm256_cmp_pd((__m256d)xu.d4[i], _mm256_setzero_pd(), _CMP_NEQ_OQ)) == 0);
+// #else
+// 		double_8u xu; xu.d8 = _x;
+// 		for (size_t i = 0; i < 4; ++i) b &= (_mm_movemask_pd(_mm_cmpneq_pd((__m128d)xu.d2[i], _mm_setzero_pd())) == 0);
+// #endif
+// 		return b;
+// 	}
 
 	finline Double_8 operator-() const { return Double_8(-_x); }
 
@@ -222,3 +229,5 @@ public:
 
 	finline void cosmic_ray() { _x[3] += 1; }
 };
+
+}

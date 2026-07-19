@@ -7,12 +7,13 @@ Please give feedback to the authors if improvement is realized. It is distribute
 
 #include <stdexcept>
 
-#define transformCPU_namespace	transformCPU_fma
+#define arch_namespace	arch_fma_namespace
+
 #include "transformCPU.h"
 
 transform * transform::create_fma(const vuint32 & b, const uint32_t n, const size_t num_regs)
 {
-	transform * ptransform = transformCPU_fma::create_transformCPU(b, n, num_regs);
+	transform * ptransform = arch_fma_namespace::create_transformCPU(b, n, num_regs);
 	ptransform->set_type("AVX+FMA");
 	return ptransform;
 }

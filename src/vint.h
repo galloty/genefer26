@@ -29,7 +29,6 @@ typedef uint64_t	uint64_8 __attribute__ ((vector_size(8 * sizeof(uint64_t))));
 #define VSIZE	8
 using vint32 = int32_8;
 using vuint32 = uint32_8;
-using vint64 = int64_8;
 using vuint64 = uint64_8;
 
 typedef union
@@ -44,13 +43,6 @@ typedef union
 	uint32_8	i8;
 	uint32_4	i4[2];
 } uint32_8u;
-
-typedef union
-{
-	int64_8	i8;
-	int64_4	i4[2];
-	int64_2	i2[4];
-} int64_8u;
 
 typedef union
 {
@@ -81,19 +73,6 @@ finline void set1(vuint32 & x, const uint32_t a)
 #endif
 }
 
-finline void set_zero(vint64 & x)
-{
-#if defined(__AVX__)
-	int64_8u xu; xu.i8 = x;
-	for (size_t i = 0; i < 2; ++i) xu.i4[i] = (int64_4)_mm256_setzero_si256();
-	x = xu.i8;
-#else
-	int64_8u xu; xu.i8 = x;
-	for (size_t i = 0; i < 4; ++i) xu.i2[i] = (int64_2)_mm_setzero_si128();
-	x = xu.i8;
-#endif
-}
-
 finline bool cmp(const vuint32 & x, const vuint32 & y)
 {
 #if defined(__AVX2__)
@@ -115,18 +94,6 @@ finline bool cmp(const vuint64 & x, const vuint64 & y)
 	uint64_8u xu, yu; xu.i8 = x; yu.i8 = y;
 	int m = (int)0xffff;
 	for (size_t i = 0; i < 4; ++i) m &= _mm_movemask_epi8(_mm_cmpeq_epi32((__m128i)xu.i2[i], (__m128i)yu.i2[i]));
-	return (m == (int)0xffff);
-// #endif
-}
-
-finline bool cmp_zero(const vint64 & x)
-{
-// #if defined(__AVX2__)
-// TODO
-// #else
-	int64_8u xu; xu.i8 = x;
-	int m = (int)0xffff;
-	for (size_t i = 0; i < 4; ++i) m &= _mm_movemask_epi8(_mm_cmpeq_epi32((__m128i)xu.i2[i], _mm_setzero_si128()));
 	return (m == (int)0xffff);
 // #endif
 }
