@@ -398,7 +398,7 @@ private:
 	device * _pdevice;
 
 public:
-	transformGPU(const vuint32 & b, const uint32_t n, const size_t num_regs, const size_t d,	// device
+	transformGPU(const UInt32_8 & b, const uint32_t n, const size_t num_regs, const size_t d,	// device
 				 const bool is_boinc, const cl_platform_id boinc_platform_id, const cl_device_id boinc_device_id)
 				: transform(b, n, EKind::GPU), _num_regs(num_regs), _size(size_t(1) << n),
 				_norm1(Zp1::norm(uint32(_size / 2))), _norm2(Zp2::norm(uint32(_size / 2))), _norm3(Zp3::norm(uint32(_size / 2))),
@@ -517,15 +517,15 @@ private:
 	}
 
 protected:
-	void getZi(vint32 * const zi) const override
+	void getZi(Int32_8 * const zi) const override
 	{
 		const size_t size = _size;
 		Zp1 * const z1 = _z1;
 
-		for (size_t k = 0; k < size; ++k) zi[k][0] = z1[k].get_int();
+		for (size_t k = 0; k < size; ++k) zi[k].set_i(0, z1[k].get_int());
 	}
 
-	void setZi(const vint32 * const zi) override
+	void setZi(const Int32_8 * const zi) override
 	{
 		const size_t size = _size;
 		Zp1 * const z1 = _z1;

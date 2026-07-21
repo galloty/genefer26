@@ -52,7 +52,6 @@ private:
 	bool _is_boinc = false;
 	bool _get_boinc_ids = false;
 	transform * _transform = nullptr;
-	gint * _gi = nullptr;
 	std::string _main_filename;
 	uint32_t _n = 0;
 	int _print_range = 0, _print_i = 0;
@@ -83,7 +82,7 @@ public:
 	static size_t display_devices() { return transform::display_devices(); }
 
 private:
-	void create_transform_GPU(const vuint32 & b, const uint32_t n, const size_t num_regs, const size_t device,
+	void create_transform_GPU(const UInt32_8 & b, const uint32_t n, const size_t num_regs, const size_t device,
 							const bool verbose = true, const bool full = true)
 	{
 		delete_transform();
@@ -99,7 +98,7 @@ private:
 		}
 	}
 
-	void create_transform_CPU(const vuint32 & b, const uint32_t n, const size_t num_regs, const bool verbose = true, const bool full = true)
+	void create_transform_CPU(const UInt32_8 & b, const uint32_t n, const size_t num_regs, const bool verbose = true, const bool full = true)
 	{
 		delete_transform();
 
@@ -180,13 +179,14 @@ private:
 
 	static void clearline() { pio::display("                                                            \r"); }
 
-	static void parse_b(const std::string & b_filename, vuint32 & b)
+	static void parse_b(const std::string & b_filename, UInt32_8 & b)
 	{
 		std::ifstream file(b_filename);
 		if (!file.is_open()) pio::error("cannot open input file", true);
 
 		size_t i = 0;
 		std::string line;
+		UInt32_8::uint32_8 nb;
 		while (std::getline(file, line))
 		{
 			const uint32_t b_i = uint32_t(std::stoi(line));
@@ -194,12 +194,13 @@ private:
 			if (b_i < 6) pio::error("b < 6 is not supported", true);
 			if (b_i > 2000000000) pio::error("b > 2000000000 is not supported", true);
 			if ((b_i == 0) || ((b_i & (~b_i + 1)) == b_i)) pio::error("b must not be a power of two", true);
-			b[i] = b_i;
+			nb[i] = b_i;
 			++i; if (i == VSIZE) break;
 		}
-		while (i < VSIZE) { b[i] = b[i - 1]; ++i; }
-
+		while (i < VSIZE) { nb[i] = nb[i - 1]; ++i; }
+		
 		file.close();
+		b = UInt32_8(nb);
 	}
 
 	int _read_checkpoint(const std::string & filename, const int where, int & i, double & elapsed_time)
@@ -348,7 +349,7 @@ private:
 		}
 	}
 
-	uint8_t get_bit_mask(const vuint32 & e, const size_t i) const
+	uint8_t get_bit_mask(const UInt32_8 & e, const size_t i) const
 	{
 		uint8_t m = 0;
 		for (size_t j = 0; j < VSIZE; ++j) m |= (((e[j] & (1u << i)) != 0) ? uint8_t(1) : uint8_t(0)) << j;	// TODO vectorize
@@ -367,12 +368,12 @@ private:
 		}
 	}
 	
-	void power_v(const size_t reg, const vuint32 & e) const
+	void power_v(const size_t reg, const UInt32_8 & e) const
 	{
 		transform * const ptransform = _transform;
 		ptransform->init_multiplicand(reg);
 		ptransform->set(1);
-		for (int i = ilog2_32(reduce_max(e)); i >= 0; --i)
+		for (int i = ilog2_32(e.max()); i >= 0; --i)
 		{
 			ptransform->square_dup(0);
 			const uint8_t mask = get_bit_mask(e, size_t(i));
@@ -408,7 +409,6 @@ private:
 	EReturn prp(const mpzv & exponent, const int B_GL, const int B_PL, double & test_time)
 	{
 		transform * const ptransform = _transform;
-		gint & gi = *_gi;
 
 		int ri = 0; double restored_time = 0;
 		const bool found = read_checkpoint(0, ri, restored_time);
@@ -465,9 +465,9 @@ private:
 			}
 			if ((B_PL != 0) && (i % B_PL == 0))
 			{
-				ptransform->getInt(gi);
 				file ckptFile(ckpt_filename(size_t(i / B_PL)), "wb", true);
-				gi.write(ckptFile);
+				ptransform->to_int();
+				ptransform->write(ckptFile);
 				ckptFile.write_crc32();
 			}
 		}
@@ -483,7 +483,6 @@ private:
 	EReturn GL(const mpzv & exponent, const int B_GL, double & valid_time)
 	{
 		transform * const ptransform = _transform;
-		gint & gi = *_gi;
 
 		clearline(); pio::display("Validating...\r");
 
@@ -518,13 +517,13 @@ private:
 		ptransform->mul(1);
 
 		// d(t)^{2^B} * 2^res ?= d(t + 1)
-		ptransform->getInt(gi);
-		vuint64 h1; gi.gethash64(h1);
+		ptransform->to_int();
+		const UInt64_8 h1 = ptransform->gethash64();
 		ptransform->copy(0, 2);
-		ptransform->getInt(gi);
-		vuint64 h2; gi.gethash64(h2);
+		ptransform->to_int();
+		const UInt64_8 h2 = ptransform->gethash64();
 
-		const bool success = cmp(h1, h2);
+		const bool success = (h1 == h2);
 
 		valid_time = chrono.get_elapsed_time();
 		return success ? EReturn::Success : EReturn::Failed;
@@ -533,10 +532,9 @@ private:
 	// (Pietrzak-Li proof generation
 	// in: ckpt[i]
 	// out: proof file, proof key
-	EReturn PL(const int depth, double & proof_time, vuint64 & pkey)
+	EReturn PL(const int depth, double & proof_time, UInt64_8 & pkey)
 	{
 		transform * const ptransform = _transform;
-		gint & gi = *_gi;
 
 		clearline(); pio::display("Generating proof...\r");
 
@@ -549,13 +547,13 @@ private:
 
 		// mu[0] = ckpt[0]
 		file ckpt_file(ckpt_filename(0), "rb", true);
-		gi.read(ckpt_file);
+		ptransform->read(ckpt_file);
 		ckpt_file.check_crc32();
+		ptransform->from_int();
 
-		gi.write(proof_file);
+		ptransform->write(proof_file);
 		// v1 = mu[0]^w[0]
-		vuint32 q; gi.gethash32(q);
-		ptransform->setInt(gi);
+		const UInt32_8 q = ptransform->gethash32();
 		power_v(0, q);
 		ptransform->copy(2, 0);
 
@@ -571,9 +569,9 @@ private:
 
 			// mu[k] = ckpt[i]^w[0]
 			file ckpt_file(ckpt_filename(i), "rb", true);
-			gi.read(ckpt_file);
+			ptransform->read(ckpt_file);
 			ckpt_file.check_crc32();
-			ptransform->setInt(gi);
+			ptransform->from_int();
 
 			power_zv(0, w[0]);
 // s += mpz_sizeinbase(w[0], 2);
@@ -583,9 +581,9 @@ private:
 			{
 				// mu[k] *= ckpt[i + 2 * j]^w[j]
 				file ckpt_file(ckpt_filename(i + 2 * j), "rb", true);
-				gi.read(ckpt_file);
+				ptransform->read(ckpt_file);
 				ckpt_file.check_crc32();
-				ptransform->setInt(gi);
+				ptransform->from_int();
 
 				power_zv(0, w[j]);
 // s += mpz_sizeinbase(w[j], 2);
@@ -600,9 +598,9 @@ private:
 				}
 			}
 // std::cout << k << ": " << s << ", " << 32 * k * (1 << (k - 1))<< std::endl;
-			ptransform->getInt(gi);
-			gi.write(proof_file);
-			vuint32 q; gi.gethash32(q);
+			ptransform->to_int();
+			ptransform->write(proof_file);
+			const UInt32_8 q = ptransform->gethash32();
 			// v1 = v1 * mu[k]^w[k]
 			power_v(0, q);
 			ptransform->mul(2);
@@ -620,40 +618,38 @@ private:
 
 		// pkey = hash64(v1);
 		ptransform->copy(0, 2);
-		ptransform->getInt(gi);
-		gi.gethash64(pkey);
+		ptransform->to_int();
+		pkey = ptransform->gethash64();
 
 		proof_time = chrono.get_elapsed_time();
 		return EReturn::Success;
 	}
 
-	EReturn quick(const mpzv & exponent, double & test_time, double & valid_time, bool is_prp[VSIZE], vuint64 & res64)
+	EReturn quick(const mpzv & exponent, double & test_time, double & valid_time, bool is_prp[VSIZE], UInt64_8 & res64)
 	{
 		const int B_GL = B_GerbiczLi(size_t(exponent.get_max_index() + 1));
 
 		const EReturn rPrp = prp(exponent, B_GL, 0, test_time);
 		if (rPrp != EReturn::Success) return rPrp;
-		{
-			gint & gi = *_gi;
-			_transform->getInt(gi);
-			gi.is_one(is_prp, res64);
-		}
+
+		_transform->to_int();
+		_transform->is_one(is_prp, res64);
+
 		return GL(exponent, B_GL, valid_time);
 	}
 
 	EReturn proof(const mpzv & exponent, const int depth, double & test_time, double & valid_time, double & proof_time,
-				  bool is_prp[VSIZE], vuint64 & pkey, vuint64 & res64)
+				  bool is_prp[VSIZE], UInt64_8 & pkey, UInt64_8 & res64)
 	{
 		const size_t esize = size_t(exponent.get_max_index() + 1);
 		const int B_GL = B_GerbiczLi(esize), B_PL = B_PietrzakLi(esize, depth);
 
 		const EReturn rPrp = prp(exponent, B_GL, B_PL, test_time);
 		if (rPrp != EReturn::Success) return rPrp;
-		{
-			gint & gi = *_gi;
-			_transform->getInt(gi);
-			gi.is_one(is_prp, res64);
-		}
+
+		_transform->to_int();
+		_transform->is_one(is_prp, res64);
+
 		const EReturn rGL = GL(exponent, B_GL, valid_time);
 		if (rGL != EReturn::Success) return rGL;
 		return PL(depth, proof_time, pkey);
@@ -661,10 +657,9 @@ private:
 
 	static uint32_t rand32(const uint32_t rmin, const uint32_t rmax) { return (rmax + rmin) / 2; }	// { return (static_cast<uint32_t>(std::rand()) % (rmax - rmin)) + rmin; }
 
-	EReturn server(const mpzv & exponent, double & time, bool is_prp[VSIZE], vuint64 & pkey, vuint64 & ckey, vuint64 & res64)
+	EReturn server(const mpzv & exponent, double & time, bool is_prp[VSIZE], UInt64_8 & pkey, UInt64_8 & ckey, UInt64_8 & res64)
 	{
 		transform * const ptransform = _transform;
-		gint & gi = *_gi;
 
 		watch chrono;
 
@@ -679,11 +674,11 @@ private:
 		mpzv * const w = new mpzv[L];
 
 		// v1 = mu[0]^w[0], v1: reg = 1
-		gi.read(proof_file);
-		gi.is_one(is_prp, res64);
-		vuint32 q; gi.gethash32(q);
+		ptransform->read(proof_file);
+		ptransform->from_int();
+		ptransform->is_one(is_prp, res64);
+		const UInt32_8 q = ptransform->gethash32();
 		w[0].set_ui(q);
-		ptransform->setInt(gi);
 		power_v(0, q);
 		ptransform->copy(1, 0);
 
@@ -694,9 +689,9 @@ private:
 		for (int k = 1; k <= depth; ++k)
 		{
 			// mu[k]: reg = 3
-			gi.read(proof_file);
-			vuint32 q; gi.gethash32(q);
-			ptransform->setInt(gi);
+			ptransform->read(proof_file);
+			ptransform->from_int();
+			const UInt32_8 q = ptransform->gethash32();
 			ptransform->copy(3, 0);
 
 			// v1 = v1 * mu[k]^w[k]
@@ -719,8 +714,8 @@ private:
 
 		// pkey = hash64(v1);
 		ptransform->copy(0, 1);
-		ptransform->getInt(gi);
-		gi.gethash64(pkey);
+		ptransform->to_int();
+		pkey = ptransform->gethash64();
 
 		mpzv p2; p2.set_PL_residue(exponent, B_PL, w, L);
 
@@ -745,20 +740,20 @@ private:
 		ptransform->set(2);
 		power(0, rnd3);
 		ptransform->mul(1);
-		ptransform->getInt(gi);
-		gi.gethash64(ckey);
+		ptransform->to_int();
+		ckey = ptransform->gethash64();
 
 		power(2, rnd2);
-		ptransform->getInt(gi);
-		vuint32 vrnd2; set1(vrnd2, rnd2); p2.mul_ui(p2, vrnd2);
-		vuint32 vrnd3; set1(vrnd3, rnd3); p2.add_ui(p2, vrnd3);
+		p2.mul_ui(p2, UInt32_8(rnd2));
+		p2.add_ui(p2, UInt32_8(rnd3));
 
+		ptransform->to_int();
 		{
 			file cert_file(cert_filename(), "wb", true);
 			int version = 1;
 			cert_file.write(reinterpret_cast<const char *>(&version), sizeof(version));
 			cert_file.write(reinterpret_cast<const char *>(&B_PL), sizeof(B_PL));
-			gi.write(cert_file);
+			ptransform->write(cert_file);
 			cert_file.write(p2);
 			cert_file.write_crc32();
 		}
@@ -767,10 +762,9 @@ private:
 		return EReturn::Success;
 	}
 
-	EReturn check(double & time, vuint64 & ckey)
+	EReturn check(double & time, UInt64_8 & ckey)
 	{
 		transform * const ptransform = _transform;
-		gint & gi = *_gi;
 
 		int ri = 0; double restored_time = 0;
 		const bool found = read_checkpoint(1, ri, restored_time);
@@ -790,7 +784,7 @@ private:
 			file cert_file(cert_filename(), "rb", true);
 			int version = 0; cert_file.read(reinterpret_cast<char *>(&version), sizeof(version));
 			cert_file.read(reinterpret_cast<char *>(&B_PL), sizeof(B_PL));
-			gi.read(cert_file);
+			ptransform->read(cert_file);
 			cert_file.read(p2);
 			cert_file.check_crc32();
 		}
@@ -810,7 +804,7 @@ private:
 		{
 			if (!found)
 			{
-				ptransform->setInt(gi);
+				ptransform->from_int();
 				ptransform->copy(1, 0);	// d(t) = u(0)
 			}
 			for (int i = found ? ri : i0; i >= p2size; --i)
@@ -871,17 +865,17 @@ private:
 			ptransform->copy(1, 0);
 
 			// u(0) * d(t)^{2^L}
-			ptransform->setInt(gi);
+			ptransform->from_int();
 			ptransform->mul(1);
 
 			// u(0) * d(t)^{2^L} ?= d(t + 1)
-			ptransform->getInt(gi);
-			vuint64 h1; gi.gethash64(h1);
+			ptransform->to_int();
+			const UInt64_8 h1 = ptransform->gethash64();
 			ptransform->copy(0, 3);
-			ptransform->getInt(gi);
-			vuint64 h2; gi.gethash64(h2);
+			ptransform->to_int();
+			const UInt64_8 h2 = ptransform->gethash64();
 
-			if (!cmp(h1, h2)) return EReturn::Failed;
+			if (h1 != h2) return EReturn::Failed;
 		}
 
 		// 2^p2
@@ -926,8 +920,8 @@ private:
 		ptransform->mul(2);
 
 		// ckey = hash64(v1')
-		ptransform->getInt(gi);
-		gi.gethash64(ckey);
+		ptransform->to_int();
+		ckey = ptransform->gethash64();
 
 		// d(t + 1) = d(t) * result
 		ptransform->copy(0, 3);
@@ -959,13 +953,13 @@ private:
 		ptransform->mul(1);
 
 		// d(t)^{2^GL} * 2^res ?= d(t + 1)
-		ptransform->getInt(gi);
-		vuint64 h1; gi.gethash64(h1);
+		ptransform->to_int();
+		const UInt64_8 h1 = ptransform->gethash64();
 		ptransform->copy(0, 2);
-		ptransform->getInt(gi);
-		vuint64 h2; gi.gethash64(h2);
+		ptransform->to_int();
+		const UInt64_8 h2 = ptransform->gethash64();
 
-		if (!cmp(h1, h2)) return EReturn::Failed;
+		if (h1 != h2) return EReturn::Failed;
 
 		time = chrono.get_elapsed_time();
 		return EReturn::Success;
@@ -978,7 +972,7 @@ private:
 		const size_t num_regs = 3;
 
 		const uint32_t b = bm[m - 12], n = m;
-		vuint32 vb; for (size_t j = 0; j < VSIZE; ++j) vb[j] = b;
+		const UInt32_8 vb = UInt32_8(b);
 
 		if (isCPU) create_transform_CPU(vb, n, num_regs, m == 16, false);
 		else create_transform_GPU(vb, n, num_regs, device, m == 16, false);
@@ -987,14 +981,12 @@ private:
 
 		// pTransform->info();
 
-		_gi = new gint(size_t(1) << n, vb);
-		vuint32 svb; for (size_t j = 0; j < VSIZE; ++j) svb[j] = 6 + 2 * uint32_t(j);
-		mpzv exponent; exponent.set_exponent(svb, 6);
+		uint32_t e[8]; for (size_t i = 0; i < 8; ++i) e[i] = 6 + 2 * uint32_t(i);
+		mpzv exponent; exponent.set_exponent(UInt32_8(e), 6);
 
-		double testTime = 0, validTime = 0; bool is_prp[VSIZE]; vuint64 res64;
+		double testTime = 0, validTime = 0; bool is_prp[VSIZE]; UInt64_8 res64;
 		const EReturn qret = quick(exponent, testTime, validTime, is_prp, res64);
 		clear_checkpoint();
-		delete _gi; _gi = nullptr;
 
 		pio::print(gfn(b, n));
 
@@ -1052,7 +1044,7 @@ public:
 	{
 		_n = n;
 
-		vuint32 b; parse_b(b_filename, b);
+		UInt32_8 b; parse_b(b_filename, b);
 		uint32_t b_min = uint32_t(-1), b_max = 0;
 		for (size_t i = 0; i < VSIZE; ++i) { b_min = std::min(b_min, b[i]); b_max = std::max(b_max, b[i]); }
 
@@ -1076,13 +1068,11 @@ public:
 		if (isCPU) create_transform_CPU(b, n, num_regs, checkError);
 		else create_transform_GPU(b, n, num_regs, device);
 
-		_gi = new gint(size_t(1) << n, b);
-
 		EReturn success = EReturn::Failed;
 
 		if (mode == EMode::Check)
 		{
-			double time = 0; vuint64 ckey;
+			double time = 0; UInt64_8 ckey;
 			success = check(time, ckey);
 			const double error = _transform->get_error();
 			clearline();
@@ -1110,7 +1100,7 @@ public:
 
 			if (mode == EMode::Quick)
 			{
-				double test_time = 0, valid_time = 0; bool is_prp[VSIZE]; vuint64 res64;
+				double test_time = 0, valid_time = 0; bool is_prp[VSIZE]; UInt64_8 res64;
 				success = quick(exponent, test_time, valid_time, is_prp, res64);
 				const double error = _transform->get_error();
 				clearline();
@@ -1130,7 +1120,7 @@ public:
 			}
 			else if (mode == EMode::Proof)
 			{
-				double test_time = 0, valid_time = 0, proof_time = 0; bool is_prp[VSIZE]; vuint64 pkey, res64;
+				double test_time = 0, valid_time = 0, proof_time = 0; bool is_prp[VSIZE]; UInt64_8 pkey, res64;
 				success = proof(exponent, depth, test_time, valid_time, proof_time, is_prp, pkey, res64);
 				const double error = _transform->get_error();
 				const double time = test_time + valid_time + proof_time;
@@ -1159,7 +1149,7 @@ public:
 			}
 			else if (mode == EMode::Server)
 			{
-				double time = 0; bool is_prp[VSIZE]; vuint64 pkey, ckey, res64;
+				double time = 0; bool is_prp[VSIZE]; UInt64_8 pkey, ckey, res64;
 				success = server(exponent, time, is_prp, pkey, ckey, res64);
 				const double error = _transform->get_error();
 				std::ostringstream ss;
@@ -1182,7 +1172,6 @@ public:
 			}
 		}
 
-		delete _gi; _gi = nullptr;
 		delete_transform();
 		if (empty_main_filename) _main_filename.clear();
 

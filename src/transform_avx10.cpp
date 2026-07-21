@@ -11,7 +11,7 @@ Please give feedback to the authors if improvement is realized. It is distribute
 
 #include "transformCPU.h"
 
-transform * transform::create_avx10(const vuint32 & b, const uint32_t n, const size_t num_regs)
+transform * transform::create_avx10(const UInt32_8 & b, const uint32_t n, const size_t num_regs)
 {
 	transform * ptransform = arch_avx10_namespace::create_transformCPU(b, n, num_regs);
 	ptransform->set_type("AVX10.2");

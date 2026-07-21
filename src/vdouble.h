@@ -52,17 +52,18 @@ private:
 public:
 	finline explicit Double_8() {}
 	finline explicit Double_8(const double f) : _x(double_8{f, f, f, f, f, f, f, f}) {}
-	finline explicit Double_8(const vint32 & rhs) : _x(__builtin_convertvector(rhs, double_8)) {}
-	finline explicit Double_8(const vuint32 & rhs) : _x(__builtin_convertvector(rhs, double_8)) {}
+	finline explicit Double_8(const Int32_8 & rhs) : _x(__builtin_convertvector(rhs.get(), double_8)) {}
+	finline explicit Double_8(const UInt32_8 & rhs) : _x(__builtin_convertvector(rhs.get(), double_8)) {}
 
-	finline void to_int(vint32 & rhs) const
+	finline Int32_8 round_to_int() const
 	{
+		Int32_8 r;
 #if defined(__AVX512F__)
-		rhs = (vint32)_mm512_cvt_roundpd_epi32(_x, _MM_FROUND_TO_NEAREST_INT | _MM_FROUND_NO_EXC);
+		r.set((Int32_8::int32_8)_mm512_cvt_roundpd_epi32(_x, _MM_FROUND_TO_NEAREST_INT | _MM_FROUND_NO_EXC));
 #else
-		const Double_8 r = round();
-		rhs = __builtin_convertvector(r._x, vint32);
+		r.set(__builtin_convertvector(round()._x, Int32_8::int32_8));
 #endif
+		return r;
 	}
 
 // 	finline bool is_zero() const

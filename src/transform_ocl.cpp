@@ -15,7 +15,7 @@ size_t transform::display_devices()
 	return pfm.displayDevices();
 }
 
-transform * transform::create_ocl(const vuint32 & b, const uint32_t n, const size_t num_regs, const size_t device,
+transform * transform::create_ocl(const UInt32_8 & b, const uint32_t n, const size_t num_regs, const size_t device,
 								  const bool is_boinc, const bool get_boinc_ids)
 {
 	cl_platform_id boinc_platform_id = 0;

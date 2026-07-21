@@ -415,14 +415,15 @@ class transformCPU : public transform
 private:
 	const size_t _num_regs;
 	const Complex_8 _base;
+	const Int32_8 _ibase;
 	Complex_8_pair * const _z;
 	Complex_8_pair * const _zp;
 	TwiddleFactor * const _w;
 	double _error;
 
 public:
-	transformCPU(const vuint32 & b, const uint32_t n, const size_t num_regs) : transform(b, n, EKind::CPU),
-		_num_regs(num_regs), _base(Double_8(b), Double_8(b).inverse()),
+	transformCPU(const UInt32_8 & b, const uint32_t n, const size_t num_regs) : transform(b, n, EKind::CPU),
+		_num_regs(num_regs), _base(Double_8(b), Double_8(b).inverse()), _ibase(b),
 		_z(static_cast<Complex_8_pair *>(align_new(num_regs * N * sizeof(Complex_8_pair), 2 * 1024 * 1024))),
 		_zp(static_cast<Complex_8_pair *>(align_new(N * sizeof(Complex_8_pair), sizeof(Complex_8_pair)))),
 		_w(static_cast<TwiddleFactor *>(align_new(N / 2 * sizeof(TwiddleFactor), sizeof(TwiddleFactor))))
@@ -447,26 +448,42 @@ public:
 	}
 
 protected:
-	void getZi(vint32 * const d) const override
+	void getZi(Int32_8 * const d) const override
 	{
 		const Complex_8_pair * const z = _z;
 
 		for (size_t k = 0; k < N; ++k)
 		{
 			const Complex_8 zk = z[k].get();
-			zk.real().to_int(d[k + 0 * N]);
-			zk.imag().to_int(d[k + 1 * N]);
+			d[k + 0 * N] = zk.real().round_to_int();
+			d[k + 1 * N] = zk.imag().round_to_int();
 		}
 	}
 
-	void setZi(const vint32 * const d) override
+	void setZi(const Int32_8 * const d) override
 	{
 		Complex_8_pair * const z = _z;
 
+		const Int32_8 base = _ibase, base_2 = base / 2, mbase_2 = -base_2;
+
+		Int32_8 c0 = Int32_8(0), c1 = Int32_8(0);
 		for (size_t k = 0; k < N; ++k)
 		{
-			z[k].set(Complex_8(Double_8(d[k + 0 * N]), Double_8(d[k + 1 * N])));
+			Int32_8 r0 = d[k + 0 * N] + c0, r1 = d[k + 1 * N] + c1;
+			c0 = c1 = Int32_8(0);
+			for (size_t j = 0; j < 8; ++j)
+			{
+				if (r0[j] > base_2[j]) { r0.set_i(j, r0[j] - base[j]); c0.set_i(j, c0[j] + 1); }
+				else if (r0[j] < mbase_2[j]) { r0.set_i(j, r0[j] + base[j]); c0.set_i(j, c0[j] - 1); }
+				if (r1[j] > base_2[j]) { r1.set_i(j, r1[j] - base[j]); c1.set_i(j, c1[j] + 1); }
+				else if (r1[j] < mbase_2[j]) { r1.set_i(j, r1[j] + base[j]); c1.set_i(j, c1[j] - 1); }
+			}
+
+			z[k].set(Complex_8(Double_8(r0), Double_8(r1)));
 		}
+
+		const Complex_8 z0 = z[0].get() + Complex_8(Double_8(c0), Double_8(c1)).shift();	// modulo z^n + 1
+		z[0].set(z0);
 	}
 
 private:
@@ -850,7 +867,7 @@ public:
 	void cosmic_ray() override { const Complex_8 z = _z[N / 2].get(); Double_8 x = z.real(); x.cosmic_ray(); _z[N / 2].set(Complex_8(x, z.imag())); }
 };
 
-inline transform * create_transformCPU(const vuint32 & b, const uint32_t n, const size_t num_regs)
+inline transform * create_transformCPU(const UInt32_8 & b, const uint32_t n, const size_t num_regs)
 {
 	transform * ptransform = nullptr;
 	/*if      (n ==  5) ptransform = new transformCPU<(1 <<  4)>(b, n, num_regs);

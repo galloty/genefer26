@@ -26,14 +26,14 @@ public:
 	const mpz_t & operator[](const size_t i) const { return _z[i]; }
 	mpz_t & operator[](const size_t i) { return _z[i]; }
 
-	void set_ui(const vuint32 & n)
+	void set_ui(const UInt32_8 & n)
 	{
-		for (size_t j = 0; j < VSIZE; ++j) mpz_set_ui(_z[j], n[j]);
+		for (size_t j = 0; j < SIZE; ++j) mpz_set_ui(_z[j], n[j]);
 	}
 
-	void set_exponent(const vuint32 & b, const uint32_t n)
+	void set_exponent(const UInt32_8 & b, const uint32_t n)
 	{
-		for (size_t j = 0; j < VSIZE; ++j) mpz_ui_pow_ui(_z[j], b[j], 1u << n);
+		for (size_t j = 0; j < SIZE; ++j) mpz_ui_pow_ui(_z[j], b[j], 1u << n);
 	}
 
 	void set_GL_residue(const mpz_vec & exponent, const int B_GL)
@@ -41,7 +41,7 @@ public:
 		for (size_t j = 0; j < SIZE; ++j) mpz_set_ui(_z[j], 0);
 
 		mpz_t e, t; mpz_inits(e, t, nullptr);
-		for (size_t j = 0; j < VSIZE; ++j)
+		for (size_t j = 0; j < SIZE; ++j)
 		{
 			mpz_set(e, exponent._z[j]);
 
@@ -60,7 +60,7 @@ public:
 		for (size_t j = 0; j < SIZE; ++j) mpz_set_ui(_z[j], 0);
 
 		mpz_t e, t; mpz_inits(e, t, nullptr);
-		for (size_t j = 0; j < VSIZE; ++j)
+		for (size_t j = 0; j < SIZE; ++j)
 		{
 			mpz_set(e, exponent._z[j]);
 
@@ -74,25 +74,25 @@ public:
 		mpz_clears(e, t, nullptr);
 	}
 
-	void add_ui(const mpz_vec & rhs, const vuint32 & n)
+	void add_ui(const mpz_vec & rhs, const UInt32_8 & n)
 	{
-		for (size_t j = 0; j < VSIZE; ++j) mpz_add_ui(_z[j], rhs._z[j], n[j]);
+		for (size_t j = 0; j < SIZE; ++j) mpz_add_ui(_z[j], rhs._z[j], n[j]);
 	}
 
-	void mul_ui(const mpz_vec & rhs, const vuint32 & n)
+	void mul_ui(const mpz_vec & rhs, const UInt32_8 & n)
 	{
-		for (size_t j = 0; j < VSIZE; ++j) mpz_mul_ui(_z[j], rhs._z[j], n[j]);
+		for (size_t j = 0; j < SIZE; ++j) mpz_mul_ui(_z[j], rhs._z[j], n[j]);
 	}
 
 	void mul_2exp(const mpz_vec & rhs, const unsigned long int e)
 	{
-		for (size_t j = 0; j < VSIZE; ++j) mpz_mul_2exp(_z[j], rhs._z[j], e);
+		for (size_t j = 0; j < SIZE; ++j) mpz_mul_2exp(_z[j], rhs._z[j], e);
 	}
 
 	int get_max_index() const	// TODO get_size => + 1
 	{
 		int max_index = -1;
-		for (size_t j = 0; j < VSIZE; ++j) max_index = std::max(max_index, int(mpz_sizeinbase(_z[j], 2)) - 1);
+		for (size_t j = 0; j < SIZE; ++j) max_index = std::max(max_index, int(mpz_sizeinbase(_z[j], 2)) - 1);
 		return max_index;
 	}
 
