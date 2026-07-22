@@ -33,53 +33,29 @@ namespace arch_namespace
 
 class Double_8
 {
+public:
+	typedef double	vtype __attribute__ ((vector_size(8 * sizeof(double))));
+
+private:
 	typedef double	double_2 __attribute__ ((vector_size(2 * sizeof(double))));
 	typedef double	double_4 __attribute__ ((vector_size(4 * sizeof(double))));
-	typedef double	double_8 __attribute__ ((vector_size(8 * sizeof(double))));
 
 	typedef union
 	{
-		double_8	d8;
+		vtype		d8;
 		double_4	d4[2];
 		double_2	d2[4];
 	} double_8u;
 
 private:
-	double_8 _x;
-
-	finline constexpr explicit Double_8(const double_8 & x) : _x(x) {}
+	vtype _x;
 
 public:
 	finline explicit Double_8() {}
-	finline explicit Double_8(const double f) : _x(double_8{f, f, f, f, f, f, f, f}) {}
-	finline explicit Double_8(const Int32_8 & rhs) : _x(__builtin_convertvector(rhs.get(), double_8)) {}
-	finline explicit Double_8(const UInt32_8 & rhs) : _x(__builtin_convertvector(rhs.get(), double_8)) {}
+	finline constexpr explicit Double_8(const vtype & x) : _x(x) {}
+	finline constexpr explicit Double_8(const double f) : _x(vtype{f, f, f, f, f, f, f, f}) {}
 
-	finline Int32_8 round_to_int() const
-	{
-		Int32_8 r;
-#if defined(__AVX512F__)
-		r.set((Int32_8::int32_8)_mm512_cvt_roundpd_epi32(_x, _MM_FROUND_TO_NEAREST_INT | _MM_FROUND_NO_EXC));
-#else
-		r.set(__builtin_convertvector(round()._x, Int32_8::int32_8));
-#endif
-		return r;
-	}
-
-// 	finline bool is_zero() const
-// 	{
-// 		bool b = true;
-// #if defined(__AVX512F__)
-// 		b = (_mm512_cmp_pd_mask((__m512d)_x, _mm512_setzero_pd(), _CMP_NEQ_OQ) == 0);
-// #elif defined(__AVX__)
-// 		double_8u xu; xu.d8 = _x;
-// 		for (size_t i = 0; i < 2; ++i) b &= (_mm256_movemask_pd(_mm256_cmp_pd((__m256d)xu.d4[i], _mm256_setzero_pd(), _CMP_NEQ_OQ)) == 0);
-// #else
-// 		double_8u xu; xu.d8 = _x;
-// 		for (size_t i = 0; i < 4; ++i) b &= (_mm_movemask_pd(_mm_cmpneq_pd((__m128d)xu.d2[i], _mm_setzero_pd())) == 0);
-// #endif
-// 		return b;
-// 	}
+	finline const vtype & get() const { return _x; }
 
 	finline Double_8 operator-() const { return Double_8(-_x); }
 
@@ -168,7 +144,7 @@ public:
 	{
 		double_8u yu;
 #if defined(__AVX512F__)
-		yu.d8 = (double_8)_mm512_roundscale_pd((__m512d)_x, _MM_FROUND_TO_NEAREST_INT | _MM_FROUND_NO_EXC);
+		yu.d8 = (vtype)_mm512_roundscale_pd((__m512d)_x, _MM_FROUND_TO_NEAREST_INT | _MM_FROUND_NO_EXC);
 #elif defined(__AVX__)
 		double_8u xu; xu.d8 = _x;
 		for (size_t i = 0; i < 2; ++i) yu.d4[i] = (double_4)_mm256_round_pd((__m256d)xu.d4[i], _MM_FROUND_TO_NEAREST_INT | _MM_FROUND_NO_EXC);
@@ -183,7 +159,7 @@ public:
 	{
 		double_8u yu;
 #if defined(__AVX512F__)
-		yu.d8 = (double_8)_mm512_abs_pd((__m512d)_x);
+		yu.d8 = (vtype)_mm512_abs_pd((__m512d)_x);
 #elif defined(__AVX__)
 		const long long m = (long long)(uint64_t(1) << 63);
 		const __m256d mask = _mm256_castsi256_pd((__m256i){m, m, m, m});
@@ -202,7 +178,7 @@ public:
 	{
 		double_8u yu;
 #if defined(__AVX512F__)
-		yu.d8 = (double_8)_mm512_max_pd((__m512d)_x, (__m512d)rhs._x);
+		yu.d8 = (vtype)_mm512_max_pd((__m512d)_x, (__m512d)rhs._x);
 #elif defined(__AVX__)
 		double_8u xu, rxu; xu.d8 = _x; rxu.d8 = rhs._x;
 		for (size_t i = 0; i < 2; ++i) yu.d4[i] = (double_4)_mm256_max_pd((__m256d)xu.d4[i], (__m256d)rxu.d4[i]);
@@ -230,5 +206,19 @@ public:
 
 	finline void cosmic_ray() { _x[3] += 1; }
 };
+
+finline Double_8 Int32_8_to_Double_8(const Int32_8 & rhs) { return Double_8(__builtin_convertvector(rhs.get(), Double_8::vtype)); }
+finline Double_8 UInt32_8_to_Double_8(const UInt32_8 & rhs) { return Double_8(__builtin_convertvector(rhs.get(), Double_8::vtype)); }
+
+finline Int32_8 Double_8_to_Int32_8_round(const Double_8 & rhs) 
+{
+	Int32_8::vtype r;
+#if defined(__AVX512F__)
+	r = (Int32_8::vtype)_mm512_cvt_roundpd_epi32(rhs.get(), _MM_FROUND_TO_NEAREST_INT | _MM_FROUND_NO_EXC);
+#else
+	r = __builtin_convertvector(rhs.round().get(), Int32_8::vtype);
+#endif
+	return Int32_8(r);
+}
 
 }

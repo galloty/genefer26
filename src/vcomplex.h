@@ -61,8 +61,6 @@ public:
 
 	finline void copy_mask(const Complex_8 & rhs, const uint8_t mask) { _re.copy_mask(rhs._re, _re, mask); _im.copy_mask(rhs._im, _im, mask); }
 
-	// finline bool is_zero() const { return (_re.is_zero() & _im.is_zero()); }
-
 	finline Complex_8 & operator+=(const Complex_8 & rhs) { _re += rhs._re; _im += rhs._im; return *this; }
 	finline Complex_8 & operator-=(const Complex_8 & rhs) { _re -= rhs._re; _im -= rhs._im; return *this; }
 	finline Complex_8 & operator*=(const double rhs) { _re *= rhs; _im *= rhs; return *this; }

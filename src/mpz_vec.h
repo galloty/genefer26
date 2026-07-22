@@ -96,7 +96,7 @@ public:
 		return max_index;
 	}
 
-	uint32_t get_bit_mask(const size_t i) const
+	uint32_t get_bit_mask(const int i) const
 	{
 		uint32_t mask = 0;
 		for (size_t j = 0; j < SIZE; ++j) mask |= ((mpz_tstbit(_z[j], mp_bitcnt_t(i)) != 0) ? 1u : 0u) << j;

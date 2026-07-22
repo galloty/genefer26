@@ -522,7 +522,7 @@ protected:
 		const size_t size = _size;
 		Zp1 * const z1 = _z1;
 
-		for (size_t k = 0; k < size; ++k) zi[k].set_i(0, z1[k].get_int());
+		// for (size_t k = 0; k < size; ++k) zi[k].set_i(0, z1[k].get_int()); TODO
 	}
 
 	void setZi(const Int32_8 * const zi) override
@@ -534,7 +534,7 @@ protected:
 
 		for (size_t k = 0; k < size; ++k)
 		{
-			const int32_t v = zi[k][0];
+			const int32_t v = 0;	// zi[k][0]; TODO
 			z1[k].set_int(v); z2[k].set_int(v); z3[k].set_int(v);
 		}
 	}

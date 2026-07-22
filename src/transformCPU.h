@@ -49,8 +49,6 @@ public:
 		_l = rhs - h; _h = h;
 	}
 
-	// finline bool is_zero() const { return (_l.is_zero() & _h.is_zero()); }
-
 	finline Complex_8_pair & operator+=(const Complex_8_pair & rhs) { _l += rhs._l; _h += rhs._h; return *this; }
 	finline Complex_8_pair & operator-=(const Complex_8_pair & rhs) { _l -= rhs._l; _h -= rhs._h; return *this; }
 	finline Complex_8_pair & operator*=(const double rhs) { _l *= rhs; _h *= rhs; return *this; }
@@ -86,16 +84,16 @@ public:
 
 	finline Complex_8_pair shift() const { return Complex_8_pair(_l.shift(), _h.shift()); }
 
-	finline Complex_8 mod(const Complex_8 & m)
+	finline Complex_8 mod(const Double_8 & m, const Double_8 & m_inv)
 	{
-		const Complex_8 h_m = (_h * m.imag()).round(), rh_m = _h.submul(h_m, m.real());
+		const Complex_8 h_m = (_h * m_inv).round(), rh_m = _h.submul(h_m, m);
 		_h = h_m;
 
-		const Complex_8 l_m = (_l * m.imag()).round(), rl_m = _l.submul(l_m, m.real()) + rh_m * split;
-		const Complex_8 rl_m2 = (rl_m * m.imag()).round();
+		const Complex_8 l_m = (_l * m_inv).round(), rl_m = _l.submul(l_m, m) + rh_m * split;
+		const Complex_8 rl_m2 = (rl_m * m_inv).round();
 		_l = l_m + rl_m2;
 
-		return rl_m.submul(rl_m2, m.real());
+		return rl_m.submul(rl_m2, m);
 	}
 
 private:
@@ -355,7 +353,7 @@ public:
 	}
 
 	finline static void backward4_0_carry(Complex_8_pair * const z, const size_t m, Complex_8_pair f[4],
-		const Complex_8 & base, const double t2_n, const Double_8 & g
+		const Double_8 & base, const Double_8 & base_inv, const double t2_n, const Double_8 & g
 #if defined(CHECK_ERROR)
 		, Complex_8_pair & err
 #endif
@@ -375,13 +373,13 @@ public:
 			err = err.max((zl[i] - t).abs());
 #endif
 			f[i] += t * g;
-			zl[i].set(f[i].mod(base));
+			zl[i].set(f[i].mod(base, base_inv));
 		}
 
 		_store(4, z, m, zl);
 	}
 
-	finline static void carry_fix(Complex_8_pair * const z, const size_t m, Complex_8_pair f[4], const Complex_8 & base)
+	finline static void carry_fix(Complex_8_pair * const z, const size_t m, Complex_8_pair f[4], const Double_8 & base, const Double_8 & base_inv)
 	{
 		// f_n <= ((b-1)^2 * N + f_{n-1}) / b
 		// f_max = (b-1)^2 * N * (1/b + 1/b^2 + 1/b^3 + ...) = (b-1) * N
@@ -398,7 +396,7 @@ public:
 			for (size_t i = 0; i < 4; ++i)
 			{
 				f[i] += zl[i].flatten();
-				zl[i].set(f[i].mod(base));
+				zl[i].set(f[i].mod(base, base_inv));
 			}
 			_store(4, &z[k], m, zl);
 		}
@@ -414,8 +412,7 @@ class transformCPU : public transform
 {
 private:
 	const size_t _num_regs;
-	const Complex_8 _base;
-	const Int32_8 _ibase;
+	const Double_8 _base, _base_inv;
 	Complex_8_pair * const _z;
 	Complex_8_pair * const _zp;
 	TwiddleFactor * const _w;
@@ -423,7 +420,7 @@ private:
 
 public:
 	transformCPU(const UInt32_8 & b, const uint32_t n, const size_t num_regs) : transform(b, n, EKind::CPU),
-		_num_regs(num_regs), _base(Double_8(b), Double_8(b).inverse()), _ibase(b),
+		_num_regs(num_regs), _base(UInt32_8_to_Double_8(b)), _base_inv(_base.inverse()),
 		_z(static_cast<Complex_8_pair *>(align_new(num_regs * N * sizeof(Complex_8_pair), 2 * 1024 * 1024))),
 		_zp(static_cast<Complex_8_pair *>(align_new(N * sizeof(Complex_8_pair), sizeof(Complex_8_pair)))),
 		_w(static_cast<TwiddleFactor *>(align_new(N / 2 * sizeof(TwiddleFactor), sizeof(TwiddleFactor))))
@@ -455,8 +452,8 @@ protected:
 		for (size_t k = 0; k < N; ++k)
 		{
 			const Complex_8 zk = z[k].get();
-			d[k + 0 * N] = zk.real().round_to_int();
-			d[k + 1 * N] = zk.imag().round_to_int();
+			d[k + 0 * N] = Double_8_to_Int32_8_round(zk.real());
+			d[k + 1 * N] = Double_8_to_Int32_8_round(zk.imag());
 		}
 	}
 
@@ -464,26 +461,11 @@ protected:
 	{
 		Complex_8_pair * const z = _z;
 
-		const Int32_8 base = _ibase, base_2 = base / 2, mbase_2 = -base_2;
-
-		Int32_8 c0 = Int32_8(0), c1 = Int32_8(0);
 		for (size_t k = 0; k < N; ++k)
 		{
-			Int32_8 r0 = d[k + 0 * N] + c0, r1 = d[k + 1 * N] + c1;
-			c0 = c1 = Int32_8(0);
-			for (size_t j = 0; j < 8; ++j)
-			{
-				if (r0[j] > base_2[j]) { r0.set_i(j, r0[j] - base[j]); c0.set_i(j, c0[j] + 1); }
-				else if (r0[j] < mbase_2[j]) { r0.set_i(j, r0[j] + base[j]); c0.set_i(j, c0[j] - 1); }
-				if (r1[j] > base_2[j]) { r1.set_i(j, r1[j] - base[j]); c1.set_i(j, c1[j] + 1); }
-				else if (r1[j] < mbase_2[j]) { r1.set_i(j, r1[j] + base[j]); c1.set_i(j, c1[j] - 1); }
-			}
-
-			z[k].set(Complex_8(Double_8(r0), Double_8(r1)));
+			const Double_8 re = Int32_8_to_Double_8(d[k + 0 * N]), im = Int32_8_to_Double_8(d[k + 1 * N]);
+			z[k].set(Complex_8(re, im));
 		}
-
-		const Complex_8 z0 = z[0].get() + Complex_8(Double_8(c0), Double_8(c1)).shift();	// modulo z^n + 1
-		z[0].set(z0);
 	}
 
 private:
@@ -726,7 +708,7 @@ private:
 		for (size_t i = 0; i < m; ++i) Complex_8_pair::backward4o(&z[i], m, w1, w21);
 	}
 
-	static double backward4_0_carry(Complex_8_pair * const z, const Complex_8 & base, const uint32_t dup)
+	static double backward4_0_carry(Complex_8_pair * const z, const Double_8 & base, const Double_8 & base_inv, const uint32_t dup)
 	{
 		Complex_8_pair f[4]; for (size_t i = 0; i < 4; ++i) f[i] = Complex_8_pair(0.0);
 
@@ -737,7 +719,7 @@ private:
 #endif
 		for (size_t k = 0; k < N / 4; ++k)
 		{
-			Complex_8_pair::backward4_0_carry(&z[k], N / 4, f, base, 2.0 / N, g
+			Complex_8_pair::backward4_0_carry(&z[k], N / 4, f, base, base_inv, 2.0 / N, g
 #if defined(CHECK_ERROR)
 				, err
 #endif
@@ -747,7 +729,7 @@ private:
 		// modulo z^n + 1
 		const Complex_8_pair t = f[3].shift(); f[3] = f[2]; f[2] = f[1]; f[1] = f[0]; f[0] = t;
 
-		Complex_8_pair::carry_fix(z, N / 4, f, base);
+		Complex_8_pair::carry_fix(z, N / 4, f, base, base_inv);
 
 #if defined(CHECK_ERROR)
 		return err.max().max();
@@ -775,7 +757,7 @@ public:
 		square_o(&z[1 * (N / 4)], w, N / 16, 4 + 0);
 		square_e(&z[2 * (N / 4)], w, N / 16, 4 + 1);
 		square_o(&z[3 * (N / 4)], w, N / 16, 4 + 1);
-		const double err = backward4_0_carry(z, _base, dup);
+		const double err = backward4_0_carry(z, _base, _base_inv, dup);
 		_error = std::max(_error, err);
 	}
 
@@ -805,7 +787,7 @@ public:
 		mul_o(&z[1 * (N / 4)], &zp[1 * (N / 4)], w, N / 16, 4 + 0);
 		mul_e(&z[2 * (N / 4)], &zp[2 * (N / 4)], w, N / 16, 4 + 1);
 		mul_o(&z[3 * (N / 4)], &zp[3 * (N / 4)], w, N / 16, 4 + 1);
-		const double err = backward4_0_carry(z, _base, 0);
+		const double err = backward4_0_carry(z, _base, _base_inv, 0);
 		_error = std::max(_error, err);
 	}
 
@@ -820,7 +802,7 @@ public:
 		mul_o_mask(&z[1 * (N / 4)], &zp[1 * (N / 4)], mask, w, N / 16, 4 + 0);
 		mul_e_mask(&z[2 * (N / 4)], &zp[2 * (N / 4)], mask, w, N / 16, 4 + 1);
 		mul_o_mask(&z[3 * (N / 4)], &zp[3 * (N / 4)], mask, w, N / 16, 4 + 1);
-		const double err = backward4_0_carry(z, _base, 0);
+		const double err = backward4_0_carry(z, _base, _base_inv, 0);
 		_error = std::max(_error, err);
 	}
 

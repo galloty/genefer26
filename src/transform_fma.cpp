@@ -14,6 +14,6 @@ Please give feedback to the authors if improvement is realized. It is distribute
 transform * transform::create_fma(const UInt32_8 & b, const uint32_t n, const size_t num_regs)
 {
 	transform * ptransform = arch_fma_namespace::create_transformCPU(b, n, num_regs);
-	ptransform->set_type("AVX+FMA");
+	ptransform->set_type("AVX2+FMA");
 	return ptransform;
 }

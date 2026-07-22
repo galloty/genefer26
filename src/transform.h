@@ -70,9 +70,10 @@ private:
 	void unbalance() const
 	{
 		if (_unbalanced) return;
+		_unbalanced = true;
 
 		const size_t size = size_t(1) << _n;
-		const Int32_8 base = Int32_8(_b);
+		const Int32_8 base = UInt32_8_to_Int32_8(_b);
 		Int32_8 * const d = _d;
 		Int32_8 f = Int32_8(0);
 
@@ -81,41 +82,41 @@ private:
 		{
 			Int32_8 r = d[i] + f;
 			f = Int32_8(0);
-			for (size_t j = 0; j < VSIZE; ++j)
-			{
-				if (r[j] >= base[j]) { r.set_i(j, r[j] - base[j]); f.set_i(j, f[j] + 1); }
-				else if (r[j] < 0) { r.set_i(j, r[j] + base[j]); f.set_i(j, f[j] - 1); }
-			}
+
+			const Int32_8 l = Int32_8(r < Int32_8(0)), ge = Int32_8(r >= base);
+			r += (base & l); f -= (Int32_8(1) & l);
+			const Int32_8 l2 = Int32_8(r < Int32_8(0));	// This should not occur but quick and safer
+			r -= (base & ge); f += (Int32_8(1) & ge);
+			r += (base & l2); f -= (Int32_8(1) & l2);
 
 			d[i] = r;
 		}
 
-		for (size_t j = 0; j < VSIZE; ++j)
+		while (!f.is_zero())
 		{
-			while (f[j] != 0)
+			f = -f;	// f * x^size = -f
+
+			for (size_t i = 0; i < size; ++i)
 			{
-				f.set_i(j, -f[j]);	// f * x^size = -f
+				Int32_8 r = d[i] + f;
+				f = Int32_8(0);
 
-				for (size_t i = 0; i < size; ++i)
-				{
-					int32_t r = d[i][j] + f[j];
-					f.set_i(j, 0);
-					if (r >= base[j]) { r -= base[j]; f.set_i(j, f[j] + 1); }
-					else if (r < 0) { r += base[j]; f.set_i(j, f[j] - 1); }
-					d[i].set_i(j, r);
-					if (f[j] == 0) break;
-				}
+				const Int32_8 l = Int32_8(r < Int32_8(0)), ge = Int32_8(r >= base);
+				r += (base & l); f -= (Int32_8(1) & l);
+				r -= (base & ge); f += (Int32_8(1) & ge);
 
-				if (f[j] == 1)
-				{
-					bool is_minus_one = true;
-					for (size_t i = 0; i < size; ++i) if (d[i][j] != 0) { is_minus_one = false; break; }
-					if (is_minus_one) { d[0].set_i(j, -1); f.set_i(j, 0); }	// -1 cannot be unbalanced
-				}
+				d[i] = r;
+
+				if (f.is_zero()) return;
 			}
+
+			// -1 cannot be unbalanced
+			Int32_8 is_minus_one = Int32_8(f == Int32_8(1));
+			for (size_t i = 0; i < size; ++i) is_minus_one &= Int32_8(d[i] == Int32_8(0));
+			d[0] -= (Int32_8(1) & is_minus_one);
+			f -= (Int32_8(1) & is_minus_one);
 		}
 
-		_unbalanced = true;
 	}
 
 protected:
@@ -146,23 +147,23 @@ public:
 		transform * ptransform = nullptr;
 
 		__builtin_cpu_init();
-		if (__builtin_cpu_supports("avx10.2"))
+		if (__builtin_cpu_supports("avx10.2") != 0)
 		{
 			ptransform = transform::create_avx10(b, n, num_regs);
 		}
-		else if (__builtin_cpu_supports("avx512f"))
+		else if (__builtin_cpu_supports("avx512f") != 0)
 		{
 			ptransform = transform::create_512(b, n, num_regs);
 		}
-		else if (__builtin_cpu_supports("fma"))
+		else if ((__builtin_cpu_supports("fma") != 0) && (__builtin_cpu_supports("avx2") != 0))
 		{
 			ptransform = transform::create_fma(b, n, num_regs);
 		}
-		else if (__builtin_cpu_supports("avx"))
+		else if (__builtin_cpu_supports("avx") != 0)
 		{
 			ptransform = transform::create_avx(b, n, num_regs);
 		}
-		else if (__builtin_cpu_supports("sse4.1"))
+		else if (__builtin_cpu_supports("sse4.1") != 0)
 		{
 			ptransform = transform::create_sse4(b, n, num_regs);
 		}
@@ -196,8 +197,8 @@ public:
 	void read(file & cFile)
 	{
 		uint32_t size; cFile.read(reinterpret_cast<char *>(&size), sizeof(size));
-		UInt32_8::uint32_8 nbase; cFile.read(reinterpret_cast<char *>(&nbase), sizeof(nbase));
-		if ((size != (1u << _n)) || (UInt32_8(nbase) != _b)) cFile.error("bad file");
+		UInt32_8::vtype nbase; cFile.read(reinterpret_cast<char *>(&nbase), sizeof(nbase));
+		if ((size != (1u << _n)) || !UInt32_8(nbase).is_equal(_b)) cFile.error("bad file");
 		cFile.read(reinterpret_cast<char *>(_d), sizeof(UInt32_8) << _n);
 
 		_unbalanced = false;
@@ -209,30 +210,30 @@ public:
 
 		const uint32_t size = 1u << _n;
 		cFile.write(reinterpret_cast<const char *>(&size), sizeof(size));
-		const UInt32_8::uint32_8 nbase = _b.get();
+		const UInt32_8::vtype nbase = _b.get();
 		cFile.write(reinterpret_cast<const char *>(&nbase), sizeof(nbase));
 		cFile.write(reinterpret_cast<const char *>(_d), sizeof(UInt32_8) << _n);
 	}
 
-	void is_one(bool b[VSIZE], UInt64_8 & res64) const
+	void is_one(bool b[8], UInt64_8 & res64) const
 	{
 		unbalance();
 
 		const size_t size = size_t(1) << _n;
-		const Int32_8 base = Int32_8(_b);
+		const UInt64_8 base = UInt32_8_to_UInt64_8(_b);
 		const Int32_8 * const d = _d;
 
-		UInt64_8 r64 = UInt64_8(d[0]), bi = UInt64_8(base);
-		Int32_8::int32_8 one; one = (d[0] == Int32_8(1));
+		UInt64_8 r64 = Int32_8_to_UInt64_8(d[0]), bi = base;
+		Int32_8 one = Int32_8(d[0] == Int32_8(1));
 		for (size_t i = 1; i < size; ++i)
 		{
-			r64 += bi * UInt64_8(d[i]);
-			bi *= UInt64_8(base);
-			one &= (d[i] == Int32_8(0));
+			r64 += bi * Int32_8_to_UInt64_8(d[i]);
+			bi *= base;
+			one &= Int32_8(d[i] == Int32_8(0));
 		}
 		res64 = r64;
 
-		for (size_t j = 0; j < VSIZE; ++j) b[j] = (one[j] == -1);
+		for (size_t j = 0; j < 8; ++j) b[j] = (one[j] == -1);
 	}
 
 	UInt64_8 gethash64() const
@@ -241,21 +242,18 @@ public:
 
 		const size_t size = size_t(1) << _n;
 		const Int32_8 * const d = _d;
-		UInt64_8::uint64_8 hash64;
-		for (size_t j = 0; j < VSIZE; ++j)
+		UInt64_8 hash64 = UInt64_8(0ull);
+
+		Int32_8 zero = Int32_8(-1);
+		for (size_t i = 0; i < size; ++i)
 		{
-			uint64_t hash = 0;
-			bool is_zero = true;
-			for (size_t i = 0; i < size; ++i)
-			{
-				const uint32_t a_i = static_cast<uint32_t>(d[i][j]);
-				hash += a_i;
-				hash ^= rotl64(a_i + 0xc39d8a0552b073e8ull, (17 * static_cast<uint64_t>(a_i) + 5) % 64);
-				is_zero &= (a_i == 0);
-			}
-			if (is_zero) pio::error("value is zero", true);
-			hash64[j] = hash;
+			const Int32_8 d_i = d[i];
+			const UInt64_8 a_i = Int32_8_to_UInt64_8(d_i);
+			hash64 += a_i;
+			hash64 ^= (a_i + UInt64_8(0xc39d8a0552b073e8ull)).rotl((UInt64_8(17) * a_i + UInt64_8(5)) & UInt64_8(63));
+			zero &= Int32_8(d_i == Int32_8(0));
 		}
+		if (zero.is_true()) pio::error("value is zero", true);
 
 		return UInt64_8(hash64);
 	}
@@ -263,7 +261,7 @@ public:
 	UInt32_8 gethash32() const
 	{
 		const UInt64_8 hash64 = gethash64();
-		const UInt32_8::uint32_8 r = __builtin_convertvector(hash64.get(), UInt32_8::uint32_8) ^ __builtin_convertvector(hash64.get() >> 32, UInt32_8::uint32_8);
-	 	return UInt32_8((r >= 2) ? r : 2);
+		const UInt32_8 r = UInt64_8_to_UInt32_8(hash64) ^ UInt64_8_to_UInt32_8(hash64 >> 32);
+		return r.max(UInt32_8(2));
 	}
 };

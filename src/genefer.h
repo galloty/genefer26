@@ -186,7 +186,7 @@ private:
 
 		size_t i = 0;
 		std::string line;
-		UInt32_8::uint32_8 nb;
+		uint32_t nb[8];
 		while (std::getline(file, line))
 		{
 			const uint32_t b_i = uint32_t(std::stoi(line));
@@ -195,9 +195,9 @@ private:
 			if (b_i > 2000000000) pio::error("b > 2000000000 is not supported", true);
 			if ((b_i == 0) || ((b_i & (~b_i + 1)) == b_i)) pio::error("b must not be a power of two", true);
 			nb[i] = b_i;
-			++i; if (i == VSIZE) break;
+			++i; if (i == 8) break;
 		}
-		while (i < VSIZE) { nb[i] = nb[i - 1]; ++i; }
+		while (i < 8) { nb[i] = nb[i - 1]; ++i; }
 		
 		file.close();
 		b = UInt32_8(nb);
@@ -349,13 +349,6 @@ private:
 		}
 	}
 
-	uint8_t get_bit_mask(const UInt32_8 & e, const size_t i) const
-	{
-		uint8_t m = 0;
-		for (size_t j = 0; j < VSIZE; ++j) m |= (((e[j] & (1u << i)) != 0) ? uint8_t(1) : uint8_t(0)) << j;	// TODO vectorize
-		return m;
-	}
-
 	void power(const size_t reg, const uint32_t e) const
 	{
 		transform * const ptransform = _transform;
@@ -373,11 +366,10 @@ private:
 		transform * const ptransform = _transform;
 		ptransform->init_multiplicand(reg);
 		ptransform->set(1);
-		for (int i = ilog2_32(e.max()); i >= 0; --i)
+		for (int i = ilog2_32(e.max(0)); i >= 0; --i)
 		{
 			ptransform->square_dup(0);
-			const uint8_t mask = get_bit_mask(e, size_t(i));
-			ptransform->mul_mask(mask);
+			ptransform->mul_mask(e.get_bit_mask(i));
 		}
 	}
 
@@ -389,8 +381,7 @@ private:
 		for (int i = e.get_max_index(); i >= 0; --i)
 		{
 			ptransform->square_dup(0);
-			const uint32_t mask = e.get_bit_mask(size_t(i));
-			ptransform->mul_mask(uint8_t(mask));
+			ptransform->mul_mask(uint8_t(e.get_bit_mask(i)));
 		}
 	}
 
@@ -452,7 +443,7 @@ private:
 				if (!_is_boinc && (chrono.get_record_time() > 600)) { save_checkpoint(0, i, chrono.get_elapsed_time()); chrono.reset_record_time(); }
 			}
 
-			ptransform->square_dup(exponent.get_bit_mask(size_t(i)));
+			ptransform->square_dup(exponent.get_bit_mask(i));
 			// if (i == i_start) ptransform->cosmic_ray();	// => invalid
 			// if (i == 0) ptransform->cosmic_ray();	// => invalid
 
@@ -510,7 +501,7 @@ private:
 		{
 			if (_is_boinc) boinc_monitor();
 			if (quitting()) return EReturn::Aborted;
-			ptransform->square_dup(res.get_bit_mask(size_t(i)));
+			ptransform->square_dup(res.get_bit_mask(i));
 		}
 
 		// d(t)^{2^B} * 2^res
@@ -523,7 +514,7 @@ private:
 		ptransform->to_int();
 		const UInt64_8 h2 = ptransform->gethash64();
 
-		const bool success = (h1 == h2);
+		const bool success = h1.is_equal(h2);
 
 		valid_time = chrono.get_elapsed_time();
 		return success ? EReturn::Success : EReturn::Failed;
@@ -625,7 +616,7 @@ private:
 		return EReturn::Success;
 	}
 
-	EReturn quick(const mpzv & exponent, double & test_time, double & valid_time, bool is_prp[VSIZE], UInt64_8 & res64)
+	EReturn quick(const mpzv & exponent, double & test_time, double & valid_time, bool is_prp[8], UInt64_8 & res64)
 	{
 		const int B_GL = B_GerbiczLi(size_t(exponent.get_max_index() + 1));
 
@@ -639,7 +630,7 @@ private:
 	}
 
 	EReturn proof(const mpzv & exponent, const int depth, double & test_time, double & valid_time, double & proof_time,
-				  bool is_prp[VSIZE], UInt64_8 & pkey, UInt64_8 & res64)
+				  bool is_prp[8], UInt64_8 & pkey, UInt64_8 & res64)
 	{
 		const size_t esize = size_t(exponent.get_max_index() + 1);
 		const int B_GL = B_GerbiczLi(esize), B_PL = B_PietrzakLi(esize, depth);
@@ -657,7 +648,7 @@ private:
 
 	static uint32_t rand32(const uint32_t rmin, const uint32_t rmax) { return (rmax + rmin) / 2; }	// { return (static_cast<uint32_t>(std::rand()) % (rmax - rmin)) + rmin; }
 
-	EReturn server(const mpzv & exponent, double & time, bool is_prp[VSIZE], UInt64_8 & pkey, UInt64_8 & ckey, UInt64_8 & res64)
+	EReturn server(const mpzv & exponent, double & time, bool is_prp[8], UInt64_8 & pkey, UInt64_8 & ckey, UInt64_8 & res64)
 	{
 		transform * const ptransform = _transform;
 
@@ -875,7 +866,7 @@ private:
 			ptransform->to_int();
 			const UInt64_8 h2 = ptransform->gethash64();
 
-			if (h1 != h2) return EReturn::Failed;
+			if (!h1.is_equal(h2)) return EReturn::Failed;
 		}
 
 		// 2^p2
@@ -901,7 +892,7 @@ private:
 				if (!_is_boinc && (chrono.get_record_time() > 600)) { save_checkpoint(1, i, chrono.get_elapsed_time()); chrono.reset_record_time(); }
 			}
 
-			ptransform->square_dup(p2.get_bit_mask(size_t(i)));
+			ptransform->square_dup(p2.get_bit_mask(i));
 			// if (i == p2size - 1) ptransform->cosmic_ray();	// => invalid
 			// if (i == 0) ptransform->cosmic_ray();	// => invalid
 
@@ -946,7 +937,7 @@ private:
 		{
 			if (_is_boinc) boinc_monitor();
 			if (quitting()) return EReturn::Aborted;
-			ptransform->square_dup(res.get_bit_mask(size_t(i)));
+			ptransform->square_dup(res.get_bit_mask(i));
 		}
 
 		// d(t)^{2^GL} * 2^res
@@ -959,7 +950,7 @@ private:
 		ptransform->to_int();
 		const UInt64_8 h2 = ptransform->gethash64();
 
-		if (h1 != h2) return EReturn::Failed;
+		if (!h1.is_equal(h2)) return EReturn::Failed;
 
 		time = chrono.get_elapsed_time();
 		return EReturn::Success;
@@ -984,7 +975,7 @@ private:
 		uint32_t e[8]; for (size_t i = 0; i < 8; ++i) e[i] = 6 + 2 * uint32_t(i);
 		mpzv exponent; exponent.set_exponent(UInt32_8(e), 6);
 
-		double testTime = 0, validTime = 0; bool is_prp[VSIZE]; UInt64_8 res64;
+		double testTime = 0, validTime = 0; bool is_prp[8]; UInt64_8 res64;
 		const EReturn qret = quick(exponent, testTime, validTime, is_prp, res64);
 		clear_checkpoint();
 
@@ -1045,13 +1036,11 @@ public:
 		_n = n;
 
 		UInt32_8 b; parse_b(b_filename, b);
-		uint32_t b_min = uint32_t(-1), b_max = 0;
-		for (size_t i = 0; i < VSIZE; ++i) { b_min = std::min(b_min, b[i]); b_max = std::max(b_max, b[i]); }
 
 		const bool empty_main_filename = _main_filename.empty();
 		if (empty_main_filename)
 		{
-			std::ostringstream ss; ss << "g" << n << "_" << b_min << "_" << b_max;
+			std::ostringstream ss; ss << "g" << n << "_" << b.min(uint32_t(-1)) << "_" << b.max(0);
 			_main_filename = ss.str();
 		}
 
@@ -1089,7 +1078,7 @@ public:
 			if (success == EReturn::Success)
 			{
 				std::ostringstream ssr;
-				for (size_t j = 0; j < VSIZE; ++j) ssr << gfn(b[j], n) << ", ckey = " << uint64toString(ckey[j]) << std::endl;
+				for (size_t j = 0; j < 8; ++j) ssr << gfn(b[j], n) << ", ckey = " << uint64toString(ckey[j]) << std::endl;
 				pio::result(ssr.str());
 				if (!_is_boinc) clear_checkpoint();
 			}
@@ -1100,7 +1089,7 @@ public:
 
 			if (mode == EMode::Quick)
 			{
-				double test_time = 0, valid_time = 0; bool is_prp[VSIZE]; UInt64_8 res64;
+				double test_time = 0, valid_time = 0; bool is_prp[8]; UInt64_8 res64;
 				success = quick(exponent, test_time, valid_time, is_prp, res64);
 				const double error = _transform->get_error();
 				clearline();
@@ -1112,7 +1101,7 @@ public:
 					ss << "Test succeeded";
 					if (error != 0) ss << ", error = " << std::setprecision(4) << error;
 					ss << ", time = " << timer::format_time(test_time + valid_time) << "." << std::endl;
-					for (size_t j = 0; j < VSIZE; ++j) ss << gfn(b[j], n) << gfn_status(is_prp[j], 0, 0, res64[j]) << std::endl;
+					for (size_t j = 0; j < 8; ++j) ss << gfn(b[j], n) << gfn_status(is_prp[j], 0, 0, res64[j]) << std::endl;
 				}
 				pio::print(ss.str());
 				if ((success == EReturn::Success) || (!_is_boinc && (success == EReturn::Failed))) pio::result(ss.str());
@@ -1120,7 +1109,7 @@ public:
 			}
 			else if (mode == EMode::Proof)
 			{
-				double test_time = 0, valid_time = 0, proof_time = 0; bool is_prp[VSIZE]; UInt64_8 pkey, res64;
+				double test_time = 0, valid_time = 0, proof_time = 0; bool is_prp[8]; UInt64_8 pkey, res64;
 				success = proof(exponent, depth, test_time, valid_time, proof_time, is_prp, pkey, res64);
 				const double error = _transform->get_error();
 				const double time = test_time + valid_time + proof_time;
@@ -1138,7 +1127,7 @@ public:
 				if (success == EReturn::Success)
 				{
 					std::ostringstream ssr;
-					for (size_t j = 0; j < VSIZE; ++j) ssr << gfn(b[j], n) << gfn_status(is_prp[j], pkey[j], 0, res64[j]) << std::endl;
+					for (size_t j = 0; j < 8; ++j) ssr << gfn(b[j], n) << gfn_status(is_prp[j], pkey[j], 0, res64[j]) << std::endl;
 					pio::result(ssr.str());
 					if (!_is_boinc)
 					{
@@ -1149,7 +1138,7 @@ public:
 			}
 			else if (mode == EMode::Server)
 			{
-				double time = 0; bool is_prp[VSIZE]; UInt64_8 pkey, ckey, res64;
+				double time = 0; bool is_prp[8]; UInt64_8 pkey, ckey, res64;
 				success = server(exponent, time, is_prp, pkey, ckey, res64);
 				const double error = _transform->get_error();
 				std::ostringstream ss;
@@ -1165,7 +1154,7 @@ public:
 				if (success == EReturn::Success)
 				{
 					std::ostringstream ssr;
-					for (size_t j = 0; j < VSIZE; ++j) ssr << gfn(b[j], n) << gfn_status(is_prp[j], pkey[j], ckey[j], res64[j]) << std::endl;
+					for (size_t j = 0; j < 8; ++j) ssr << gfn(b[j], n) << gfn_status(is_prp[j], pkey[j], ckey[j], res64[j]) << std::endl;
 					pio::print(ssr.str());
 					if (success == EReturn::Success) pio::result(ssr.str());
 				}
