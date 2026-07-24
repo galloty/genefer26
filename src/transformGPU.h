@@ -677,6 +677,9 @@ public:
 		copy(dst, src);
 	}
 
+	void power(const size_t src, const uint32_t e) override { _power(src, e); }
+	void power_vec(const size_t src, const UInt32_8 & e) override { _power_vec(src, e); }
+
 	bool read_checkpoint(file & cFile, const size_t nregs) override
 	{
 		int kind = 0;
@@ -704,6 +707,10 @@ public:
 
 	size_t get_cache_size() const override { return (sizeof(Zp1) + sizeof(Zp2) + sizeof(Zp3)) * _size; }
 	double get_error() const override { return 0.0; }
+
+	void is_one(bool b[8], UInt64_8 & res64) const override { _is_one(b, res64); }
+	UInt64_8 gethash64() const override { return _gethash64(); }
+	UInt32_8 gethash32() const override { return _gethash32(); }
 
 	void cosmic_ray() override { Zp1 & z = _z1[_size / 2]; z = z.add(Zp1(1)); }
 };

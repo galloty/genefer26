@@ -107,6 +107,7 @@ public:
 		return false;
 	}
 
+	template<size_t VSIZE>
 	bool read(mpz_vec<VSIZE> & z)
 	{
 		for (size_t i = 0; i < VSIZE; ++i)
@@ -118,6 +119,7 @@ public:
 		return true;
 	}
 
+	template<size_t VSIZE>
 	bool write(const mpz_vec<VSIZE> & z)
 	{
 		for (size_t i = 0; i < VSIZE; ++i)

@@ -89,10 +89,10 @@ public:
 		for (size_t j = 0; j < SIZE; ++j) mpz_mul_2exp(_z[j], rhs._z[j], e);
 	}
 
-	int get_max_index() const	// TODO get_size => + 1
+	size_t get_max_size() const
 	{
-		int max_index = -1;
-		for (size_t j = 0; j < SIZE; ++j) max_index = std::max(max_index, int(mpz_sizeinbase(_z[j], 2)) - 1);
+		size_t max_index = 0;
+		for (size_t j = 0; j < SIZE; ++j) max_index = std::max(max_index, mpz_sizeinbase(_z[j], 2));
 		return max_index;
 	}
 

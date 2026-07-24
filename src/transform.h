@@ -15,6 +15,10 @@ Please give feedback to the authors if improvement is realized. It is distribute
 #include "file.h"
 #include "alignment.h"
 
+#ifndef finline
+#define finline	__attribute__((always_inline)) inline
+#endif
+
 class transform
 {
 protected:
@@ -42,11 +46,19 @@ public:
 	virtual void copy(const size_t dst, const size_t src) const = 0;	// r_dst = r_src
 	virtual void copy_mask(const size_t dst, const size_t src, const uint8_t mask) const = 0;
 
+	virtual void power(const size_t src, const uint32_t e) = 0;
+	virtual void power_vec(const size_t src, const UInt32_8 & e) = 0;
+
 	virtual bool read_checkpoint(file & cfile, const size_t num_regs) = 0;
 	virtual void save_checkpoint(file & cfile, const size_t num_regs) const = 0;
 
 	virtual size_t get_cache_size() const = 0;
 	virtual double get_error() const { return 0; }
+
+	// the binary code must be generated for each instruction set
+	virtual void is_one(bool b[8], UInt64_8 & res64) const = 0;
+	virtual UInt64_8 gethash64() const = 0;
+	virtual UInt32_8 gethash32() const = 0;
 
 	virtual void cosmic_ray() = 0;
 
@@ -65,9 +77,7 @@ public:
 	virtual ~transform() { align_delete(_d); }
 
 private:
-	static constexpr uint64_t rotl64(const uint64_t x, const uint8_t n) { return (x << n) | (x >> (-n & 63)); }
-
-	void unbalance() const
+	finline void unbalance() const
 	{
 		if (_unbalanced) return;
 		_unbalanced = true;
@@ -83,9 +93,9 @@ private:
 			Int32_8 r = d[i] + f;
 			f = Int32_8(0);
 
-			const Int32_8 l = Int32_8(r < Int32_8(0)), ge = Int32_8(r >= base);
+			const Int32_8 l = (r < Int32_8(0)), ge = (r >= base);
 			r += (base & l); f -= (Int32_8(1) & l);
-			const Int32_8 l2 = Int32_8(r < Int32_8(0));	// This should not occur but quick and safer
+			const Int32_8 l2 = (r < Int32_8(0));	// This should not occur but quick and safer
 			r -= (base & ge); f += (Int32_8(1) & ge);
 			r += (base & l2); f -= (Int32_8(1) & l2);
 
@@ -101,7 +111,7 @@ private:
 				Int32_8 r = d[i] + f;
 				f = Int32_8(0);
 
-				const Int32_8 l = Int32_8(r < Int32_8(0)), ge = Int32_8(r >= base);
+				const Int32_8 l = (r < Int32_8(0)), ge = (r >= base);
 				r += (base & l); f -= (Int32_8(1) & l);
 				r -= (base & ge); f += (Int32_8(1) & ge);
 
@@ -111,12 +121,11 @@ private:
 			}
 
 			// -1 cannot be unbalanced
-			Int32_8 is_minus_one = Int32_8(f == Int32_8(1));
-			for (size_t i = 0; i < size; ++i) is_minus_one &= Int32_8(d[i] == Int32_8(0));
+			Int32_8 is_minus_one = (f == Int32_8(1));
+			for (size_t i = 0; i < size; ++i) is_minus_one &= (d[i] == Int32_8(0));
 			d[0] -= (Int32_8(1) & is_minus_one);
 			f -= (Int32_8(1) & is_minus_one);
 		}
-
 	}
 
 protected:
@@ -125,11 +134,85 @@ protected:
 	EKind get_kind() const { return _kind; }
 	void set_type(const std::string & type) { _type = type; }
 
+	static constexpr int ilog2_32(const uint32_t n) { return (n == 0) ? -1 : (31 - __builtin_clz(n)); }
+
 	static size_t bitrev(const size_t i, const size_t n)
 	{
 		size_t r = 0;
 		for (size_t k = n, j = i; k > 1; k /= 2, j /= 2) r = (2 * r) | (j % 2);
 		return r;
+	}
+
+	finline void _power(const size_t src, const uint32_t e)
+	{
+		init_multiplicand(src);
+		set(1);
+		for (int i = ilog2_32(e); i >= 0; --i)
+		{
+			square_dup(0);
+			if ((e & (1u << i)) != 0) mul();
+		}
+	}
+
+	finline void _power_vec(const size_t src, const UInt32_8 & e)
+	{
+		init_multiplicand(src);
+		set(1);
+		for (int i = ilog2_32(e.max()); i >= 0; --i)
+		{
+			square_dup(0);
+			mul_mask(e.get_bit_mask(i));
+		}
+	}
+
+	finline void _is_one(bool b[8], UInt64_8 & res64) const
+	{
+		unbalance();
+
+		const size_t size = size_t(1) << _n;
+		const UInt64_8 base = UInt32_8_to_UInt64_8(_b);
+		const Int32_8 * const d = _d;
+
+		UInt64_8 r64 = Int32_8_to_UInt64_8(d[0]), bi = base;
+		Int32_8 one = (d[0] == Int32_8(1));
+		for (size_t i = 1; i < size; ++i)
+		{
+			r64 += bi * Int32_8_to_UInt64_8(d[i]);
+			bi *= base;
+			one &= (d[i] == Int32_8(0));
+		}
+		res64 = r64;
+
+		for (size_t j = 0; j < 8; ++j) b[j] = (one[j] == -1);
+	}
+
+	finline UInt64_8 _gethash64() const
+	{
+		unbalance();
+
+		const size_t size = size_t(1) << _n;
+		const Int32_8 * const d = _d;
+		UInt64_8 hash64 = UInt64_8(0ull);
+
+		Int32_8 zero = Int32_8(-1);
+		for (size_t i = 0; i < size; ++i)
+		{
+			const Int32_8 d_i = d[i];
+			const UInt64_8 a_i = Int32_8_to_UInt64_8(d_i);
+			hash64 += a_i;
+			hash64 ^= (a_i + UInt64_8(0xc39d8a0552b073e8ull)).rotl((UInt64_8(17) * a_i + UInt64_8(5)) & UInt64_8(63));
+			zero &= Int32_8(d_i == Int32_8(0));
+		}
+		if (zero.is_true()) pio::error("value is zero", true);
+
+		return UInt64_8(hash64);
+	}
+
+	finline UInt32_8 _gethash32() const
+	{
+		const UInt64_8 hash64 = gethash64();
+		const UInt32_8 r = UInt64_8_to_UInt32_8(hash64) ^ UInt64_8_to_UInt32_8(hash64 >> 32);
+		return r.max(UInt32_8(2));
 	}
 
 public:
@@ -213,55 +296,5 @@ public:
 		const UInt32_8::vtype nbase = _b.get();
 		cFile.write(reinterpret_cast<const char *>(&nbase), sizeof(nbase));
 		cFile.write(reinterpret_cast<const char *>(_d), sizeof(UInt32_8) << _n);
-	}
-
-	void is_one(bool b[8], UInt64_8 & res64) const
-	{
-		unbalance();
-
-		const size_t size = size_t(1) << _n;
-		const UInt64_8 base = UInt32_8_to_UInt64_8(_b);
-		const Int32_8 * const d = _d;
-
-		UInt64_8 r64 = Int32_8_to_UInt64_8(d[0]), bi = base;
-		Int32_8 one = Int32_8(d[0] == Int32_8(1));
-		for (size_t i = 1; i < size; ++i)
-		{
-			r64 += bi * Int32_8_to_UInt64_8(d[i]);
-			bi *= base;
-			one &= Int32_8(d[i] == Int32_8(0));
-		}
-		res64 = r64;
-
-		for (size_t j = 0; j < 8; ++j) b[j] = (one[j] == -1);
-	}
-
-	UInt64_8 gethash64() const
-	{
-		unbalance();
-
-		const size_t size = size_t(1) << _n;
-		const Int32_8 * const d = _d;
-		UInt64_8 hash64 = UInt64_8(0ull);
-
-		Int32_8 zero = Int32_8(-1);
-		for (size_t i = 0; i < size; ++i)
-		{
-			const Int32_8 d_i = d[i];
-			const UInt64_8 a_i = Int32_8_to_UInt64_8(d_i);
-			hash64 += a_i;
-			hash64 ^= (a_i + UInt64_8(0xc39d8a0552b073e8ull)).rotl((UInt64_8(17) * a_i + UInt64_8(5)) & UInt64_8(63));
-			zero &= Int32_8(d_i == Int32_8(0));
-		}
-		if (zero.is_true()) pio::error("value is zero", true);
-
-		return UInt64_8(hash64);
-	}
-
-	UInt32_8 gethash32() const
-	{
-		const UInt64_8 hash64 = gethash64();
-		const UInt32_8 r = UInt64_8_to_UInt32_8(hash64) ^ UInt64_8_to_UInt32_8(hash64 >> 32);
-		return r.max(UInt32_8(2));
 	}
 };

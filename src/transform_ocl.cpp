@@ -37,7 +37,7 @@ transform * transform::create_ocl(const UInt32_8 & b, const uint32_t n, const si
 #endif
 
 	transform * ptransform = nullptr;
-	uint32_t b_max = 0; for (size_t i = 0; i < VSIZE; ++i) b_max = std::max(b_max, b[i]);
+	const uint32_t b_max = b.max();
 
 	if (b_max <= 1000000000)
 	{

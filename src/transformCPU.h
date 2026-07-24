@@ -822,6 +822,9 @@ public:
 		for (size_t k = 0; k < N; ++k) z_dst[k].copy_mask(z_src[k], mask);
 	}
 
+	void power(const size_t src, const uint32_t e) override { _power(src, e); }
+	void power_vec(const size_t src, const UInt32_8 & e) override { _power_vec(src, e); }
+
 	bool read_checkpoint(file & cFile, const size_t nregs) override
 	{
 		int kind = 0;
@@ -845,6 +848,10 @@ public:
 
 	size_t get_cache_size() const override { return N * sizeof(Complex_8_pair); }
 	double get_error() const override { return _error; }
+
+	void is_one(bool b[8], UInt64_8 & res64) const override { _is_one(b, res64); }
+	UInt64_8 gethash64() const override { return _gethash64(); }
+	UInt32_8 gethash32() const override { return _gethash32(); }
 
 	void cosmic_ray() override { const Complex_8 z = _z[N / 2].get(); Double_8 x = z.real(); x.cosmic_ray(); _z[N / 2].set(Complex_8(x, z.imag())); }
 };

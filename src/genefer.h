@@ -26,8 +26,6 @@ Please give feedback to the authors if improvement is realized. It is distribute
 #include "file.h"
 #include "timer.h"
 
-inline int ilog2_32(const uint32_t n) { return (n == 0) ? -1 : (31 - __builtin_clz(n)); }
-
 class genefer
 {
 public:
@@ -57,7 +55,10 @@ private:
 	int _print_range = 0, _print_i = 0;
 	bool _print_sr = true;
 
-	using mpzv = mpz_vec<VSIZE>;
+	static constexpr size_t vec_size = 8;
+	using mpzv = mpz_vec<vec_size>;
+
+	static constexpr int ilog2_32(const uint32_t n) { return (n == 0) ? -1 : (31 - __builtin_clz(n)); }
 
 protected:
 	bool quitting() const
@@ -349,36 +350,12 @@ private:
 		}
 	}
 
-	void power(const size_t reg, const uint32_t e) const
+	void power_zvec(const size_t reg, const mpzv & e) const
 	{
 		transform * const ptransform = _transform;
 		ptransform->init_multiplicand(reg);
 		ptransform->set(1);
-		for (int i = ilog2_32(e); i >= 0; --i)
-		{
-			ptransform->square_dup(0);
-			if ((e & (1u << i)) != 0) ptransform->mul();
-		}
-	}
-	
-	void power_v(const size_t reg, const UInt32_8 & e) const
-	{
-		transform * const ptransform = _transform;
-		ptransform->init_multiplicand(reg);
-		ptransform->set(1);
-		for (int i = ilog2_32(e.max(0)); i >= 0; --i)
-		{
-			ptransform->square_dup(0);
-			ptransform->mul_mask(e.get_bit_mask(i));
-		}
-	}
-
-	void power_zv(const size_t reg, const mpzv & e) const
-	{
-		transform * const ptransform = _transform;
-		ptransform->init_multiplicand(reg);
-		ptransform->set(1);
-		for (int i = e.get_max_index(); i >= 0; --i)
+		for (int i = static_cast<int>(e.get_max_size()) - 1; i >= 0; --i)
 		{
 			ptransform->square_dup(0);
 			ptransform->mul_mask(uint8_t(e.get_bit_mask(i)));
@@ -421,7 +398,7 @@ private:
 		}
 
 		watch chrono(found ? restored_time : 0);
-		int i0 = exponent.get_max_index();
+		int i0 = static_cast<int>(exponent.get_max_size()) - 1;
 		const int i_start = found ? ri : i0;
 		init_print_progress(i0, i_start);
 		int dcount = 100;
@@ -497,7 +474,7 @@ private:
 
 		// 2^res
 		ptransform->set(1);
-		for (int i = res.get_max_index(); i >= 0; --i)
+		for (int i = static_cast<int>(res.get_max_size()) - 1; i >= 0; --i)
 		{
 			if (_is_boinc) boinc_monitor();
 			if (quitting()) return EReturn::Aborted;
@@ -545,7 +522,7 @@ private:
 		ptransform->write(proof_file);
 		// v1 = mu[0]^w[0]
 		const UInt32_8 q = ptransform->gethash32();
-		power_v(0, q);
+		ptransform->power_vec(0, q);
 		ptransform->copy(2, 0);
 
 		const size_t L = size_t(1) << depth;
@@ -564,7 +541,7 @@ private:
 			ckpt_file.check_crc32();
 			ptransform->from_int();
 
-			power_zv(0, w[0]);
+			power_zvec(0, w[0]);
 // s += mpz_sizeinbase(w[0], 2);
 			ptransform->copy(1, 0);
 
@@ -576,7 +553,7 @@ private:
 				ckpt_file.check_crc32();
 				ptransform->from_int();
 
-				power_zv(0, w[j]);
+				power_zvec(0, w[j]);
 // s += mpz_sizeinbase(w[j], 2);
 				ptransform->mul(1);
 				ptransform->copy(1, 0);
@@ -593,7 +570,7 @@ private:
 			ptransform->write(proof_file);
 			const UInt32_8 q = ptransform->gethash32();
 			// v1 = v1 * mu[k]^w[k]
-			power_v(0, q);
+			ptransform->power_vec(0, q);
 			ptransform->mul(2);
 			ptransform->copy(2, 0);
 
@@ -618,7 +595,7 @@ private:
 
 	EReturn quick(const mpzv & exponent, double & test_time, double & valid_time, bool is_prp[8], UInt64_8 & res64)
 	{
-		const int B_GL = B_GerbiczLi(size_t(exponent.get_max_index() + 1));
+		const int B_GL = B_GerbiczLi(exponent.get_max_size());
 
 		const EReturn rPrp = prp(exponent, B_GL, 0, test_time);
 		if (rPrp != EReturn::Success) return rPrp;
@@ -632,7 +609,7 @@ private:
 	EReturn proof(const mpzv & exponent, const int depth, double & test_time, double & valid_time, double & proof_time,
 				  bool is_prp[8], UInt64_8 & pkey, UInt64_8 & res64)
 	{
-		const size_t esize = size_t(exponent.get_max_index() + 1);
+		const size_t esize = exponent.get_max_size();
 		const int B_GL = B_GerbiczLi(esize), B_PL = B_PietrzakLi(esize, depth);
 
 		const EReturn rPrp = prp(exponent, B_GL, B_PL, test_time);
@@ -659,7 +636,7 @@ private:
 		int depth = 0; proof_file.read(reinterpret_cast<char *>(&depth), sizeof(depth));
 
 		const size_t L = size_t(1) << depth;
-		const size_t esize = size_t(exponent.get_max_index() + 1);
+		const size_t esize = exponent.get_max_size();
 		const int B_PL = B_PietrzakLi(esize, depth);
 
 		mpzv * const w = new mpzv[L];
@@ -670,7 +647,7 @@ private:
 		ptransform->is_one(is_prp, res64);
 		const UInt32_8 q = ptransform->gethash32();
 		w[0].set_ui(q);
-		power_v(0, q);
+		ptransform->power_vec(0, q);
 		ptransform->copy(1, 0);
 
 		// v2 = 1, v2: reg = 2
@@ -686,12 +663,12 @@ private:
 			ptransform->copy(3, 0);
 
 			// v1 = v1 * mu[k]^w[k]
-			power_v(0, q);
+			ptransform->power_vec(0, q);
 			ptransform->mul(1);
 			ptransform->copy(1, 0);
 
 			// v2 = v2^w[k] * mu[k]
-			power_v(2, q);
+			ptransform->power_vec(2, q);
 			ptransform->mul(3);
 			ptransform->copy(2, 0);
 
@@ -721,20 +698,19 @@ private:
 		mpz_clear(t);
 
 		ptransform->set(2);
-		power(0, rnd1);
+		ptransform->power(0, rnd1);
 		ptransform->mul(2);
 		ptransform->copy_mask(2, 0, uint8_t(mask));
-		std::cout << "mask = " << mask << std::endl;
 
-		power(1, rnd2);
+		ptransform->power(1, rnd2);
 		ptransform->copy(1, 0);
 		ptransform->set(2);
-		power(0, rnd3);
+		ptransform->power(0, rnd3);
 		ptransform->mul(1);
 		ptransform->to_int();
 		ckey = ptransform->gethash64();
 
-		power(2, rnd2);
+		ptransform->power(2, rnd2);
 		p2.mul_ui(p2, UInt32_8(rnd2));
 		p2.add_ui(p2, UInt32_8(rnd3));
 
@@ -780,7 +756,7 @@ private:
 			cert_file.check_crc32();
 		}
 
-		const int p2size = p2.get_max_index() + 1;
+		const int p2size = static_cast<int>(p2.get_max_size());
 
 		// Gerbicz test for v2^{2^B} and Gerbicz-Li test for 2^p2
 		const int L = B_GerbiczLi(static_cast<size_t>(B_PL)), GL = B_GerbiczLi(static_cast<size_t>(p2size));
@@ -933,7 +909,7 @@ private:
 
 		// 2^res
 		ptransform->set(1);
-		for (int i = res.get_max_index(); i >= 0; --i)
+		for (int i = static_cast<int>(res.get_max_size()) - 1; i >= 0; --i)
 		{
 			if (_is_boinc) boinc_monitor();
 			if (quitting()) return EReturn::Aborted;
@@ -1040,7 +1016,7 @@ public:
 		const bool empty_main_filename = _main_filename.empty();
 		if (empty_main_filename)
 		{
-			std::ostringstream ss; ss << "g" << n << "_" << b.min(uint32_t(-1)) << "_" << b.max(0);
+			std::ostringstream ss; ss << "g" << n << "_" << b.min() << "_" << b.max();
 			_main_filename = ss.str();
 		}
 

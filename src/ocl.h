@@ -28,68 +28,6 @@ Please give feedback to the authors if improvement is realized. It is distribute
 
 #include "pio.h"
 
-class splitter
-{
-private:
-	struct partition
-	{
-		size_t size;
-		uint32_t p[64];
-	};
-
-	const bool b256, b1024;
-	const size_t mMax;
-	std::vector<partition> part;
-
-private:
-	void split(const size_t m, const size_t i, partition & p)
-	{
-		if (b1024 && (m >= 10 + 5))
-		{
-			p.p[i] = 10;
-			split(m - 10, i + 1, p);
-		}
-		if (b256 && (m >= 8 + 5))
-		{
-			p.p[i] = 8;
-			split(m - 8, i + 1, p);
-		}
-		if (m >= 6 + 5)
-		{
-			p.p[i] = 6;
-			split(m - 6, i + 1, p);
-		}
-
-		if ((5 <= m) && (m <= mMax) && (i > 0))
-		{
-			partition pt;
-			for (size_t k = 0; k < i; ++k) pt.p[k] = p.p[k];
-			pt.p[i] = static_cast<uint32_t>(m);
-			pt.size = i + 1;
-			part.push_back(pt);
-		}
-	}
-
-private:
-	static size_t log_2(const size_t n) { size_t r = 0; for (size_t m = 1; m < n; m *= 2) ++r; return r; }
-
-public:
-	splitter(const size_t n, const size_t chunk256, const size_t chunk1024, const size_t sizeofType, const size_t sizeofVec,
-		const size_t mSquareMax, const cl_ulong localMemSize, const size_t maxWorkGroupSize) :
-		b256((maxWorkGroupSize >= (256 / 4) * chunk256) && (localMemSize >= 256 * chunk256 * sizeofVec * sizeofType)),
-		b1024((maxWorkGroupSize >= (1024 / 4) * chunk1024) && (localMemSize >= 1024 * chunk1024 * sizeofVec * sizeofType)),
-		mMax(std::min(mSquareMax, std::min(log_2(size_t(localMemSize / sizeofType)), log_2(maxWorkGroupSize * 4 * sizeofVec))))
-	{
-		partition p;
-		split(n, 0, p);
-	}
-
-	size_t getSize() const { return part.size(); }
-	size_t getPartSize(const size_t i) const { return part[i].size; }
-	uint32_t getPart(const size_t i, const size_t j) const { return part[i].p[j]; }
-};
-
-
 // #define ocl_debug		1
 #define ocl_fast_exec		1
 
