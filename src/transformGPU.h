@@ -680,32 +680,30 @@ public:
 	void power(const size_t src, const uint32_t e) override { _power(src, e); }
 	void power_vec(const size_t src, const UInt32_8 & e) override { _power_vec(src, e); }
 
-	bool read_checkpoint(file & cFile, const size_t nregs) override
+	bool read_checkpoint(file & cFile) override
 	{
 		int kind = 0;
 		if (!cFile.read(reinterpret_cast<char *>(&kind), sizeof(kind))) return false;
 		if (kind != static_cast<int>(get_kind())) return false;
-
-		const size_t num_regs = (nregs != 0) ? nregs : _num_regs, size = _size;
-		if (!cFile.read(reinterpret_cast<char *>(_z1), num_regs * size * sizeof(Zp1))) return false;
-		if (!cFile.read(reinterpret_cast<char *>(_z2), num_regs * size * sizeof(Zp2))) return false;
-		if (!cFile.read(reinterpret_cast<char *>(_z3), num_regs * size * sizeof(Zp3))) return false;
-
+		const size_t size = _num_regs * _size;
+		if (!cFile.read(reinterpret_cast<char *>(_z1), size * sizeof(Zp1))) return false;
+		if (!cFile.read(reinterpret_cast<char *>(_z2), size * sizeof(Zp2))) return false;
+		if (!cFile.read(reinterpret_cast<char *>(_z3), size * sizeof(Zp3))) return false;
 		return true;
 	}
 
-	void save_checkpoint(file & cFile, const size_t nregs) const override
+	void save_checkpoint(file & cFile) const override
 	{
 		const int kind = static_cast<int>(get_kind());
 		if (!cFile.write(reinterpret_cast<const char *>(&kind), sizeof(kind))) return;
-
-		const size_t num_regs = (nregs != 0) ? nregs : _num_regs, size = _size;
-		if (!cFile.write(reinterpret_cast<const char *>(_z1), num_regs * size * sizeof(Zp1))) return;
-		if (!cFile.write(reinterpret_cast<const char *>(_z2), num_regs * size * sizeof(Zp2))) return;
-		if (!cFile.write(reinterpret_cast<const char *>(_z3), num_regs * size * sizeof(Zp3))) return;
+		const size_t size = _num_regs * _size;
+		if (!cFile.write(reinterpret_cast<const char *>(_z1), size * sizeof(Zp1))) return;
+		if (!cFile.write(reinterpret_cast<const char *>(_z2), size * sizeof(Zp2))) return;
+		if (!cFile.write(reinterpret_cast<const char *>(_z3), size * sizeof(Zp3))) return;
 	}
 
-	size_t get_cache_size() const override { return (sizeof(Zp1) + sizeof(Zp2) + sizeof(Zp3)) * _size; }
+	size_t get_data_size() const override { return 0; }
+	size_t get_cache_size() const override { return 0; }
 	double get_error() const override { return 0.0; }
 
 	void is_one(bool b[8], UInt64_8 & res64) const override { _is_one(b, res64); }

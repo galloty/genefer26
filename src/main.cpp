@@ -289,8 +289,12 @@ public:
 		{
 			// internal test
 			// const bool is_cpu = true;
-			// if (g.check("b8p.txt",  8, genefer::EMode::Quick, device, is_cpu, 5) != genefer::EReturn::Success) return;
-			// if (g.check("b9p.txt",  9, genefer::EMode::Quick, device, is_cpu, 5) != genefer::EReturn::Success) return;
+			// if (g.check("b8m.txt", 8, genefer::EMode::Proof, device, is_cpu, 5) != genefer::EReturn::Success) return;
+			// if (g.check("b8m.txt", 8, genefer::EMode::Server, device, is_cpu, 5) != genefer::EReturn::Success) return;
+			// if (g.check("b8m.txt", 8, genefer::EMode::Check, device, is_cpu, 5) != genefer::EReturn::Success) return;
+			// if (g.check("b9m.txt",  9, genefer::EMode::Proof, device, is_cpu, 5) != genefer::EReturn::Success) return;
+			// if (g.check("b9m.txt",  9, genefer::EMode::Server, device, is_cpu, 5) != genefer::EReturn::Success) return;
+			// if (g.check("b9m.txt",  9, genefer::EMode::Check, device, is_cpu, 5) != genefer::EReturn::Success) return;
 			// return;
 
 			pio::print(usage());

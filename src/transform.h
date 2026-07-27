@@ -49,9 +49,10 @@ public:
 	virtual void power(const size_t src, const uint32_t e) = 0;
 	virtual void power_vec(const size_t src, const UInt32_8 & e) = 0;
 
-	virtual bool read_checkpoint(file & cfile, const size_t num_regs) = 0;
-	virtual void save_checkpoint(file & cfile, const size_t num_regs) const = 0;
+	virtual bool read_checkpoint(file & cfile) = 0;
+	virtual void save_checkpoint(file & cfile) const = 0;
 
+	virtual size_t get_data_size() const = 0;
 	virtual size_t get_cache_size() const = 0;
 	virtual double get_error() const { return 0; }
 
@@ -210,7 +211,7 @@ protected:
 
 	finline UInt32_8 _gethash32() const
 	{
-		const UInt64_8 hash64 = gethash64();
+		const UInt64_8 hash64 = _gethash64();
 		const UInt32_8 r = UInt64_8_to_UInt32_8(hash64) ^ UInt64_8_to_UInt32_8(hash64 >> 32);
 		return r.max(UInt32_8(2));
 	}

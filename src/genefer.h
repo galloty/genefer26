@@ -107,8 +107,12 @@ private:
 		_transform = transform::create_cpu(b, n, num_regs);
 		if (verbose)
 		{
-			std::ostringstream ss; ss << "Using " << _transform->get_type() << " implementation, 4 threads";
-			if (full) ss << ", data size: " << std::setprecision(3) << _transform->get_cache_size() / (1024 * 1024.0) << " MB";
+			std::ostringstream ss; ss << "Using " << _transform->get_type() << " implementation";
+			if (full)
+			{
+				ss << ", data size: " << std::setprecision(3) << _transform->get_data_size() / (1024 * 1024.0) << " MB";
+				ss << ", cache size: " << std::setprecision(3) << _transform->get_cache_size() / (1024 * 1024.0) << " MB";
+			}
 			ss << "." << std::endl;
 			pio::print(ss.str());
 		}
@@ -126,11 +130,6 @@ private:
 	std::string checkpoint_filename() const { return _main_filename + ".chk"; }
 	std::string proof_filename() const { return _main_filename + ".proof"; }
 	std::string cert_filename() const { return _main_filename + ".cert"; }
-	std::string ckpt_filename(const size_t i) const
-	{
-		std::ostringstream ss; ss << _main_filename << "_" << i << ".ckpt";
-		return ss.str();
-	}
 
 	static std::string uint64toString(const uint64_t u)
 	{
@@ -217,8 +216,7 @@ private:
 		if (rwhere != where) return -2;
 		if (!checkpoint_file.read(reinterpret_cast<char *>(&i), sizeof(i))) return -2;
 		if (!checkpoint_file.read(reinterpret_cast<char *>(&elapsed_time), sizeof(elapsed_time))) return -2;
-		const size_t num_reg = (where == 0) ? 2 : 3;
-		if (!_transform->read_checkpoint(checkpoint_file, num_reg)) return -2;
+		if (!_transform->read_checkpoint(checkpoint_file)) return -2;
 		if (!checkpoint_file.check_crc32()) return -2;
 		return 0;
 	}
@@ -256,8 +254,7 @@ private:
 			if (!checkpoint_file.write(reinterpret_cast<const char *>(&where), sizeof(where))) return;
 			if (!checkpoint_file.write(reinterpret_cast<const char *>(&i), sizeof(i))) return;
 			if (!checkpoint_file.write(reinterpret_cast<const char *>(&elapsed_time), sizeof(elapsed_time))) return;
-			const size_t num_reg = (where == 0) ? 2 : 3;
-			_transform->save_checkpoint(checkpoint_file, num_reg);
+			_transform->save_checkpoint(checkpoint_file);
 			checkpoint_file.write_crc32();
 		}
 
@@ -390,11 +387,11 @@ private:
 		{
 			std::ostringstream ss; ss << "Resuming from a checkpoint." << std::endl;
 			pio::print(ss.str());
-			if (ri == -1)
-			{
-				test_time = 0;
-				return EReturn::Success;
-			}
+			// if (ri == -1)
+			// {
+			// 	test_time = 0;
+			// 	return EReturn::Success;
+			// }
 		}
 
 		watch chrono(found ? restored_time : 0);
@@ -433,15 +430,12 @@ private:
 			}
 			if ((B_PL != 0) && (i % B_PL == 0))
 			{
-				file ckptFile(ckpt_filename(size_t(i / B_PL)), "wb", true);
-				ptransform->to_int();
-				ptransform->write(ckptFile);
-				ckptFile.write_crc32();
+				ptransform->copy(3 + size_t(i / B_PL), 0);
 			}
 		}
 
 		test_time = chrono.get_elapsed_time();
-		save_checkpoint(0, -1, test_time);
+		// save_checkpoint(0, -1, test_time);
 		return EReturn::Success;
 	}
 
@@ -514,12 +508,10 @@ private:
 		proof_file.write(reinterpret_cast<const char *>(&depth), sizeof(depth));
 
 		// mu[0] = ckpt[0]
-		file ckpt_file(ckpt_filename(0), "rb", true);
-		ptransform->read(ckpt_file);
-		ckpt_file.check_crc32();
-		ptransform->from_int();
-
+		ptransform->copy(0, 3 + 0);
+		ptransform->to_int();
 		ptransform->write(proof_file);
+
 		// v1 = mu[0]^w[0]
 		const UInt32_8 q = ptransform->gethash32();
 		ptransform->power_vec(0, q);
@@ -536,11 +528,7 @@ private:
 			const size_t i = size_t(1) << (depth - k);
 
 			// mu[k] = ckpt[i]^w[0]
-			file ckpt_file(ckpt_filename(i), "rb", true);
-			ptransform->read(ckpt_file);
-			ckpt_file.check_crc32();
-			ptransform->from_int();
-
+			ptransform->copy(0, 3 + i);
 			power_zvec(0, w[0]);
 // s += mpz_sizeinbase(w[0], 2);
 			ptransform->copy(1, 0);
@@ -548,11 +536,7 @@ private:
 			for (size_t j = i; j < L / 2; j += i)
 			{
 				// mu[k] *= ckpt[i + 2 * j]^w[j]
-				file ckpt_file(ckpt_filename(i + 2 * j), "rb", true);
-				ptransform->read(ckpt_file);
-				ckpt_file.check_crc32();
-				ptransform->from_int();
-
+				ptransform->copy(0, 3 + i + 2 * j);
 				power_zvec(0, w[j]);
 // s += mpz_sizeinbase(w[j], 2);
 				ptransform->mul(1);
@@ -623,7 +607,7 @@ private:
 		return PL(depth, proof_time, pkey);
 	}
 
-	static uint32_t rand32(const uint32_t rmin, const uint32_t rmax) { return (rmax + rmin) / 2; }	// { return (static_cast<uint32_t>(std::rand()) % (rmax - rmin)) + rmin; }
+	static uint32_t rand32(const uint32_t rmin, const uint32_t rmax) { return (rmax + rmin) / 2; }	// { return (static_cast<uint32_t>(std::rand()) % (rmax - rmin)) + rmin; } // TODO
 
 	EReturn server(const mpzv & exponent, double & time, bool is_prp[8], UInt64_8 & pkey, UInt64_8 & ckey, UInt64_8 & res64)
 	{
@@ -1024,7 +1008,7 @@ public:
 
 		size_t num_regs;
 		if (mode == EMode::Quick) num_regs = 3;
-		else if (mode == EMode::Proof) num_regs = 3;
+		else if (mode == EMode::Proof) num_regs = 3 + (size_t(1) << depth);
 		else if (mode == EMode::Server) num_regs = 4;
 		else if (mode == EMode::Check) num_regs = 4;
 		else return EReturn::Failed;
@@ -1105,11 +1089,7 @@ public:
 					std::ostringstream ssr;
 					for (size_t j = 0; j < 8; ++j) ssr << gfn(b[j], n) << gfn_status(is_prp[j], pkey[j], 0, res64[j]) << std::endl;
 					pio::result(ssr.str());
-					if (!_is_boinc)
-					{
-						for (size_t i = 0, L = size_t(1) << depth; i < L; ++i) std::remove(ckpt_filename(i).c_str());
-						clear_checkpoint();
-					}
+					if (!_is_boinc) clear_checkpoint();
 				}
 			}
 			else if (mode == EMode::Server)

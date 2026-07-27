@@ -825,28 +825,24 @@ public:
 	void power(const size_t src, const uint32_t e) override { _power(src, e); }
 	void power_vec(const size_t src, const UInt32_8 & e) override { _power_vec(src, e); }
 
-	bool read_checkpoint(file & cFile, const size_t nregs) override
+	bool read_checkpoint(file & cFile) override
 	{
 		int kind = 0;
 		if (!cFile.read(reinterpret_cast<char *>(&kind), sizeof(kind))) return false;
 		if (kind != static_cast<int>(get_kind())) return false;
-
-		const size_t num_regs = (nregs != 0) ? nregs : _num_regs;
-		if (!cFile.read(reinterpret_cast<char *>(_z), num_regs * N * sizeof(Complex_8_pair))) return false;
-
+		if (!cFile.read(reinterpret_cast<char *>(_z), _num_regs * N * sizeof(Complex_8_pair))) return false;
 		return true;
 	}
 
-	void save_checkpoint(file & cFile, const size_t nregs) const override
+	void save_checkpoint(file & cFile) const override
 	{
 		const int kind = static_cast<int>(get_kind());
 		if (!cFile.write(reinterpret_cast<const char *>(&kind), sizeof(kind))) return;
-
-		const size_t num_regs = (nregs != 0) ? nregs : _num_regs;
-		if (!cFile.write(reinterpret_cast<const char *>(_z), num_regs * N * sizeof(Complex_8_pair))) return;
+		if (!cFile.write(reinterpret_cast<const char *>(_z), _num_regs * N * sizeof(Complex_8_pair))) return;
 	}
 
-	size_t get_cache_size() const override { return N * sizeof(Complex_8_pair); }
+	size_t get_data_size() const override { return (_num_regs + 1) * N * sizeof(Complex_8_pair) + N / 2 * sizeof(TwiddleFactor); }
+	size_t get_cache_size() const override { return N * sizeof(Complex_8_pair) + N / 2 * sizeof(TwiddleFactor); }
 	double get_error() const override { return _error; }
 
 	void is_one(bool b[8], UInt64_8 & res64) const override { _is_one(b, res64); }
@@ -864,14 +860,14 @@ inline transform * create_transformCPU(const UInt32_8 & b, const uint32_t n, con
 	else if (n ==  7) ptransform = new transformCPU<(1 <<  6)>(b, n, num_regs);
 	else*/ if (n ==  8) ptransform = new transformCPU<(1 <<  7)>(b, n, num_regs);
 	else if (n ==  9) ptransform = new transformCPU<(1 <<  8)>(b, n, num_regs);
-	/*else if (n == 10) ptransform = new transformCPU<(1 <<  9)>(b, n, num_regs);
+	else if (n == 10) ptransform = new transformCPU<(1 <<  9)>(b, n, num_regs);
 	else if (n == 11) ptransform = new transformCPU<(1 << 10)>(b, n, num_regs);
 	else if (n == 12) ptransform = new transformCPU<(1 << 11)>(b, n, num_regs);
 	else if (n == 13) ptransform = new transformCPU<(1 << 12)>(b, n, num_regs);
 	else if (n == 14) ptransform = new transformCPU<(1 << 13)>(b, n, num_regs);
 	else if (n == 15) ptransform = new transformCPU<(1 << 14)>(b, n, num_regs);
 	else if (n == 16) ptransform = new transformCPU<(1 << 15)>(b, n, num_regs);
-	else if (n == 17) ptransform = new transformCPU<(1 << 16)>(b, n, num_regs);*/
+	else if (n == 17) ptransform = new transformCPU<(1 << 16)>(b, n, num_regs);
 
 	if (ptransform == nullptr) throw std::runtime_error("exponent is not supported");
 
