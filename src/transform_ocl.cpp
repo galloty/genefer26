@@ -41,11 +41,11 @@ transform * transform::create_ocl(const UInt32_8 & b, const uint32_t n, const si
 
 	if (b_max <= 1000000000)
 	{
-		ptransform = new transformGPU<false>(b, n, num_regs, device, is_boinc, boinc_platform_id, boinc_device_id);
+		ptransform = new transformGPU<8, false>(b, n, num_regs, device, is_boinc, boinc_platform_id, boinc_device_id);
 	}
 	else
 	{
-		ptransform = new transformGPU<true>(b, n, num_regs, device, is_boinc, boinc_platform_id, boinc_device_id);
+		ptransform = new transformGPU<8, true>(b, n, num_regs, device, is_boinc, boinc_platform_id, boinc_device_id);
 	}
 	return ptransform;
 }
