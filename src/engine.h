@@ -29,6 +29,43 @@ public:
 	uint32 get() const { return _n; }
 };
 
+template<uint32 P, uint32 Q, uint32 R, uint32 H>
+class ZPT : public ZP
+{
+private:
+	static uint32 _add(const uint32 a, const uint32 b) { return a + b - ((a >= P - b) ? P : 0); }
+	static uint32 _sub(const uint32 a, const uint32 b) { return a - b + ((a < b) ? P : 0); }
+
+	static uint32 _mul(const uint32 lhs, const uint32 rhs)
+	{
+		const uint64 t = lhs * uint64(rhs);
+		const uint32 lo = uint32(t), hi = uint32(t >> 32);
+		const uint32 mp = uint32(((lo * Q) * uint64(P)) >> 32);
+		return _sub(hi, mp);
+	}
+
+public:
+	ZPT() {}
+	explicit ZPT(const uint32 n) : ZP(n) {}
+
+	int32 get_int() const { return (_n >= P / 2) ? int32(_n - P) : int32(_n); }
+	ZPT & set_int(const int32 i) { _n = (i < 0) ? (uint32(i) + P) : uint32(i); return *this; }
+
+	ZPT mul(const ZPT & rhs) const { return ZPT(_mul(_n, rhs._n)); }
+
+	ZPT pow(const size_t e) const
+	{
+		if (e == 0) return ZPT(R);	// MF of one is R
+		ZPT r = ZPT(R), y = *this;
+		for (size_t i = e; i != 1; i /= 2) { if (i % 2 != 0) r = r.mul(y); y = y.mul(y); }
+		r = r.mul(y);
+		return r;
+	}
+
+	static const ZPT primroot_n(const uint32 n) { return ZPT(H).pow((P - 1) / n); }
+	static ZPT norm(const uint32 n) { return ZPT(P - (P - 1) / n); }
+};
+
 #define CREATE_TRANSFORM_KERNEL(name) _##name = create_transform_kernel(#name);
 
 template<size_t VSIZE, bool IS32>
@@ -123,10 +160,10 @@ public:
 ///////////////////////////////
 
 public:
-	void backward8(const size_t m, const size_t s)
+	void backward8(const int lm, const size_t s)
 	{
-		const uint32 im = uint32(m), is = uint32(s);
-		_setKernelArg(_backward8, 2, sizeof(uint32), &im);
+		const int32 ilm = int32(lm); const uint32 is = uint32(s);
+		_setKernelArg(_backward8, 2, sizeof(int32), &ilm);
 		_setKernelArg(_backward8, 3, sizeof(uint32), &is);
 		_executeKernel(_backward8, 3 * VSIZE * _n / 8);
 	}

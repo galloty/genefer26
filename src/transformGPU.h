@@ -13,32 +13,86 @@ Please give feedback to the authors if improvement is realized. It is distribute
 #include "engine.h"
 #include "ocl/kernel.h"
 
-#define	P1		(127 * (uint32(1) << 24) + 1)
-#define	Q1		2164260865u		// p * q = 1 (mod 2^32)
-#define	R1		33554430u		// 2^32 mod p
-#define	RSQ1	402124772u		// (2^32)^2 mod p
-#define	H1		100663290u		// Montgomery form of the primitive root 3
-#define	IM1		1930170389u		// MF of MF of I = 3^{(p - 1)/4} to convert input into MF
-#define	SQRTI1	1626730317u		// MF of 3^{(p - 1)/8}
-#define	ISQRTI1	856006302u		// MF of i * sqrt(i)
+#define	P1S			(127 * (uint32(1) << 24) + 1)
+#define	Q1S			2164260865u		// p * q = 1 (mod 2^32)
+#define	R1S			33554430u		// 2^32 mod p
+#define	RSQ1S		402124772u		// (2^32)^2 mod p
+#define	H1S			100663290u		// Montgomery form of the primitive root 3
+#define	IM1S		2063729671u		// MF of I = 3^{(p - 1)/4}
+#define	MFIM1S		1930170389u		// MF of MF of I to convert input into MF
+#define	SQRTI1S		1626730317u		// MF of 3^{(p - 1)/8}
+#define	ISQRTI1S	856006302u		// MF of i * sqrt(i)
 
-#define	P2		(63 * (uint32(1) << 25) + 1)
-#define	Q2		2181038081u
-#define	R2		67108862u
-#define	RSQ2	2111798781u
-#define	H2		335544310u		// MF of the primitive root 5
-#define	IM2		1036950657u
-#define	SQRTI2	338852760u
-#define	ISQRTI2	1090446030u
+#define	P2S			(63 * (uint32(1) << 25) + 1)
+#define	Q2S			2181038081u
+#define	R2S			67108862u
+#define	RSQ2S		2111798781u
+#define	H2S			335544310u		// MF of the primitive root 5
+#define	IM2S		530075385u
+#define	MFIM2S		1036950657u
+#define	SQRTI2S		338852760u
+#define	ISQRTI2S	1090446030u
 
-#define	P3		(15 * (uint32(1) << 27) + 1)
-#define	Q3		2281701377u
-#define	R3		268435454u
-#define	RSQ3	1172168163u
-#define	H3		268435390u		// MF of the primitive root 31
-#define	IM3		734725699u
-#define	SQRTI3	1032137103u
-#define	ISQRTI3	1964242958u
+#define	P3S			(15 * (uint32(1) << 27) + 1)
+#define	Q3S			2281701377u
+#define	R3S			268435454u
+#define	RSQ3S		1172168163u
+#define	H3S			268435390u		// MF of the primitive root 31
+#define	IM3S		473486609u
+#define	MFIM3S		734725699u
+#define	SQRTI3S		1032137103u
+#define	ISQRTI3S	1964242958u
+
+#define	INVP2_P1S	2130706177u		// MF of 1 / P2 (mod P1)
+#define	INVP3_P1S	608773230u		// MF of 1 / P3 (mod P1)
+#define	INVP3_P2S	1409286102u		// MF of 1 / P3 (mod P2)
+
+#define	P1P2P3LS	1962934273u					// (P1 * P2 * P3) mod 2^32
+#define	P1P2P3HS	2111326211158966273ul		// (P1 * P2 * P3) >> 32
+
+#define	P1P2P3_2LS	3128950784u					// (P1 * P2 * P3 / 2) mod 2^32
+#define	P1P2P3_2HS	1055663105579483136ul		// (P1 * P2 * P3 / 2) >> 32
+
+#define P1U			(125 * (uint32(1) << 25) + 1)
+#define	Q1U			100663297u		// p * q = 1 (mod 2^32)
+#define	R1U			100663295u		// 2^32 mod p
+#define	RSQ1U		232465106u		// (2^32)^2 mod p
+#define	H1U			301989885u		// Montgomery form of the primitive root 3
+#define	IM1U		1486287593u		// MF of I = 3^{(p - 1)/4}
+#define	MFIM1U		3645424034u		// MF of MF of I to convert input into MF
+#define	SQRTI1U		3580437317u		// MF of 3^{(p - 1)/8}
+#define	ISQRTI1U	2017881188u		// MF of i * sqrt(i)
+
+#define P2U			(243 * (uint32(1) << 24) + 1)
+#define	Q2U			218103809u
+#define	R2U			218103807u
+#define	RSQ2U		3444438393u
+#define	H2U			1526726649u		// MF of the primitive root 7
+#define	IM2U		99906823u
+#define	MFIM2U		1773796560u
+#define	SQRTI2U		2024944857u
+#define	ISQRTI2U	2119710515u
+
+#define P3U			(235 * (uint32(1) << 24) + 1)
+#define	Q3U			352321537u
+#define	R3U			352321535u
+#define	RSQ3U		3810498414u
+#define	H3U			1056964605u		// MF of the primitive root 3
+#define	IM3U		2213106415u
+#define	MFIM3U		2454519270u
+#define	SQRTI3U		3448990025u
+#define	ISQRTI3U	3659377330u
+
+#define	INVP2_P1U	1797558821u		// MF of 1 / P2 (mod P1)
+#define	INVP3_P1U	3075822917u		// MF of 1 / P3 (mod P1)
+#define	INVP3_P2U	4076863457u		// MF of 1 / P3 (mod P2)
+
+#define	P1P2P3LU	3623878657u					// (P1 * P2 * P3) mod 2^32
+#define	P1P2P3HU	15696902887611105282ul		// (P1 * P2 * P3) >> 32
+
+#define	P1P2P3_2LU	1811939328u					// (P1 * P2 * P3 / 2) mod 2^32
+#define	P1P2P3_2HU	7848451443805552641ul		// (P1 * P2 * P3 / 2) >> 32
+
 
 template<uint32 P, uint32 Q, uint32 R, uint32 RSQ, uint32 H, uint32 IM, uint32 SQRTI, uint32 ISQRTI>
 class Zp : public ZP
@@ -274,167 +328,164 @@ private:
 	}
 
 	template<size_t VSIZE>
-	static void mul2x4(Zp * const z, const Zp * const zp, const Zp * const w, const size_t n_8)
+	static void mul2x4(Zp * const z, const Zp * const zp, const Zp * const w, const int ln_8)
 	{
-		for (size_t j = 0; j < n_8; ++j)
+		const size_t n_8 = size_t(1) << ln_8;
+
+		for (size_t id = 0; id < (VSIZE << ln_8); ++id)
 		{
+			const size_t j = id / VSIZE, k = 7 * (id & ~(VSIZE - 1)) + id;
+
 			Zp w2[2]; _load(2, w2, &w[2 * n_8 + 2 * j], 1);
 
-			const size_t k = 8 * j;
-			for (size_t l = 0; l < VSIZE; ++l)
-			{
-				Zp zl[8]; _load(8, zl, &z[VSIZE * k + l], VSIZE);
-				Zp zpl[8]; _load(8, zpl, &zp[VSIZE * k + l], VSIZE);
-				_mul2x4(zl, zpl, w2);
-				_store(8, &z[VSIZE * k + l], VSIZE, zl);
-			}
+			Zp zl[8]; _load(8, zl, &z[k], VSIZE);
+			Zp zpl[8]; _load(8, zpl, &zp[k], VSIZE);
+			_mul2x4(zl, zpl, w2);
+			_store(8, &z[k], VSIZE, zl);
 		}
 	}
 
 	template<size_t VSIZE>
-	static void mul2x4_mask(Zp * const z, const Zp * const zp, const Zp * const w, const size_t n_8, const uint8_t mask)
+	static void mul2x4_mask(Zp * const z, const Zp * const zp, const Zp * const w, const int ln_8, const uint8_t mask)
 	{
+		const size_t n_8 = size_t(1) << ln_8;
 		const Zp one = Zp(1).toMonty(), zero = Zp(0);
 		const Zp z1l[8] = { one, zero, one, zero, one, zero, one, zero };
 
-		for (size_t j = 0; j < n_8; ++j)
+		for (size_t id = 0; id < (VSIZE << ln_8); ++id)
 		{
+			const size_t j = id / VSIZE, k = 7 * (id & ~(VSIZE - 1)) + id;
+
 			Zp w2[2]; _load(2, w2, &w[2 * n_8 + 2 * j], 1);
 
-			const size_t k = 8 * j;
-			for (size_t l = 0; l < VSIZE; ++l)
-			{
-				Zp zl[8]; _load(8, zl, &z[VSIZE * k + l], VSIZE);
-				Zp zpl[8]; _load(8, zpl, &zp[VSIZE * k + l], VSIZE);
-				const Zp * const zml = ((mask & (uint8_t(1) << l)) != 0) ? zpl : z1l;
-				_mul2x4(zl, zml, w2);
-				_store(8, &z[VSIZE * k + l], VSIZE, zl);
-			}
+			Zp zl[8]; _load(8, zl, &z[k], VSIZE);
+			Zp zpl[8]; _load(8, zpl, &zp[k], VSIZE);
+			const Zp * const zml = ((mask & (uint8_t(1) << (id % VSIZE))) != 0) ? zpl : z1l;
+			_mul2x4(zl, zml, w2);
+			_store(8, &z[k], VSIZE, zl);
 		}
 	}
 
 	template<size_t VSIZE>
-	static void fwd4x2(Zp * const zp, const Zp * const w, const size_t n_8)
+	static void fwd4x2(Zp * const zp, const Zp * const w, const int ln_8)
 	{
-		for (size_t j = 0; j < n_8; ++j)
+		const size_t n_8 = size_t(1) << ln_8;
+
+		for (size_t id = 0; id < (VSIZE << ln_8); ++id)
 		{
+			const size_t j = id / VSIZE, k = 7 * (id & ~(VSIZE - 1)) + id;
+
 			Zp w2[2]; _load(2, w2, &w[2 * (n_8 + j)], 1);
 
-			const size_t k = 8 * j;
-			for (size_t l = 0; l < VSIZE; ++l)
-			{
-				Zp zpl[8]; _load(8, zpl, &zp[VSIZE * k + l], VSIZE);
-				_fwd4x2(zpl, w2);
-				_store(8, &zp[VSIZE * k + l], VSIZE, zpl);
-			}
+			Zp zpl[8]; _load(8, zpl, &zp[k], VSIZE);
+			_fwd4x2(zpl, w2);
+			_store(8, &zp[k], VSIZE, zpl);
 		}
 	}
 
 	template<size_t VSIZE>
-	static void mul4x2(Zp * const z, const Zp * const zp, const Zp * const w, const size_t n_8)
+	static void mul4x2(Zp * const z, const Zp * const zp, const Zp * const w, const int ln_8)
 	{
-		for (size_t j = 0; j < n_8; ++j)
+		const size_t n_8 = size_t(1) << ln_8;
+
+		for (size_t id = 0; id < (VSIZE << ln_8); ++id)
 		{
+			const size_t j = id / VSIZE, k = 7 * (id & ~(VSIZE - 1)) + id;
+
 			const size_t ji = n_8 - j - 1;
 			Zp w2[2]; _load(2, w2, &w[2 * (n_8 + j)], 1);
 			Zp wi2r[2]; _load(2, wi2r, &w[2 * (n_8 + ji)], 1);
 
-			const size_t k = 8 * j;
-			for (size_t l = 0; l < VSIZE; ++l)
-			{
-				Zp zl[8]; _load(8, zl, &z[VSIZE * k + l], VSIZE);
-				Zp zpl[8]; _load(8, zpl, &zp[VSIZE * k + l], VSIZE);
-				_mul4x2r(zl, zpl, w2, wi2r);
-				_store(8, &z[VSIZE * k + l], VSIZE, zl);
-			}
+			Zp zl[8]; _load(8, zl, &z[k], VSIZE);
+			Zp zpl[8]; _load(8, zpl, &zp[k], VSIZE);
+			_mul4x2r(zl, zpl, w2, wi2r);
+			_store(8, &z[k], VSIZE, zl);
 		}
 	}
 
 	template<size_t VSIZE>
-	static void mul4x2_mask(Zp * const z, const Zp * const zp, const Zp * const w, const size_t n_8, const uint8_t mask)
+	static void mul4x2_mask(Zp * const z, const Zp * const zp, const Zp * const w, const int ln_8, const uint8_t mask)
 	{
+		const size_t n_8 = size_t(1) << ln_8;
 		const Zp one = Zp(1).toMonty(), zero = Zp(0);
 		const Zp z1l[8] = { one, zero, one, zero, one, zero, one, zero };
 
-		for (size_t j = 0; j < n_8; ++j)
+		for (size_t id = 0; id < (VSIZE << ln_8); ++id)
 		{
+			const size_t j = id / VSIZE, k = 7 * (id & ~(VSIZE - 1)) + id;
+
 			const size_t ji = n_8 - j - 1;
 			Zp w2[2]; _load(2, w2, &w[2 * (n_8 + j)], 1);
 			Zp wi2r[2]; _load(2, wi2r, &w[2 * (n_8 + ji)], 1);
 
-			const size_t k = 8 * j;
-			for (size_t l = 0; l < VSIZE; ++l)
-			{
-				Zp zl[8]; _load(8, zl, &z[VSIZE * k + l], VSIZE);
-				Zp zpl[8]; _load(8, zpl, &zp[VSIZE * k + l], VSIZE);
-				const Zp * const zml = ((mask & (uint8_t(1) << l)) != 0) ? zpl : z1l;
-				_mul4x2r(zl, zml, w2, wi2r);
-				_store(8, &z[VSIZE * k + l], VSIZE, zl);
-			}
+			Zp zl[8]; _load(8, zl, &z[k], VSIZE);
+			Zp zpl[8]; _load(8, zpl, &zp[k], VSIZE);
+			const Zp * const zml = ((mask & (uint8_t(1) << (id % VSIZE))) != 0) ? zpl : z1l;
+			_mul4x2r(zl, zml, w2, wi2r);
+			_store(8, &z[k], VSIZE, zl);
 		}
 	}
 
 	template<size_t VSIZE>
-	static void fwd8(Zp * const zp, const Zp * const w, const size_t n_8)
+	static void fwd8(Zp * const zp, const Zp * const w, const int ln_8)
 	{
-		for (size_t j = 0; j < n_8; ++j)
+		const size_t n_8 = size_t(1) << ln_8;
+
+		for (size_t id = 0; id < (VSIZE << ln_8); ++id)
 		{
+			const size_t j = id / VSIZE, k = 7 * (id & ~(VSIZE - 1)) + id;
+
 			const Zp w1 = w[1 * (n_8 + j)];
 			Zp w2[2]; _load(2, w2, &w[2 * (n_8 + j)], 1);
 
-			const size_t k = 8 * j;
-			for (size_t l = 0; l < VSIZE; ++l)
-			{
-				Zp zpl[8]; _load(8, zpl, &zp[VSIZE * k + l], VSIZE);
-				_fwd8(zpl, w1, w2);
-				_store(8, &zp[VSIZE * k + l], VSIZE, zpl);
-			}
+			Zp zpl[8]; _load(8, zpl, &zp[k], VSIZE);
+			_fwd8(zpl, w1, w2);
+			_store(8, &zp[k], VSIZE, zpl);
 		}
 	}
 
 	template<size_t VSIZE>
-	static void mul8(Zp * const z, const Zp * const zp, const Zp * const w, const size_t n_8)
+	static void mul8(Zp * const z, const Zp * const zp, const Zp * const w, int ln_8)
 	{
-		for (size_t j = 0; j < n_8; ++j)
+		const size_t n_8 = size_t(1) << ln_8;
+
+		for (size_t id = 0; id < (VSIZE << ln_8); ++id)
 		{
+			const size_t j = id / VSIZE, k = 7 * (id & ~(VSIZE - 1)) + id;
+
 			const size_t ji = n_8 - j - 1;
 			const Zp w1 = w[1 * (n_8 + j)], wi1 = w[1 * (n_8 + ji)];
 			Zp w2[2]; _load(2, w2, &w[2 * (n_8 + j)], 1);
 			Zp wi2r[2]; _load(2, wi2r, &w[2 * (n_8 + ji)], 1);
 
-			const size_t k = 8 * j;
-			for (size_t l = 0; l < VSIZE; ++l)
-			{
-				Zp zl[8]; _load(8, zl, &z[VSIZE * k + l], VSIZE);
-				Zp zpl[8]; _load(8, zpl, &zp[VSIZE * k + l], VSIZE);
-				_mul8r(zl, zpl, w1, wi1, w2, wi2r);
-				_store(8, &z[VSIZE * k + l], VSIZE, zl);
-			}
+			Zp zl[8]; _load(8, zl, &z[k], VSIZE);
+			Zp zpl[8]; _load(8, zpl, &zp[k], VSIZE);
+			_mul8r(zl, zpl, w1, wi1, w2, wi2r);
+			_store(8, &z[k], VSIZE, zl);
 		}
 	}
 
 	template<size_t VSIZE>
-	static void mul8_mask(Zp * const z, const Zp * const zp, const Zp * const w, const size_t n_8, const uint8_t mask)
+	static void mul8_mask(Zp * const z, const Zp * const zp, const Zp * const w, const int ln_8, const uint8_t mask)
 	{
+		const size_t n_8 = size_t(1) << ln_8;
 		const Zp one = Zp(1).toMonty(), zero = Zp(0);
 		const Zp z1l[8] = { one, zero, one, zero, one, zero, one, zero };
 
-		for (size_t j = 0; j < n_8; ++j)
+		for (size_t id = 0; id < (VSIZE << ln_8); ++id)
 		{
+			const size_t j = id / VSIZE, k = 7 * (id & ~(VSIZE - 1)) + id;
+
 			const size_t ji = n_8 - j - 1;
 			const Zp w1 = w[1 * (n_8 + j)], wi1 = w[1 * (n_8 + ji)];
 			Zp w2[2]; _load(2, w2, &w[2 * (n_8 + j)], 1);
 			Zp wi2r[2]; _load(2, wi2r, &w[2 * (n_8 + ji)], 1);
 
-			const size_t k = 8 * j;
-			for (size_t l = 0; l < VSIZE; ++l)
-			{
-				Zp zl[8]; _load(8, zl, &z[VSIZE * k + l], VSIZE);
-				Zp zpl[8]; _load(8, zpl, &zp[VSIZE * k + l], VSIZE);
-				const Zp * const zml = ((mask & (uint8_t(1) << l)) != 0) ? zpl : z1l;
-				_mul8r(zl, zml, w1, wi1, w2, wi2r);
-				_store(8, &z[VSIZE * k + l], VSIZE, zl);
-			}
+			Zp zl[8]; _load(8, zl, &z[k], VSIZE);
+			Zp zpl[8]; _load(8, zpl, &zp[k], VSIZE);
+			const Zp * const zml = ((mask & (uint8_t(1) << (id % VSIZE))) != 0) ? zpl : z1l;
+			_mul8r(zl, zml, w1, wi1, w2, wi2r);
+			_store(8, &z[k], VSIZE, zl);
 		}
 	}
 
@@ -466,34 +517,38 @@ public:
 	template<size_t VSIZE>
 	static void fwd(Zp * const zp, const Zp * const w, const int lm0, const int ln_8)
 	{
-		if (lm0 == 3) fwd8<VSIZE>(zp, w, size_t(1) << ln_8);
-		else if (lm0 == 2) fwd4x2<VSIZE>(zp, w, size_t(1) << ln_8);
+		if (lm0 == 3) fwd8<VSIZE>(zp, w, ln_8);
+		else if (lm0 == 2) fwd4x2<VSIZE>(zp, w, ln_8);
 	}
 
 	template<size_t VSIZE>
 	static void mul(Zp * const z, const Zp * const zp, const Zp * const w, const int lm0, const int ln_8)
 	{
-		if (lm0 == 3) mul8<VSIZE>(z, zp, w, size_t(1) << ln_8);
-		else if (lm0 == 2) mul4x2<VSIZE>(z, zp, w, size_t(1) << ln_8);
-		else if (lm0 == 1) mul2x4<VSIZE>(z, zp, w, size_t(1) << ln_8);
+		if (lm0 == 3) mul8<VSIZE>(z, zp, w, ln_8);
+		else if (lm0 == 2) mul4x2<VSIZE>(z, zp, w, ln_8);
+		else if (lm0 == 1) mul2x4<VSIZE>(z, zp, w, ln_8);
 	}
 
 	template<size_t VSIZE>
 	static void mul_mask(Zp * const z, const Zp * const zp, const Zp * const w, const int lm0, const int ln_8, const uint8_t mask)
 	{
-		if (lm0 == 3) mul8_mask<VSIZE>(z, zp, w, size_t(1) << ln_8, mask);
-		else if (lm0 == 2) mul4x2_mask<VSIZE>(z, zp, w, size_t(1) << ln_8, mask);
-		else if (lm0 == 1) mul2x4_mask<VSIZE>(z, zp, w, size_t(1) << ln_8, mask);
+		if (lm0 == 3) mul8_mask<VSIZE>(z, zp, w, ln_8, mask);
+		else if (lm0 == 2) mul4x2_mask<VSIZE>(z, zp, w, ln_8, mask);
+		else if (lm0 == 1) mul2x4_mask<VSIZE>(z, zp, w, ln_8, mask);
 	}
 };
 
-typedef Zp<P1, Q1, R1, RSQ1, H1, IM1, SQRTI1, ISQRTI1> Zp1;
-typedef Zp<P2, Q2, R2, RSQ2, H2, IM2, SQRTI2, ISQRTI2> Zp2;
-typedef Zp<P3, Q3, R3, RSQ3, H3, IM3, SQRTI3, ISQRTI3> Zp3;
+typedef Zp<P1S, Q1S, R1S, RSQ1S, H1S, MFIM1S, SQRTI1S, ISQRTI1S> Zp1;
+typedef Zp<P2S, Q2S, R2S, RSQ2S, H2S, MFIM2S, SQRTI2S, ISQRTI2S> Zp2;
+typedef Zp<P3S, Q3S, R3S, RSQ3S, H3S, MFIM3S, SQRTI3S, ISQRTI3S> Zp3;
 
 template<size_t VSIZE, bool IS32>
 class transformGPU : public transform
 {
+	using ZP1 = ZPT<IS32 ? P1U : P1S, IS32 ? Q1U : Q1S, IS32 ? R1U : R1S, IS32 ? H1U : H1S>;
+	using ZP2 = ZPT<IS32 ? P2U : P2S, IS32 ? Q2U : Q2S, IS32 ? R2U : R2S, IS32 ? H2U : H2S>;
+	using ZP3 = ZPT<IS32 ? P3U : P3S, IS32 ? Q3U : Q3S, IS32 ? R3U : R3S, IS32 ? H3U : H3S>;
+
 private:
 	const size_t _num_regs;
 	const int _lsize;
@@ -516,6 +571,8 @@ public:
 				_z(new ZP[3 * VSIZE * num_regs * _size]), _zp(new ZP[3 * VSIZE * _size]),
 				_w1(new Zp1[_size / 2]), _w2(new Zp2[_size / 2]), _w3(new Zp3[_size / 2])
 	{
+		const size_t size = _size;
+
 		const bool is_boinc_platform = is_boinc && (boinc_device_id != 0) && (boinc_platform_id != 0);
 		const platform eng_platform = is_boinc_platform ? platform(boinc_platform_id, boinc_device_id) : platform();
 
@@ -524,18 +581,57 @@ public:
 
 		std::ostringstream src;
 
-		src << "#define N_SZ\t" << (1u << n) << "u" << std::endl;
+		src << "#define N_SZ\t" << size << "u" << std::endl;
 		src << "#define LN_SZ\t" << n << std::endl;
 		src << "#define VSIZE\t" << VSIZE << std::endl;
 		if (IS32) src << "#define IS32\t" << 1 << std::endl;
+
+		src << "#define P1\t" << (IS32 ? P1U : P1S) << "u" << std::endl;
+		src << "#define Q1\t" << (IS32 ? Q1U : Q1S) << "u" << std::endl;
+		src << "#define RSQ1\t" << (IS32 ? RSQ1U : RSQ1S) << "u" << std::endl;
+		src << "#define IM1\t" << (IS32 ? IM1U : IM1S) << "u" << std::endl;
+		src << "#define MFIM1\t" << (IS32 ? MFIM1U : MFIM1S) << "u" << std::endl;
+		src << "#define SQRTI1\t" << (IS32 ? SQRTI1U : SQRTI1S) << "u" << std::endl;
+		src << "#define ISQRTI1\t" << (IS32 ? ISQRTI1U : ISQRTI1S) << "u" << std::endl;
+
+		src << "#define P2\t" << (IS32 ? P2U : P2S) << "u" << std::endl;
+		src << "#define Q2\t" << (IS32 ? Q2U : Q2S) << "u" << std::endl;
+		src << "#define RSQ2\t" << (IS32 ? RSQ2U : RSQ2S) << "u" << std::endl;
+		src << "#define IM2\t" << (IS32 ? IM2U : IM2S) << "u" << std::endl;
+		src << "#define MFIM2\t" << (IS32 ? MFIM2U : MFIM2S) << "u" << std::endl;
+		src << "#define SQRTI2\t" << (IS32 ? SQRTI2U : SQRTI2S) << "u" << std::endl;
+		src << "#define ISQRTI2\t" << (IS32 ? ISQRTI2U : ISQRTI2S) << "u" << std::endl;
+
+		src << "#define P3\t" << (IS32 ? P3U : P3S) << "u" << std::endl;
+		src << "#define Q3\t" << (IS32 ? Q3U : Q3S) << "u" << std::endl;
+		src << "#define RSQ3\t" << (IS32 ? RSQ3U : RSQ3S) << "u" << std::endl;
+		src << "#define IM3\t" << (IS32 ? IM3U : IM3S) << "u" << std::endl;
+		src << "#define MFIM3\t" << (IS32 ? MFIM3U : MFIM3S) << "u" << std::endl;
+		src << "#define SQRTI3\t" << (IS32 ? SQRTI3U : SQRTI3S) << "u" << std::endl;
+		src << "#define ISQRTI3\t" << (IS32 ? ISQRTI3U : ISQRTI3S) << "u" << std::endl;
+
+		src << "#define INVP2_P1\t" << (IS32 ? INVP2_P1U : INVP2_P1S) << "u" << std::endl;
+		src << "#define INVP3_P1\t" << (IS32 ? INVP3_P1U : INVP3_P1S) << "u" << std::endl;
+		src << "#define INVP3_P2\t" << (IS32 ? INVP3_P2U : INVP3_P2S) << "u" << std::endl;
+
+		src << "#define P1P2P3L\t" << (IS32 ? P1P2P3LU : P1P2P3LS) << "u" << std::endl;
+		src << "#define P1P2P3H\t" << (IS32 ? P1P2P3HU : P1P2P3HS) << "ul" << std::endl;
+		src << "#define P1P2P3_2L\t" << (IS32 ? P1P2P3_2LU : P1P2P3_2LS) << "u" << std::endl;
+		src << "#define P1P2P3_2H\t" << (IS32 ? P1P2P3_2HU : P1P2P3_2HS) << "ul" << std::endl;
+
+		src << "#define NORM1\t" << ZP1::norm(uint32(size / 2)).get() << "u" << std::endl;
+		src << "#define NORM2\t" << ZP2::norm(uint32(size / 2)).get() << "u" << std::endl;
+		src << "#define NORM3\t" << ZP3::norm(uint32(size / 2)).get() << "u" << std::endl;
+
+		src << "#define W_SZ\t" << size / 2 << "u" << std::endl;
+
+// std::cout << src.str() << std::endl;
 
 		if (is_boinc || !_engine->readOpenCL("ocl/kernel.cl", "src/ocl/kernel.h", "src_ocl_kernel", src)) src << src_ocl_kernel;
 
 		_engine->loadProgram(src.str());
 		_engine->alloc_memory();
 		_engine->create_kernels(b);
-
-		const size_t size = _size;
 
 		Zp1 * const w1 = _w1;
 		for (size_t s = 1; s < size / 2; s *= 2)
@@ -591,13 +687,13 @@ private:
 	{
 		// Montgomery form of 1 / Pi (mod Pj)
 		const uint32 mfInvP3_P1 = 608773230u, mfInvP2_P1 = 2130706177u, mfInvP3_P2 = 1409286102u;
-		const uint64 P2P3 = P2 * uint64(P3);
-		const __uint128_t P1P2P3 = P1 * __uint128_t(P2P3);
+		const uint64 P2P3 = P2S * uint64(P3S);
+		const __uint128_t P1P2P3 = P1S * __uint128_t(P2P3);
 
 		const Zp1 u13 = r1.sub(Zp1(r3.get())).mul(Zp1(mfInvP3_P1));	// P3 < P1
 		const Zp2 u23 = r2.sub(Zp2(r3.get())).mul(Zp2(mfInvP3_P2));	// P3 < P2
 		const Zp1 u123 = u13.sub(Zp1(u23.get())).mul(Zp1(mfInvP2_P1));	// P3 < P1
-		const __uint128_t n = __uint128_t(P2P3) * u123.get() + (u23.get() * uint64(P3) + r3.get());
+		const __uint128_t n = __uint128_t(P2P3) * u123.get() + (u23.get() * uint64(P3S) + r3.get());
 		return (n > P1P2P3 / 2) ? __int128_t(n - P1P2P3) : __int128_t(n);
 	}
 
@@ -698,13 +794,6 @@ public:
 		for (size_t k = 1; k < size; ++k) for (size_t j = 0; j < VSIZE; ++j) z3[VSIZE * k + j] = Zp3(0);
 	}
 
-	void backward8(const size_t m, const size_t s)
-	{
-		// m * s = n_8
-
-		_engine->backward8(m, s);
-	}
-
 	void square_dup(const uint32_t dup) override
 	{
 		const size_t vsize = VSIZE * _size;
@@ -714,21 +803,24 @@ public:
 		const Zp1 * const w1 = _w1;
 		const int lm0 = Zp1::forward<VSIZE>(z1, w1, ln_8);
 		Zp1::square<VSIZE>(z1, w1, lm0, ln_8);
-		Zp1::backward<VSIZE>(z1, w1, lm0, ln_8);
+		// Zp1::backward<VSIZE>(z1, w1, lm0, ln_8);
 
 		Zp2 * const z2 = reinterpret_cast<Zp2 *>(&_z[1 * vsize]);
 		const Zp2 * const w2 = _w2;
 		Zp2::forward<VSIZE>(z2, w2, ln_8);
 		Zp2::square<VSIZE>(z2, w2, lm0, ln_8);
-		Zp2::backward<VSIZE>(z2, w2, lm0, ln_8);
+		// Zp2::backward<VSIZE>(z2, w2, lm0, ln_8);
 
 		Zp3 * const z3 = reinterpret_cast<Zp3 *>(&_z[2 * vsize]);
 		const Zp3 * const w3 = _w3;
 		Zp3::forward<VSIZE>(z3, w3, ln_8);
 		Zp3::square<VSIZE>(z3, w3, lm0, ln_8);
-		Zp3::backward<VSIZE>(z3, w3, lm0, ln_8);
+		// Zp3::backward<VSIZE>(z3, w3, lm0, ln_8);
 
-		for (size_t m = size_t(1) << lm0, s = (size_t(1) << ln_8) >> lm0; s >= 1; m *= 8, s /= 8) backward8(m, s);
+		_engine->write_memory_z(_z);
+		int lm = lm0;
+		for (size_t s = size_t(1) << (ln_8 - lm0); s >= 1; lm += 3, s /= 8) _engine->backward8(lm, s);
+		_engine->read_memory_z(_z);
 
 		carry(dup);
 	}
