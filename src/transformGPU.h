@@ -491,9 +491,14 @@ private:
 
 public:
 	template<size_t VSIZE>
-	static int forward(Zp * const z, const Zp * const w, const int ln_8)
+	static void forward0(Zp * const z, const Zp * const w, const int ln_8)
 	{
 		forward8_0<VSIZE>(z, w, ln_8);
+	}
+
+	template<size_t VSIZE>
+	static int forward(Zp * const z, const Zp * const w, const int ln_8)
+	{
 		int lm = ln_8;
 		for (size_t s = 8; lm > 3; lm -= 3, s *= 8) forward8<VSIZE>(z, w, lm - 3, s, ln_8);
 		return lm;
@@ -801,25 +806,41 @@ public:
 
 		Zp1 * const z1 = reinterpret_cast<Zp1 *>(&_z[0 * vsize]);
 		const Zp1 * const w1 = _w1;
-		const int lm0 = Zp1::forward<VSIZE>(z1, w1, ln_8);
-		Zp1::square<VSIZE>(z1, w1, lm0, ln_8);
-		// Zp1::backward<VSIZE>(z1, w1, lm0, ln_8);
-
 		Zp2 * const z2 = reinterpret_cast<Zp2 *>(&_z[1 * vsize]);
 		const Zp2 * const w2 = _w2;
-		Zp2::forward<VSIZE>(z2, w2, ln_8);
-		Zp2::square<VSIZE>(z2, w2, lm0, ln_8);
-		// Zp2::backward<VSIZE>(z2, w2, lm0, ln_8);
-
 		Zp3 * const z3 = reinterpret_cast<Zp3 *>(&_z[2 * vsize]);
 		const Zp3 * const w3 = _w3;
-		Zp3::forward<VSIZE>(z3, w3, ln_8);
-		Zp3::square<VSIZE>(z3, w3, lm0, ln_8);
-		// Zp3::backward<VSIZE>(z3, w3, lm0, ln_8);
+
+		Zp1::forward0<VSIZE>(z1, w1, ln_8);
+		Zp2::forward0<VSIZE>(z2, w2, ln_8);
+		Zp3::forward0<VSIZE>(z3, w3, ln_8);
 
 		_engine->write_memory_z(_z);
-		int lm = lm0;
-		for (size_t s = size_t(1) << (ln_8 - lm0); s >= 1; lm += 3, s /= 8) _engine->backward8(lm, s);
+		int lm = ln_8;
+		for (size_t s = 8; lm > 3; lm -= 3, s *= 8) _engine->forward8(lm - 3, s);
+
+		if (lm == 3) _engine->square8();
+		else if (lm == 2) _engine->square4x2();
+		else if (lm == 1) _engine->square2x4();
+
+		// _engine->read_memory_z(_z);
+		// const int lm0 = lm;
+
+		// const int lm0 = Zp1::forward<VSIZE>(z1, w1, ln_8);
+		// Zp2::forward<VSIZE>(z2, w2, ln_8);
+		// Zp3::forward<VSIZE>(z3, w3, ln_8);
+
+		// Zp1::square<VSIZE>(z1, w1, lm0, ln_8);
+		// Zp2::square<VSIZE>(z2, w2, lm0, ln_8);
+		// Zp3::square<VSIZE>(z3, w3, lm0, ln_8);
+
+		// Zp1::backward<VSIZE>(z1, w1, lm0, ln_8);
+		// Zp2::backward<VSIZE>(z2, w2, lm0, ln_8);
+		// Zp3::backward<VSIZE>(z3, w3, lm0, ln_8);
+
+		// _engine->write_memory_z(_z);
+		// int lm = lm0;
+		for (size_t s = size_t(1) << (ln_8 - lm); s >= 1; lm += 3, s /= 8) _engine->backward8(lm, s);
 		_engine->read_memory_z(_z);
 
 		carry(dup);
@@ -833,22 +854,27 @@ public:
 		const Zp1 * const z1_src = reinterpret_cast<Zp1 *>(&_z[(3 * src + 0) * vsize]);
 		Zp1 * const zp1 = reinterpret_cast<Zp1 *>(&_zp[0 * vsize]);
 		for (size_t k = 0; k < vsize; ++k) zp1[k] = z1_src[k];
-		const Zp1 * const w1 = _w1;
-		const int lm0 = Zp1::forward<VSIZE>(zp1, w1, ln_8);
-		Zp1::fwd<VSIZE>(zp1, w1, lm0, ln_8);
-
 		const Zp2 * const z2_src = reinterpret_cast<Zp2 *>(&_z[(3 * src + 1) * vsize]);
 		Zp2 * const zp2 = reinterpret_cast<Zp2 *>(&_zp[1 * vsize]);
 		for (size_t k = 0; k < vsize; ++k) zp2[k] = z2_src[k];
-		const Zp2 * const w2 = _w2;
-		Zp2::forward<VSIZE>(zp2, w2, ln_8);
-		Zp2::fwd<VSIZE>(zp2, w2, lm0, ln_8);
-
 		const Zp3 * const z3_src = reinterpret_cast<Zp3 *>(&_z[(3 * src + 2) * vsize]);
 		Zp3 * const zp3 = reinterpret_cast<Zp3 *>(&_zp[2 * vsize]);
 		for (size_t k = 0; k < vsize; ++k) zp3[k] = z3_src[k];
+
+		const Zp1 * const w1 = _w1;
+		const Zp2 * const w2 = _w2;
 		const Zp3 * const w3 = _w3;
+
+		Zp1::forward0<VSIZE>(zp1, w1, ln_8);
+		Zp2::forward0<VSIZE>(zp2, w2, ln_8);
+		Zp3::forward0<VSIZE>(zp3, w3, ln_8);
+
+		const int lm0 = Zp1::forward<VSIZE>(zp1, w1, ln_8);
+		Zp2::forward<VSIZE>(zp2, w2, ln_8);
 		Zp3::forward<VSIZE>(zp3, w3, ln_8);
+
+		Zp1::fwd<VSIZE>(zp1, w1, lm0, ln_8);
+		Zp2::fwd<VSIZE>(zp2, w2, lm0, ln_8);
 		Zp3::fwd<VSIZE>(zp3, w3, lm0, ln_8);
 	}
 
@@ -858,24 +884,31 @@ public:
 		const int ln_8 = _lsize - 3;
 
 		Zp1 * const z1 = reinterpret_cast<Zp1 *>(&_z[0 * vsize]);
-		const Zp1 * const w1 = _w1;
-		const int lm0 = Zp1::forward<VSIZE>(z1, w1, ln_8);
-		Zp1 * const zp1 = reinterpret_cast<Zp1 *>(&_zp[0 * vsize]);
-		Zp1::mul<VSIZE>(z1, zp1, w1, lm0, ln_8);
-		Zp1::backward<VSIZE>(z1, w1, lm0, ln_8);
-
 		Zp2 * const z2 = reinterpret_cast<Zp2 *>(&_z[1 * vsize]);
-		const Zp2 * const w2 = _w2;
-		Zp2::forward<VSIZE>(z2, w2, ln_8);
-		Zp2 * const zp2 = reinterpret_cast<Zp2 *>(&_zp[1 * vsize]);
-		Zp2::mul<VSIZE>(z2, zp2, w2, lm0, ln_8);
-		Zp2::backward<VSIZE>(z2, w2, lm0, ln_8);
-
 		Zp3 * const z3 = reinterpret_cast<Zp3 *>(&_z[2 * vsize]);
+
+		const Zp1 * const w1 = _w1;
+		const Zp2 * const w2 = _w2;
 		const Zp3 * const w3 = _w3;
+
+		Zp1::forward0<VSIZE>(z1, w1, ln_8);
+		Zp2::forward0<VSIZE>(z2, w2, ln_8);
+		Zp3::forward0<VSIZE>(z3, w3, ln_8);
+
+		const int lm0 = Zp1::forward<VSIZE>(z1, w1, ln_8);
+		Zp2::forward<VSIZE>(z2, w2, ln_8);
 		Zp3::forward<VSIZE>(z3, w3, ln_8);
+
+		Zp1 * const zp1 = reinterpret_cast<Zp1 *>(&_zp[0 * vsize]);
+		Zp2 * const zp2 = reinterpret_cast<Zp2 *>(&_zp[1 * vsize]);
 		Zp3 * const zp3 = reinterpret_cast<Zp3 *>(&_zp[2 * vsize]);
+
+		Zp1::mul<VSIZE>(z1, zp1, w1, lm0, ln_8);
+		Zp2::mul<VSIZE>(z2, zp2, w2, lm0, ln_8);
 		Zp3::mul<VSIZE>(z3, zp3, w3, lm0, ln_8);
+
+		Zp1::backward<VSIZE>(z1, w1, lm0, ln_8);
+		Zp2::backward<VSIZE>(z2, w2, lm0, ln_8);
 		Zp3::backward<VSIZE>(z3, w3, lm0, ln_8);
 
 		carry(0);
@@ -887,24 +920,31 @@ public:
 		const int ln_8 = _lsize - 3;
 
 		Zp1 * const z1 = reinterpret_cast<Zp1 *>(&_z[0 * vsize]);
-		const Zp1 * const w1 = _w1;
-		const int lm0 = Zp1::forward<VSIZE>(z1, w1, ln_8);
-		Zp1 * const zp1 = reinterpret_cast<Zp1 *>(&_zp[0 * vsize]);
-		Zp1::mul_mask<VSIZE>(z1, zp1, w1, lm0, ln_8, mask);
-		Zp1::backward<VSIZE>(z1, w1, lm0, ln_8);
-
 		Zp2 * const z2 = reinterpret_cast<Zp2 *>(&_z[1 * vsize]);
-		const Zp2 * const w2 = _w2;
-		Zp2::forward<VSIZE>(z2, w2, ln_8);
-		Zp2 * const zp2 = reinterpret_cast<Zp2 *>(&_zp[1 * vsize]);
-		Zp2::mul_mask<VSIZE>(z2, zp2, w2, lm0, ln_8, mask);
-		Zp2::backward<VSIZE>(z2, w2, lm0, ln_8);
-
 		Zp3 * const z3 = reinterpret_cast<Zp3 *>(&_z[2 * vsize]);
+
+		const Zp1 * const w1 = _w1;
+		const Zp2 * const w2 = _w2;
 		const Zp3 * const w3 = _w3;
+
+		Zp1::forward0<VSIZE>(z1, w1, ln_8);
+		Zp2::forward0<VSIZE>(z2, w2, ln_8);
+		Zp3::forward0<VSIZE>(z3, w3, ln_8);
+
+		const int lm0 = Zp1::forward<VSIZE>(z1, w1, ln_8);
+		Zp2::forward<VSIZE>(z2, w2, ln_8);
 		Zp3::forward<VSIZE>(z3, w3, ln_8);
+
+		Zp1 * const zp1 = reinterpret_cast<Zp1 *>(&_zp[0 * vsize]);
+		Zp2 * const zp2 = reinterpret_cast<Zp2 *>(&_zp[1 * vsize]);
 		Zp3 * const zp3 = reinterpret_cast<Zp3 *>(&_zp[2 * vsize]);
+
+		Zp1::mul_mask<VSIZE>(z1, zp1, w1, lm0, ln_8, mask);
+		Zp2::mul_mask<VSIZE>(z2, zp2, w2, lm0, ln_8, mask);
 		Zp3::mul_mask<VSIZE>(z3, zp3, w3, lm0, ln_8, mask);
+
+		Zp1::backward<VSIZE>(z1, w1, lm0, ln_8);
+		Zp2::backward<VSIZE>(z2, w2, lm0, ln_8);
 		Zp3::backward<VSIZE>(z3, w3, lm0, ln_8);
 
 		carry(0);

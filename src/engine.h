@@ -79,7 +79,8 @@ private:
 
 	cl_mem _z = nullptr, _zp = nullptr, _w = nullptr, _c = nullptr;
 
-	cl_kernel _backward8 = nullptr;
+	cl_kernel _forward8 = nullptr, _backward8 = nullptr, _forward8_0 = nullptr;
+	cl_kernel _square2x4 = nullptr, _square4x2 = nullptr, _square8 = nullptr;
 
 public:
 	engine(const platform & platform, const size_t device_id, const int ln, const bool is_boinc, const size_t num_regs)
@@ -137,7 +138,13 @@ public:
 		pio::display(ss.str());
 #endif
 
+		CREATE_TRANSFORM_KERNEL(forward8);
 		CREATE_TRANSFORM_KERNEL(backward8);
+		CREATE_TRANSFORM_KERNEL(forward8_0);
+
+		CREATE_TRANSFORM_KERNEL(square2x4);
+		CREATE_TRANSFORM_KERNEL(square4x2);
+		CREATE_TRANSFORM_KERNEL(square8);
 	}
 
 	void release_kernels()
@@ -147,7 +154,8 @@ public:
 		pio::display(ss.str());
 #endif
 
-		_releaseKernel(_backward8);
+		_releaseKernel(_forward8); _releaseKernel(_backward8); _releaseKernel(_forward8_0);
+		_releaseKernel(_square2x4); _releaseKernel(_square4x2); _releaseKernel(_square8);
 	}
 
 ///////////////////////////////
@@ -160,6 +168,14 @@ public:
 ///////////////////////////////
 
 public:
+	void forward8(const int lm, const size_t s)
+	{
+		const int32 ilm = int32(lm); const uint32 is = uint32(s);
+		_setKernelArg(_forward8, 2, sizeof(int32), &ilm);
+		_setKernelArg(_forward8, 3, sizeof(uint32), &is);
+		_executeKernel(_forward8, 3 * VSIZE * _n / 8);
+	}
+
 	void backward8(const int lm, const size_t s)
 	{
 		const int32 ilm = int32(lm); const uint32 is = uint32(s);
@@ -167,4 +183,10 @@ public:
 		_setKernelArg(_backward8, 3, sizeof(uint32), &is);
 		_executeKernel(_backward8, 3 * VSIZE * _n / 8);
 	}
+
+	void forward8_0() { _executeKernel(_forward8_0, 3 * VSIZE * _n / 8); }
+
+	void square2x4() { _executeKernel(_square2x4, 3 * VSIZE * _n / 8); }
+	void square4x2() { _executeKernel(_square4x2, 3 * VSIZE * _n / 8); }
+	void square8() { _executeKernel(_square8, 3 * VSIZE * _n / 8); }
 };
