@@ -16,6 +16,7 @@ typedef cl_uint		uint32;
 typedef cl_int		int32;
 typedef cl_ulong	uint64;
 typedef cl_long		int64;
+typedef cl_uint2	uint32_2;
 
 class ZP
 {
@@ -67,6 +68,7 @@ public:
 };
 
 #define CREATE_TRANSFORM_KERNEL(name) _##name = create_transform_kernel(#name);
+#define CREATE_CARRY_KERNEL(name) _##name = create_carry_kernel(#name);
 
 template<size_t VSIZE, bool IS32>
 class engine : public device
@@ -76,17 +78,23 @@ private:
 	const int _ln;
 	const bool _is_boinc;
 	const size_t _num_regs;
+	const int _lcarry_wgsize;
 
-	cl_mem _z = nullptr, _zp = nullptr, _w = nullptr, _c = nullptr;
+	cl_mem _z = nullptr, _zp = nullptr, _w = nullptr, _c = nullptr, _bb_inv = nullptr, _bs = nullptr;
 
 	cl_kernel _forward8 = nullptr, _backward8 = nullptr, _forward8_0 = nullptr;
 	cl_kernel _square2x4 = nullptr, _square4x2 = nullptr, _square8 = nullptr;
+	cl_kernel _carry1 = nullptr, _carry2 = nullptr;
+
+	static constexpr int ilog2_32(const uint32_t n) { return (n == 0) ? -1 : (31 - __builtin_clz(n)); }
 
 public:
 	engine(const platform & platform, const size_t device_id, const int ln, const bool is_boinc, const size_t num_regs)
-		: device(platform, device_id), _n(size_t(1) << ln), _ln(ln), _is_boinc(is_boinc), _num_regs(num_regs) {}
+		: device(platform, device_id), _n(size_t(1) << ln), _ln(ln), _is_boinc(is_boinc), _num_regs(num_regs),
+		_lcarry_wgsize(std::min(std::max(5, ln / 2 - 3), ilog2_32(uint32_t(getMaxWorkGroupSize())))) {}
 	virtual ~engine() {}
 
+	size_t get_carry_workgroup_size() const { return size_t(1 << _lcarry_wgsize); }
 
 ///////////////////////////////
 
@@ -103,9 +111,12 @@ public:
 			_z = _createBuffer(CL_MEM_READ_WRITE, 3 * VSIZE * _num_regs * n * sizeof(ZP));
 			_zp = _createBuffer(CL_MEM_READ_WRITE, 3 * VSIZE * n * sizeof(ZP));
 			_w = _createBuffer(CL_MEM_READ_ONLY, 3 * n / 2 * sizeof(ZP));
-			_c = _createBuffer(CL_MEM_READ_WRITE, n / 4 * sizeof(int64));
+			_c = _createBuffer(CL_MEM_READ_WRITE, VSIZE * n / 8 * sizeof(int64));
+			_bb_inv = _createBuffer(CL_MEM_READ_ONLY, VSIZE * sizeof(uint32_2));
+			_bs = _createBuffer(CL_MEM_READ_ONLY, VSIZE * sizeof(int32));
 		}
 	}
+
 	void release_memory()
 	{
 #if defined(ocl_debug)
@@ -114,8 +125,8 @@ public:
 #endif
 		if (_n != 0)
 		{
-			_releaseBuffer(_z); _releaseBuffer(_zp);
-			_releaseBuffer(_w); _releaseBuffer(_c);
+			_releaseBuffer(_z); _releaseBuffer(_zp); _releaseBuffer(_w);
+			_releaseBuffer(_c); _releaseBuffer(_bb_inv); _releaseBuffer(_bs);
 		}
 	}
 
@@ -130,8 +141,18 @@ private:
 		return kernel;
 	}
 
+	cl_kernel create_carry_kernel(const char * const kernel_name)
+	{
+		cl_kernel kernel = _createKernel(kernel_name);
+		_setKernelArg(kernel, 0, sizeof(cl_mem), &_bb_inv);
+		_setKernelArg(kernel, 1, sizeof(cl_mem), &_bs);
+		_setKernelArg(kernel, 2, sizeof(cl_mem), &_z);
+		_setKernelArg(kernel, 3, sizeof(cl_mem), &_c);
+		return kernel;
+	}
+
 public:
-	void create_kernels(const UInt32_8 & b)
+	void create_kernels()
 	{
 #if defined(ocl_debug)
 		std::ostringstream ss; ss << "Create ocl kernels." << std::endl;
@@ -145,6 +166,9 @@ public:
 		CREATE_TRANSFORM_KERNEL(square2x4);
 		CREATE_TRANSFORM_KERNEL(square4x2);
 		CREATE_TRANSFORM_KERNEL(square8);
+
+		CREATE_CARRY_KERNEL(carry1);
+		CREATE_CARRY_KERNEL(carry2);
 	}
 
 	void release_kernels()
@@ -156,6 +180,7 @@ public:
 
 		_releaseKernel(_forward8); _releaseKernel(_backward8); _releaseKernel(_forward8_0);
 		_releaseKernel(_square2x4); _releaseKernel(_square4x2); _releaseKernel(_square8);
+		_releaseKernel(_carry1); _releaseKernel(_carry2);
 	}
 
 ///////////////////////////////
@@ -164,6 +189,13 @@ public:
 	void read_memory_z(ZP * const z_ptr, const size_t count = 1) { _readBuffer(_z, z_ptr, 3 * VSIZE * count * _n * sizeof(ZP)); }
 	void write_memory_z(const ZP * const z_ptr, const size_t count = 1) { _writeBuffer(_z, z_ptr, 3 * VSIZE * count * _n * sizeof(ZP)); }
 	void write_memory_w(const ZP * const w_ptr, const size_t offset) { _writeBuffer(_w, w_ptr, _n / 2 * sizeof(ZP), offset * _n / 2 * sizeof(ZP)); }
+	void write_memory_b(const uint32_t * const b, const uint32_t * const b_inv, const int * const b_s)
+	{
+		uint32_2 bb_inv[VSIZE]; for (size_t i = 0; i < VSIZE; ++i) { bb_inv[i].s[0] = b[i]; bb_inv[i].s[1] = b_inv[i]; }
+		int32 bs[8]; for (size_t i = 0; i < VSIZE; ++i) bs[i] = static_cast<int32>(b_s[i]);
+		_writeBuffer(_bb_inv, bb_inv, VSIZE * sizeof(uint32_2));
+		_writeBuffer(_bs, bs, VSIZE * sizeof(int32));
+	}
 
 ///////////////////////////////
 
@@ -189,4 +221,13 @@ public:
 	void square2x4() { _executeKernel(_square2x4, 3 * VSIZE * _n / 8); }
 	void square4x2() { _executeKernel(_square4x2, 3 * VSIZE * _n / 8); }
 	void square8() { _executeKernel(_square8, 3 * VSIZE * _n / 8); }
+
+	void carry1(const uint32_t dup)
+	{
+		const uint32 idup = uint32(dup);
+		_setKernelArg(_carry1, 4, sizeof(uint32), &idup);
+		_executeKernel(_carry1, VSIZE * _n / 8);
+	}
+
+	void carry2() { _executeKernel(_carry2, VSIZE * _n / 8); }
 };

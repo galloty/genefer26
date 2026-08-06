@@ -566,6 +566,7 @@ private:
 	Zp1 * const _w1;
 	Zp2 * const _w2;
 	Zp3 * const _w3;
+	int64_t * const _c;
 	engine<VSIZE, IS32> * _engine = nullptr;
 
 public:
@@ -574,7 +575,8 @@ public:
 				: transform(b, n, EKind::GPU), _num_regs(num_regs), _lsize(int(n)), _size(size_t(1) << n),
 				_norm1(Zp1::norm(uint32(_size / 2))), _norm2(Zp2::norm(uint32(_size / 2))), _norm3(Zp3::norm(uint32(_size / 2))),
 				_z(new ZP[3 * VSIZE * num_regs * _size]), _zp(new ZP[3 * VSIZE * _size]),
-				_w1(new Zp1[_size / 2]), _w2(new Zp2[_size / 2]), _w3(new Zp3[_size / 2])
+				_w1(new Zp1[_size / 2]), _w2(new Zp2[_size / 2]), _w3(new Zp3[_size / 2]),
+				_c(new int64_t[VSIZE * _size / 8])
 	{
 		const size_t size = _size;
 
@@ -624,11 +626,14 @@ public:
 		src << "#define P1P2P3_2L\t" << (IS32 ? P1P2P3_2LU : P1P2P3_2LS) << "u" << std::endl;
 		src << "#define P1P2P3_2H\t" << (IS32 ? P1P2P3_2HU : P1P2P3_2HS) << "ul" << std::endl;
 
+		// Not converted into Montgomery form such that output is converted out of MF
 		src << "#define NORM1\t" << ZP1::norm(uint32(size / 2)).get() << "u" << std::endl;
 		src << "#define NORM2\t" << ZP2::norm(uint32(size / 2)).get() << "u" << std::endl;
 		src << "#define NORM3\t" << ZP3::norm(uint32(size / 2)).get() << "u" << std::endl;
 
 		src << "#define W_SZ\t" << size / 2 << "u" << std::endl;
+
+		src << "#define CARRY_WG_SZ\t" << _engine->get_carry_workgroup_size() << "u" << std::endl;
 
 // std::cout << src.str() << std::endl;
 
@@ -636,7 +641,7 @@ public:
 
 		_engine->loadProgram(src.str());
 		_engine->alloc_memory();
-		_engine->create_kernels(b);
+		_engine->create_kernels();
 
 		Zp1 * const w1 = _w1;
 		for (size_t s = 1; s < size / 2; s *= 2)
@@ -671,6 +676,18 @@ public:
 		_engine->write_memory_w(w1, 0);
 		_engine->write_memory_w(w2, 1);
 		_engine->write_memory_w(w3, 2);
+
+		uint32_t bu[VSIZE], b_inv[VSIZE]; int b_s[VSIZE];
+		for (size_t i = 0; i < VSIZE; ++i)
+		{
+			const uint32_t bi = b[i];
+			const int s = 31 - __builtin_clz(bi) - 1;
+			bu[i] = bi;
+			b_inv[i] = static_cast<uint32_t>((static_cast<uint64_t>(1) << (s + 32)) / bi);
+			b_s[i] = s;
+		}
+
+		_engine->write_memory_b(bu, b_inv, b_s);
 	}
 
 	virtual ~transformGPU()
@@ -685,6 +702,7 @@ public:
 		delete[] _w1;
 		delete[] _w2;
 		delete[] _w3;
+		delete[] _c;
 	}
 
 private:
@@ -708,42 +726,61 @@ private:
 		Zp1 * const z1 = reinterpret_cast<Zp1 *>(&_z[0 * vsize]);
 		Zp2 * const z2 = reinterpret_cast<Zp2 *>(&_z[1 * vsize]);
 		Zp3 * const z3 = reinterpret_cast<Zp3 *>(&_z[2 * vsize]);
+		int64_t * const c = _c;
 
-		// Not converted into Montgomery form such that output is converted out of MF
 		const Zp1 norm1 = _norm1; const Zp2 norm2 = _norm2;	const Zp3 norm3 = _norm3;
 
-		for (size_t j = 0; j < VSIZE; ++j)
+		for (size_t id = 0; id < VSIZE * n / 8; ++id)
 		{
-			const int32 base = static_cast<int32>(get_b()[j]);
-			__int128_t f = 0;
-
-			for (size_t k = 0; k < n; ++k)
+			const size_t i = id % VSIZE, k = 7 * (id & ~(VSIZE - 1)) + id;
+			int64_t f = 0;
+			for (size_t j = 0; j < 8; ++j)
 			{
-				const Zp1 u1 = z1[VSIZE * k + j].mul(norm1);
-				const Zp2 u2 = z2[VSIZE * k + j].mul(norm2);
-				const Zp3 u3 = z3[VSIZE * k + j].mul(norm3);
+				const Zp1 u1 = z1[k + j * VSIZE].mul(norm1);
+				const Zp2 u2 = z2[k + j * VSIZE].mul(norm2);
+				const Zp3 u3 = z3[k + j * VSIZE].mul(norm3);
 				__int128_t l = garner3(u1, u2, u3);
-				if ((dup & (1u << j)) != 0) l += l;
-				f += l;
-				const __int128_t r = f / base;
-				const int32 i = int32(f - r * base);
+				if ((dup & (1u << i)) != 0) l += l;
+				l += f;
+				const int32 base = static_cast<int32>(get_b()[i]);
+				const int64_t r = int64_t(l / base);
+				const int32 ri = int32(l - __int128_t(r) * base);
 				f = r;
-				z1[VSIZE * k + j].set_int(i); z2[VSIZE * k + j].set_int(i); z3[VSIZE * k + j].set_int(i);
+				z1[k + j * VSIZE].set_int(ri);
+				z2[k + j * VSIZE].set_int(ri);
+				z3[k + j * VSIZE].set_int(ri);
 			}
 
-			while (f != 0)
-			{
-				f = -f;		// a_n = -a_0
+			const size_t vid = ((id / VSIZE) + 1) % (n / 8);
+			c[vid * VSIZE + i] = (vid == 0) ? -f : f;
+		}
 
-				for (size_t k = 0; k < n; ++k)
+		for (size_t id = 0; id < VSIZE * n / 8; ++id)
+		{
+			const size_t i = id % VSIZE, k = 7 * (id & ~(VSIZE - 1)) + id;
+
+			int64_t f = c[id];
+			for (size_t j = 0; j < 7; ++j)
+			{
+				if (f != 0)
 				{
-					f += z1[VSIZE * k + j].get_int();
-					const __int128_t r = f / base;
-					const int32 i = int32(f - r * base);
-					z1[VSIZE * k + j].set_int(i); z2[VSIZE * k + j].set_int(i); z3[VSIZE * k + j].set_int(i);
+					f += z1[k + j * VSIZE].get_int();
+					const int32 base = static_cast<int32>(get_b()[i]);
+					const int64_t r = f / base;
+					const int32 ri = int32(f - r * base);
 					f = r;
-					if (r == 0) break;
+					z1[k + j * VSIZE].set_int(ri);
+					z2[k + j * VSIZE].set_int(ri);
+					z3[k + j * VSIZE].set_int(ri);
 				}
+			}
+			if (f != 0)
+			{
+				f += z1[k + 7 * VSIZE].get_int();
+				const int32 ri = int32(f);
+				z1[k + 7 * VSIZE].set_int(ri);
+				z2[k + 7 * VSIZE].set_int(ri);
+				z3[k + 7 * VSIZE].set_int(ri);
 			}
 		}
 	}
@@ -801,30 +838,21 @@ public:
 
 	void square_dup(const uint32_t dup) override
 	{
-		const size_t vsize = VSIZE * _size;
 		const int ln_8 = _lsize - 3;
 
-		Zp1 * const z1 = reinterpret_cast<Zp1 *>(&_z[0 * vsize]);
-		const Zp1 * const w1 = _w1;
-		Zp2 * const z2 = reinterpret_cast<Zp2 *>(&_z[1 * vsize]);
-		const Zp2 * const w2 = _w2;
-		Zp3 * const z3 = reinterpret_cast<Zp3 *>(&_z[2 * vsize]);
-		const Zp3 * const w3 = _w3;
+		// const size_t vsize = VSIZE * _size;
 
-		Zp1::forward0<VSIZE>(z1, w1, ln_8);
-		Zp2::forward0<VSIZE>(z2, w2, ln_8);
-		Zp3::forward0<VSIZE>(z3, w3, ln_8);
+		// Zp1 * const z1 = reinterpret_cast<Zp1 *>(&_z[0 * vsize]);
+		// Zp2 * const z2 = reinterpret_cast<Zp2 *>(&_z[1 * vsize]);
+		// Zp3 * const z3 = reinterpret_cast<Zp3 *>(&_z[2 * vsize]);
 
-		_engine->write_memory_z(_z);
-		int lm = ln_8;
-		for (size_t s = 8; lm > 3; lm -= 3, s *= 8) _engine->forward8(lm - 3, s);
+		// const Zp1 * const w1 = _w1;
+		// const Zp2 * const w2 = _w2;
+		// const Zp3 * const w3 = _w3;
 
-		if (lm == 3) _engine->square8();
-		else if (lm == 2) _engine->square4x2();
-		else if (lm == 1) _engine->square2x4();
-
-		// _engine->read_memory_z(_z);
-		// const int lm0 = lm;
+		// Zp1::forward0<VSIZE>(z1, w1, ln_8);
+		// Zp2::forward0<VSIZE>(z2, w2, ln_8);
+		// Zp3::forward0<VSIZE>(z3, w3, ln_8);
 
 		// const int lm0 = Zp1::forward<VSIZE>(z1, w1, ln_8);
 		// Zp2::forward<VSIZE>(z2, w2, ln_8);
@@ -838,12 +866,23 @@ public:
 		// Zp2::backward<VSIZE>(z2, w2, lm0, ln_8);
 		// Zp3::backward<VSIZE>(z3, w3, lm0, ln_8);
 
-		// _engine->write_memory_z(_z);
-		// int lm = lm0;
-		for (size_t s = size_t(1) << (ln_8 - lm); s >= 1; lm += 3, s /= 8) _engine->backward8(lm, s);
-		_engine->read_memory_z(_z);
+		// carry(dup);
 
-		carry(dup);
+		_engine->write_memory_z(_z);
+		_engine->forward8_0();
+
+		int lm = ln_8;
+		for (size_t s = 8; lm > 3; lm -= 3, s *= 8) _engine->forward8(lm - 3, s);
+
+		if (lm == 3) _engine->square8();
+		else if (lm == 2) _engine->square4x2();
+		else if (lm == 1) _engine->square2x4();
+
+		for (size_t s = size_t(1) << (ln_8 - lm); s >= 1; lm += 3, s /= 8) _engine->backward8(lm, s);
+
+		_engine->carry1(dup);
+		_engine->carry2();
+		_engine->read_memory_z(_z);
 	}
 
 	void init_multiplicand(const size_t src) override
