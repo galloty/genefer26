@@ -92,14 +92,19 @@ private:
 		_transform = transform::create_gpu(b, n, num_regs, device, _is_boinc, _get_boinc_ids);
 		if (verbose)
 		{
-			std::ostringstream ss;
-			if (full) ss << "Running on " << _transform->get_type() << ", data size: " << std::setprecision(3) << _transform->get_cache_size() / (1024 * 1024.0) << " MB";
+			std::ostringstream ss; ss << "Running on " << _transform->get_type();
+			if (full)
+			{
+				ss << ", data size: " << std::setprecision(3) << _transform->get_data_size() / (1024 * 1024.0) << " MB";
+				ss << ", cache size: " << std::setprecision(3) << _transform->get_cache_size() / (1024 * 1024.0) << " MB";
+			}
 			ss << "." << std::endl;
 			pio::print(ss.str());
 		}
 	}
 
-	void create_transform_CPU(const UInt32_8 & b, const uint32_t n, const size_t num_regs, const bool verbose = true, const bool full = true)
+	void create_transform_CPU(const UInt32_8 & b, const uint32_t n, const size_t num_regs,
+							const bool verbose = true, const bool full = true)
 	{
 		delete_transform();
 
@@ -139,8 +144,7 @@ private:
 
 	static std::string gfn(const uint32_t b, const uint32_t n)
 	{
-		std::ostringstream ss;
-		ss << b << "^{2^" << n << "} + 1";
+		std::ostringstream ss; ss << b << "^{2^" << n << "} + 1";
 		return ss.str();
 	}
 
@@ -916,21 +920,19 @@ private:
 		return EReturn::Success;
 	}
 
-	EReturn bench(const uint32_t m, const size_t device, const bool isCPU)
+	EReturn bench(const uint32_t n, const size_t device, const bool isCPU, const int depth)
 	{
-		static constexpr uint32_t bm[12] = { 1000000000, 1000000000, 1000000000, 460000000, 550000000, 400000000,
-											 80000000, 20000000, 6000000, 3000000, 550000, 150000 };
-		const size_t num_regs = 3;
+		static constexpr uint32_t bn[3] = { 1000000000, 1000000000, 1000000000 };
+		const size_t num_regs = 3 + (size_t(1) << depth);
 
-		const uint32_t b = bm[m - 12], n = m;
-		const UInt32_8 vb = UInt32_8(b);
+		const uint32_t b = bn[n - 7];
+		const uint32_t b8[8] = { b - 14, b - 12, b - 10, b - 8, b - 6, b - 4, b - 2, b};
+		const UInt32_8 vb = UInt32_8(b8);
 
-		if (isCPU) create_transform_CPU(vb, n, num_regs, m == 16, false);
-		else create_transform_GPU(vb, n, num_regs, device, m == 16, false);
+		if (isCPU) create_transform_CPU(vb, n, num_regs, n == 7, false);
+		else create_transform_GPU(vb, n, num_regs, device, n == 7, false);
 
 		transform * const pTransform = _transform;
-
-		// pTransform->info();
 
 		uint32_t e[8]; for (size_t i = 0; i < 8; ++i) e[i] = 6 + 2 * uint32_t(i);
 		mpzv exponent; exponent.set_exponent(UInt32_8(e), 6);
@@ -939,7 +941,8 @@ private:
 		const EReturn qret = quick(exponent, testTime, validTime, is_prp, res64);
 		clear_checkpoint();
 
-		pio::print(gfn(b, n));
+		std::ostringstream ssg; ssg << "[" << vb.min() << "-" << vb.max() << "]^{2^" << n << "} + 1";
+		pio::print(ssg.str());
 
 		std::ostringstream ss;
 		if (qret == EReturn::Failed) ss << ": test failed!" << std::endl;
@@ -962,7 +965,7 @@ private:
 			size_t i = 1;
 			while (!_break.load(std::memory_order_relaxed))
 			{
-				pTransform->square_dup(((i % 2) != 0) ? uint32_t(-1) : 0);
+				pTransform->square_dup(((i % 2) != 0) ? 0x55 : 0xAA);
 				++i;
 				if (quitting())
 				{
@@ -976,13 +979,14 @@ private:
 
 			pTransform->copy(1, 0);	// synchro
 
-			const size_t memsize = _transform->get_cache_size();
-
 			const double error = _transform->get_error();
 			const double mul_time = chrono.get_elapsed_time() / i, estimated_time = mul_time * std::log2(b) * (size_t(1) << n);
+			ss << ": i = " << i << ", " << std::log2(b) * (size_t(1) << n) << " ";
+
 			ss << ": " << timer::format_time(estimated_time) << std::setprecision(3) << ", " << mul_time * 1e3 << " ms/bit, ";
 			if (error != 0) ss << "error = " << std::setprecision(4) << error << ", ";
-			ss << "data size: " << memsize / (1024 * 1024.0) << " MB." << std::endl;
+			ss << "data size: " << std::setprecision(3) << _transform->get_data_size() / (1024 * 1024.0) << " MB, ";
+			ss << "cache size: " << std::setprecision(3) << _transform->get_cache_size() / (1024 * 1024.0) << " MB." << std::endl;
 		}
 		pio::print(ss.str());
 
@@ -995,7 +999,7 @@ public:
 	{
 		_n = n;
 
-		UInt32_8 b; parse_b(b_filename, b);
+		UInt32_8 b; if (!b_filename.empty()) parse_b(b_filename, b); else b = UInt32_8(1000000000);
 
 		const bool empty_main_filename = _main_filename.empty();
 		if (empty_main_filename)
@@ -1004,7 +1008,7 @@ public:
 			_main_filename = ss.str();
 		}
 
-		if (mode == EMode::Bench) return bench(n, device, isCPU);
+		if (mode == EMode::Bench) return bench(n, device, isCPU, depth);
 
 		size_t num_regs;
 		if (mode == EMode::Quick) num_regs = 3;

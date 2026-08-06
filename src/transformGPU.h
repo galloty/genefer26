@@ -1056,8 +1056,8 @@ public:
 		if (!cFile.write(reinterpret_cast<const char *>(_z), 3 * VSIZE * _num_regs * _size * sizeof(ZP))) return;
 	}
 
-	size_t get_data_size() const override { return (3 * VSIZE * ((_num_regs + 1) * _size + _size / 2)) * sizeof(ZP); }
-	size_t get_cache_size() const override { return (3 * VSIZE * (_size + _size / 2)) * sizeof(ZP); }
+	size_t get_data_size() const override { return (3 * (VSIZE * (_num_regs + 1) * _size + _size / 2)) * sizeof(ZP); }
+	size_t get_cache_size() const override { return (3 * (VSIZE * _size + _size / 2)) * sizeof(ZP); }
 	double get_error() const override { return 0; }
 
 	void is_one(bool b[8], UInt64_8 & res64) const override { _is_one(b, res64); }
