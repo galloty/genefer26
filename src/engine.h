@@ -68,7 +68,11 @@ public:
 };
 
 #define CREATE_TRANSFORM_KERNEL(name) _##name = create_transform_kernel(#name);
+#define CREATE_TRANSFORM_KERNELP(name) _##name = create_transform_kernel(#name, false);
+#define CREATE_MUL_KERNEL(name) _##name = create_mul_kernel(#name);
 #define CREATE_CARRY_KERNEL(name) _##name = create_carry_kernel(#name);
+#define CREATE_SETCOPY_KERNEL(name) _##name = create_set_copy_kernel(#name);
+#define CREATE_COPYP_KERNEL(name) _##name = create_copyp_kernel(#name);
 
 template<size_t VSIZE, bool IS32>
 class engine : public device
@@ -84,7 +88,10 @@ private:
 
 	cl_kernel _forward8 = nullptr, _backward8 = nullptr, _forward8_0 = nullptr;
 	cl_kernel _square2x4 = nullptr, _square4x2 = nullptr, _square8 = nullptr;
+	cl_kernel _fwd4x2 = nullptr, _fwd8 = nullptr;
+	cl_kernel _mul2x4 = nullptr, _mul4x2 = nullptr, _mul8 = nullptr;
 	cl_kernel _carry1 = nullptr, _carry2 = nullptr;
+	cl_kernel _set = nullptr, _copy = nullptr, _copyp = nullptr;
 
 	static constexpr int ilog2_32(const uint32_t n) { return (n == 0) ? -1 : (31 - __builtin_clz(n)); }
 
@@ -133,11 +140,25 @@ public:
 ///////////////////////////////
 
 private:
+	void set_transform_arg0(cl_kernel & kernel, const bool is_multiplier = true)
+	{
+		_setKernelArg(kernel, 0, sizeof(cl_mem), is_multiplier ? &_z : &_zp);
+	}
+
 	cl_kernel create_transform_kernel(const char * const kernel_name, const bool is_multiplier = true)
 	{
 		cl_kernel kernel = _createKernel(kernel_name);
-		_setKernelArg(kernel, 0, sizeof(cl_mem), is_multiplier ? &_z : &_zp);
+		set_transform_arg0(kernel, is_multiplier);
 		_setKernelArg(kernel, 1, sizeof(cl_mem), &_w);
+		return kernel;
+	}
+
+	cl_kernel create_mul_kernel(const char * const kernel_name)
+	{
+		cl_kernel kernel = _createKernel(kernel_name);
+		_setKernelArg(kernel, 0, sizeof(cl_mem), &_z);
+		_setKernelArg(kernel, 1, sizeof(cl_mem), &_zp);
+		_setKernelArg(kernel, 2, sizeof(cl_mem), &_w);
 		return kernel;
 	}
 
@@ -148,6 +169,21 @@ private:
 		_setKernelArg(kernel, 1, sizeof(cl_mem), &_bs);
 		_setKernelArg(kernel, 2, sizeof(cl_mem), &_z);
 		_setKernelArg(kernel, 3, sizeof(cl_mem), &_c);
+		return kernel;
+	}
+
+	cl_kernel create_set_copy_kernel(const char * const kernel_name)
+	{
+		cl_kernel kernel = _createKernel(kernel_name);
+		_setKernelArg(kernel, 0, sizeof(cl_mem), &_z);
+		return kernel;
+	}
+
+	cl_kernel create_copyp_kernel(const char * const kernel_name)
+	{
+		cl_kernel kernel = _createKernel(kernel_name);
+		_setKernelArg(kernel, 0, sizeof(cl_mem), &_zp);
+		_setKernelArg(kernel, 1, sizeof(cl_mem), &_z);
 		return kernel;
 	}
 
@@ -167,8 +203,19 @@ public:
 		CREATE_TRANSFORM_KERNEL(square4x2);
 		CREATE_TRANSFORM_KERNEL(square8);
 
+		CREATE_TRANSFORM_KERNELP(fwd4x2);
+		CREATE_TRANSFORM_KERNELP(fwd8);
+
+		CREATE_MUL_KERNEL(mul2x4);
+		CREATE_MUL_KERNEL(mul4x2);
+		CREATE_MUL_KERNEL(mul8);
+
 		CREATE_CARRY_KERNEL(carry1);
 		CREATE_CARRY_KERNEL(carry2);
+
+		CREATE_SETCOPY_KERNEL(set);
+		CREATE_SETCOPY_KERNEL(copy);
+		CREATE_COPYP_KERNEL(copyp);
 	}
 
 	void release_kernels()
@@ -180,7 +227,10 @@ public:
 
 		_releaseKernel(_forward8); _releaseKernel(_backward8); _releaseKernel(_forward8_0);
 		_releaseKernel(_square2x4); _releaseKernel(_square4x2); _releaseKernel(_square8);
+		_releaseKernel(_fwd4x2); _releaseKernel(_fwd8);
+		_releaseKernel(_mul2x4); _releaseKernel(_mul4x2); _releaseKernel(_mul8);
 		_releaseKernel(_carry1); _releaseKernel(_carry2);
+		_releaseKernel(_set); _releaseKernel(_copy); _releaseKernel(_copyp);
 	}
 
 ///////////////////////////////
@@ -222,12 +272,54 @@ public:
 	void square4x2() { _executeKernel(_square4x2, 3 * VSIZE * _n / 8); }
 	void square8() { _executeKernel(_square8, 3 * VSIZE * _n / 8); }
 
-	void carry1(const uint32_t dup)
+	void forward8p(const int lm, const size_t s)
+	{
+		set_transform_arg0(_forward8, false);
+		forward8(lm, s);
+		set_transform_arg0(_forward8);
+	}
+
+	void forward8_0p()
+	{
+		set_transform_arg0(_forward8_0, false);
+		forward8_0();
+		set_transform_arg0(_forward8_0);
+	}
+
+	void fwd4x2() { _executeKernel(_fwd4x2, 3 * VSIZE * _n / 8); }
+	void fwd8() { _executeKernel(_fwd8, 3 * VSIZE * _n / 8); }
+
+	void mul2x4() { _executeKernel(_mul2x4, 3 * VSIZE * _n / 8); }
+	void mul4x2() { _executeKernel(_mul4x2, 3 * VSIZE * _n / 8); }
+	void mul8() { _executeKernel(_mul8, 3 * VSIZE * _n / 8); }
+
+	void carry(const uint32_t dup)
 	{
 		const uint32 idup = uint32(dup);
 		_setKernelArg(_carry1, 4, sizeof(uint32), &idup);
 		_executeKernel(_carry1, VSIZE * _n / 8);
+		_executeKernel(_carry2, VSIZE * _n / 8);
 	}
 
-	void carry2() { _executeKernel(_carry2, VSIZE * _n / 8); }
+	void set(const uint32_t a)
+	{
+		const uint32 ia = uint32(a);
+		_setKernelArg(_set, 1, sizeof(uint32), &ia);
+		_executeKernel(_set, 3 * VSIZE * _n);
+	}
+
+	void copy(const size_t dst, const size_t src)
+	{
+		const uint32 idst = uint32(dst), isrc = uint32(src);
+		_setKernelArg(_copy, 1, sizeof(uint32), &idst);
+		_setKernelArg(_copy, 2, sizeof(uint32), &isrc);
+		_executeKernel(_copy, 3 * VSIZE * _n);
+	}
+
+	void copyp(const size_t src)
+	{
+		const uint32 isrc = uint32(src);
+		_setKernelArg(_copyp, 2, sizeof(uint32), &isrc);
+		_executeKernel(_copyp, 3 * VSIZE * _n);
+	}
 };
