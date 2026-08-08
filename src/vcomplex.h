@@ -59,7 +59,7 @@ public:
 	finline const Double_8 & real() const { return _re; }
 	finline const Double_8 & imag() const { return _im; }
 
-	finline void copy_mask(const Complex_8 & rhs, const uint8_t mask) { _re.copy_mask(rhs._re, _re, mask); _im.copy_mask(rhs._im, _im, mask); }
+	finline void copy_mask(const Complex_8 & rhs, const uint32_t mask) { _re.copy_mask(rhs._re, _re, mask); _im.copy_mask(rhs._im, _im, mask); }
 
 	finline Complex_8 & operator+=(const Complex_8 & rhs) { _re += rhs._re; _im += rhs._im; return *this; }
 	finline Complex_8 & operator-=(const Complex_8 & rhs) { _re -= rhs._re; _im -= rhs._im; return *this; }
@@ -98,13 +98,13 @@ public:
 	finline Complex_8 sqr() const { const Double_8 t = _re * _im; return Complex_8(_re * _re - _im * _im, t + t); }
 	finline Complex_8 mul(const Complex_8 & rhs) const { return Complex_8(_re * rhs._re - _im * rhs._im, _re * rhs._im + _im * rhs._re); }
 
-	finline Complex_8 mul_mask(const Complex_8 & rhs, const uint8_t mask) const
+	finline Complex_8 mul_mask(const Complex_8 & rhs, const uint32_t mask) const
 	{
 		const Double_8 re = _re.mul_mask(rhs._re, mask) - _im.mul_maskz(rhs._im, mask);
 		const Double_8 im = _re.mul_maskz(rhs._im, mask) + _im.mul_mask(rhs._re, mask);
 		return Complex_8(re, im);
 	}
-	finline Complex_8 mul_maskz(const Complex_8 & rhs, const uint8_t mask) const
+	finline Complex_8 mul_maskz(const Complex_8 & rhs, const uint32_t mask) const
 	{
 		const Double_8 re = _re.mul_maskz(rhs._re, mask) - _im.mul_maskz(rhs._im, mask);
 		const Double_8 im = _re.mul_maskz(rhs._im, mask) + _im.mul_maskz(rhs._re, mask);

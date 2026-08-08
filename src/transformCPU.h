@@ -37,7 +37,7 @@ public:
 	finline explicit Complex_8_pair() {}
 	finline explicit Complex_8_pair(const double f) : _l(f), _h(0) {}
 
-	finline void copy_mask(const Complex_8_pair & rhs, const uint8_t mask) { _l.copy_mask(rhs._l, mask); _h.copy_mask(rhs._h, mask); }
+	finline void copy_mask(const Complex_8_pair & rhs, const uint32_t mask) { _l.copy_mask(rhs._l, mask); _h.copy_mask(rhs._h, mask); }
 
 	finline const Complex_8 & low() const { return _l; }
 	finline const Complex_8 & high() const { return _h; }
@@ -71,8 +71,8 @@ public:
 	finline Complex_8_pair sqr() const { return Complex_8_pair(_l.sqr(), _l.mul(_h + _h) + _h.sqr()); }
 	finline Complex_8_pair mul(const Complex_8_pair & rhs) const { return Complex_8_pair(_l.mul(rhs._l), _l.mul(rhs._h) + _h.mul(rhs.get())); }
 
-	finline Complex_8_pair mul_mask(const Complex_8_pair & rhs, const uint8_t mask) const { return Complex_8_pair(_l.mul_mask(rhs._l, mask), _l.mul_maskz(rhs._h, mask) + _h.mul_mask(rhs.get(), mask)); }
-	finline Complex_8_pair mul_maskz(const Complex_8_pair & rhs, const uint8_t mask) const { return Complex_8_pair(_l.mul_maskz(rhs._l, mask), _l.mul_maskz(rhs._h, mask) + _h.mul_maskz(rhs.get(), mask)); }
+	finline Complex_8_pair mul_mask(const Complex_8_pair & rhs, const uint32_t mask) const { return Complex_8_pair(_l.mul_mask(rhs._l, mask), _l.mul_maskz(rhs._h, mask) + _h.mul_mask(rhs.get(), mask)); }
+	finline Complex_8_pair mul_maskz(const Complex_8_pair & rhs, const uint32_t mask) const { return Complex_8_pair(_l.mul_maskz(rhs._l, mask), _l.mul_maskz(rhs._h, mask) + _h.mul_maskz(rhs.get(), mask)); }
 
 	finline Complex_8_pair flatten() const { return Complex_8_pair(_l, _h * split_inv); }
 	finline Complex_8_pair elevate() const { return Complex_8_pair(_l, _h * split); }
@@ -166,19 +166,19 @@ private:
 		const Complex_8_pair t = z1.mul(zp1).mulTF(w); z1 = z0.mul(zp1) + z1.mul(zp0); z0 = z0.mul(zp0).subi(t);
 	}
 
-	finline static void _mul2_mask(Complex_8_pair & z0, Complex_8_pair & z1, const Complex_8_pair & zp0, const Complex_8_pair & zp1, const uint8_t mask, const TwiddleFactor & w) 
+	finline static void _mul2_mask(Complex_8_pair & z0, Complex_8_pair & z1, const Complex_8_pair & zp0, const Complex_8_pair & zp1, const uint32_t mask, const TwiddleFactor & w) 
 	{
 		const Complex_8_pair t = z1.mul_maskz(zp1, mask).mulTF(w); z1 = z0.mul_maskz(zp1, mask) + z1.mul_mask(zp0, mask); z0 = z0.mul_mask(zp0, mask) + t;
 	}
-	finline static void _mul2i_mask(Complex_8_pair & z0, Complex_8_pair & z1, const Complex_8_pair & zp0, const Complex_8_pair & zp1, const uint8_t mask, const TwiddleFactor & w) 
+	finline static void _mul2i_mask(Complex_8_pair & z0, Complex_8_pair & z1, const Complex_8_pair & zp0, const Complex_8_pair & zp1, const uint32_t mask, const TwiddleFactor & w) 
 	{
 		const Complex_8_pair t = z1.mul_maskz(zp1, mask).mulTF(w); z1 = z0.mul_maskz(zp1, mask) + z1.mul_mask(zp0, mask); z0 = z0.mul_mask(zp0, mask).addi(t);
 	}
-	finline static void _mul2n_mask(Complex_8_pair & z0, Complex_8_pair & z1, const Complex_8_pair & zp0, const Complex_8_pair & zp1, const uint8_t mask, const TwiddleFactor & w)
+	finline static void _mul2n_mask(Complex_8_pair & z0, Complex_8_pair & z1, const Complex_8_pair & zp0, const Complex_8_pair & zp1, const uint32_t mask, const TwiddleFactor & w)
 	{
 		const Complex_8_pair t = z1.mul_maskz(zp1, mask).mulTF(w); z1 = z0.mul_maskz(zp1, mask) + z1.mul_mask(zp0, mask); z0 = z0.mul_mask(zp0, mask) - t;
 	}
-	finline static void _mul2ni_mask(Complex_8_pair & z0, Complex_8_pair & z1, const Complex_8_pair & zp0, const Complex_8_pair & zp1, const uint8_t mask, const TwiddleFactor & w)
+	finline static void _mul2ni_mask(Complex_8_pair & z0, Complex_8_pair & z1, const Complex_8_pair & zp0, const Complex_8_pair & zp1, const uint32_t mask, const TwiddleFactor & w)
 	{
 		const Complex_8_pair t = z1.mul_maskz(zp1, mask).mulTF(w); z1 = z0.mul_maskz(zp1, mask) + z1.mul_mask(zp0, mask); z0 = z0.mul_mask(zp0, mask).subi(t);
 	}
@@ -282,7 +282,7 @@ public:
 		_store(4, z, 1, zl);
 	}
 
-	finline static void mul2x2e_mask(Complex_8_pair * const z, const Complex_8_pair * const zp, const uint8_t mask, const TwiddleFactor & w1)
+	finline static void mul2x2e_mask(Complex_8_pair * const z, const Complex_8_pair * const zp, const uint32_t mask, const TwiddleFactor & w1)
 	{
 		Complex_8_pair zpl[4]; _load(4, zpl, zp, 1);
 		Complex_8_pair zl[4]; _load(4, zl, z, 1);
@@ -290,7 +290,7 @@ public:
 		_store(4, z, 1, zl);
 	}
 
-	finline static void mul2x2o_mask(Complex_8_pair * const z, const Complex_8_pair * const zp, const uint8_t mask, const TwiddleFactor & w1)
+	finline static void mul2x2o_mask(Complex_8_pair * const z, const Complex_8_pair * const zp, const uint32_t mask, const TwiddleFactor & w1)
 	{
 		Complex_8_pair zpl[4]; _load(4, zpl, zp, 1);
 		Complex_8_pair zl[4]; _load(4, zl, z, 1);
@@ -332,7 +332,7 @@ public:
 		_store(4, z, 1, zl);
 	}
 
-	finline static void mul4e_mask(Complex_8_pair * const z, const Complex_8_pair * const zp, const uint8_t mask, const TwiddleFactor & w1)
+	finline static void mul4e_mask(Complex_8_pair * const z, const Complex_8_pair * const zp, const uint32_t mask, const TwiddleFactor & w1)
 	{
 		Complex_8_pair zpl[4]; _load(4, zpl, zp, 1);
 		Complex_8_pair zl[4]; _load(4, zl, z, 1);
@@ -342,7 +342,7 @@ public:
 		_store(4, z, 1, zl);
 	}
 
-	finline static void mul4o_mask(Complex_8_pair * const z, const Complex_8_pair * const zp, const uint8_t mask, const TwiddleFactor & w1)
+	finline static void mul4o_mask(Complex_8_pair * const z, const Complex_8_pair * const zp, const uint32_t mask, const TwiddleFactor & w1)
 	{
 		Complex_8_pair zpl[4]; _load(4, zpl, zp, 1);
 		Complex_8_pair zl[4]; _load(4, zl, z, 1);
@@ -646,7 +646,7 @@ private:
 		for (size_t i = 0; i < m; ++i) Complex_8_pair::backward4o(&z[i], m, w1, w21);
 	}
 
-	static void mul_e_mask(Complex_8_pair * const z, const Complex_8_pair * const zp, const uint8_t mask, const TwiddleFactor * const w, const size_t m, const size_t sj)
+	static void mul_e_mask(Complex_8_pair * const z, const Complex_8_pair * const zp, const uint32_t mask, const TwiddleFactor * const w, const size_t m, const size_t sj)
 	{
 		const TwiddleFactor w1 = w[sj], w20 = w[2 * sj + 0];
 
@@ -677,7 +677,7 @@ private:
 		for (size_t i = 0; i < m; ++i) Complex_8_pair::backward4e(&z[i], m, w1, w20);
 	}
 
-	static void mul_o_mask(Complex_8_pair * const z, const Complex_8_pair * const zp, const uint8_t mask, const TwiddleFactor * const w, const size_t m, const size_t sj)
+	static void mul_o_mask(Complex_8_pair * const z, const Complex_8_pair * const zp, const uint32_t mask, const TwiddleFactor * const w, const size_t m, const size_t sj)
 	{
 		const TwiddleFactor w1 = w[sj], w21 = w[2 * sj + 1];
 
@@ -712,7 +712,7 @@ private:
 	{
 		Complex_8_pair f[4]; for (size_t i = 0; i < 4; ++i) f[i] = Complex_8_pair(0.0);
 
-		Double_8 g; g.copy_mask(Double_8(2), Double_8(1), uint8_t(dup));
+		Double_8 g; g.copy_mask(Double_8(2), Double_8(1), dup);
 
 #if defined(CHECK_ERROR)
 		Complex_8_pair err = Complex_8_pair(0.0);
@@ -791,7 +791,7 @@ public:
 		_error = std::max(_error, err);
 	}
 
-	void mul_mask(const uint8_t mask) override
+	void mul_mask(const uint32_t mask) override
 	{
 		Complex_8_pair * const z = _z;
 		const Complex_8_pair * const zp = _zp;
@@ -814,10 +814,10 @@ public:
 		for (size_t k = 0; k < N; ++k) z_dst[k] = z_src[k];
 	}
 
-	void copy_mask(const size_t dst, const size_t src, const uint8_t mask) const override
+	void copy_mask(const size_t dst, const size_t src, const uint32_t mask) const override
 	{
 		if (mask == 0) return;
-		if (mask == uint8_t(-1)) { copy(dst, src); return; }
+		if (mask == 0xff) { copy(dst, src); return; }
 
 		pio::print("copy_mask");
 

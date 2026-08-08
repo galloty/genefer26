@@ -69,7 +69,7 @@ public:
 	finline Double_8 operator*(const double rhs) const { return Double_8(_x * rhs); }
 	finline Double_8 operator*(const Double_8 & rhs) const { return Double_8(_x * rhs._x); }
 
-	finline void copy_mask(const Double_8 & src_1, const Double_8 & src_0, const uint8_t mask)
+	finline void copy_mask(const Double_8 & src_1, const Double_8 & src_0, const uint32_t mask)
 	{
 #if defined(__AVX512F__)
 		_x = _mm512_mask_mov_pd((__m512d)src_0._x, mask, (__m512d)src_1._x);
@@ -92,7 +92,7 @@ public:
 #endif
 	}
 
-	finline Double_8 mul_mask(const Double_8 & rhs, const uint8_t mask) const
+	finline Double_8 mul_mask(const Double_8 & rhs, const uint32_t mask) const
 	{
 		double_8u yu;
 #if defined(__AVX512F__)
@@ -115,7 +115,7 @@ public:
 		return Double_8(yu.d8);
 	}
 
-	finline Double_8 mul_maskz(const Double_8 & rhs, const uint8_t mask) const
+	finline Double_8 mul_maskz(const Double_8 & rhs, const uint32_t mask) const
 	{
 		double_8u yu;
 #if defined(__AVX512F__)

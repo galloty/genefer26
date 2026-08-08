@@ -41,10 +41,10 @@ public:
 	virtual void square_dup(const uint32_t dup) = 0;		// r_0 = r_0^2 or 2*r_0^2
 	virtual void init_multiplicand(const size_t src) = 0;	// r_m = transform(r_src)
 	virtual void mul() = 0;									// r_0 *= r_m
-	virtual void mul_mask(const uint8_t mask) = 0;
+	virtual void mul_mask(const uint32_t mask) = 0;
 
 	virtual void copy(const size_t dst, const size_t src) const = 0;	// r_dst = r_src
-	virtual void copy_mask(const size_t dst, const size_t src, const uint8_t mask) const = 0;
+	virtual void copy_mask(const size_t dst, const size_t src, const uint32_t mask) const = 0;
 
 	virtual void power(const size_t src, const uint32_t e) = 0;
 	virtual void power_vec(const size_t src, const UInt32_8 & e) = 0;

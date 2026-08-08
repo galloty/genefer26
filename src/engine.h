@@ -90,6 +90,7 @@ private:
 	cl_kernel _square2x4 = nullptr, _square4x2 = nullptr, _square8 = nullptr;
 	cl_kernel _fwd4x2 = nullptr, _fwd8 = nullptr;
 	cl_kernel _mul2x4 = nullptr, _mul4x2 = nullptr, _mul8 = nullptr;
+	cl_kernel _mul2x4_mask = nullptr, _mul4x2_mask = nullptr, _mul8_mask = nullptr;
 	cl_kernel _carry1 = nullptr, _carry2 = nullptr;
 	cl_kernel _set = nullptr, _copy = nullptr, _copyp = nullptr;
 
@@ -210,6 +211,10 @@ public:
 		CREATE_MUL_KERNEL(mul4x2);
 		CREATE_MUL_KERNEL(mul8);
 
+		CREATE_MUL_KERNEL(mul2x4_mask);
+		CREATE_MUL_KERNEL(mul4x2_mask);
+		CREATE_MUL_KERNEL(mul8_mask);
+
 		CREATE_CARRY_KERNEL(carry1);
 		CREATE_CARRY_KERNEL(carry2);
 
@@ -229,6 +234,7 @@ public:
 		_releaseKernel(_square2x4); _releaseKernel(_square4x2); _releaseKernel(_square8);
 		_releaseKernel(_fwd4x2); _releaseKernel(_fwd8);
 		_releaseKernel(_mul2x4); _releaseKernel(_mul4x2); _releaseKernel(_mul8);
+		_releaseKernel(_mul2x4_mask); _releaseKernel(_mul4x2_mask); _releaseKernel(_mul8_mask);
 		_releaseKernel(_carry1); _releaseKernel(_carry2);
 		_releaseKernel(_set); _releaseKernel(_copy); _releaseKernel(_copyp);
 	}
@@ -292,6 +298,25 @@ public:
 	void mul2x4() { _executeKernel(_mul2x4, 3 * VSIZE * _n / 8); }
 	void mul4x2() { _executeKernel(_mul4x2, 3 * VSIZE * _n / 8); }
 	void mul8() { _executeKernel(_mul8, 3 * VSIZE * _n / 8); }
+
+	void mul2x4_mask(const uint32_t mask)
+	{
+		const uint32 imask = uint32(mask);
+		_setKernelArg(_mul2x4_mask, 3, sizeof(uint32), &imask);
+		_executeKernel(_mul2x4_mask, 3 * VSIZE * _n / 8);
+	}
+	void mul4x2_mask(const uint32_t mask)
+	{
+		const uint32 imask = uint32(mask);
+		_setKernelArg(_mul4x2_mask, 3, sizeof(uint32), &imask);
+		_executeKernel(_mul4x2_mask, 3 * VSIZE * _n / 8);
+	}
+	void mul8_mask(const uint32_t mask)
+	{
+		const uint32 imask = uint32(mask);
+		_setKernelArg(_mul8_mask, 3, sizeof(uint32), &imask);
+		_executeKernel(_mul8_mask, 3 * VSIZE * _n / 8);
+	}
 
 	void carry(const uint32_t dup)
 	{

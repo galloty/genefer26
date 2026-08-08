@@ -125,8 +125,8 @@ finline uint8_t UInt32_8::get_bit_mask(const int i) const
 	const int mask = _mm256_movemask_ps(_mm256_castsi256_ps(_mm256_cmpeq_epi32((__m256i)r, _mm256_setzero_si256())));
 	return ~uint8_t(mask);
 #else
-	uint8_t mask = (r[0] != 0) ? 1 : 0;
-	for (size_t i = 1; i < 8; ++i) mask |= ((r[i] != 0) ? 1 : 0) << i;
+	uint32_t mask = (r[0] != 0) ? 1 : 0;
+	for (size_t i = 1; i < 8; ++i) mask |= ((r[i] != 0) ? 1u : 0u) << i;
 	return mask;
 #endif
 }

@@ -359,7 +359,7 @@ private:
 		for (int i = static_cast<int>(e.get_max_size()) - 1; i >= 0; --i)
 		{
 			ptransform->square_dup(0);
-			ptransform->mul_mask(uint8_t(e.get_bit_mask(i)));
+			ptransform->mul_mask(e.get_bit_mask(i));
 		}
 	}
 
@@ -688,7 +688,7 @@ private:
 		ptransform->set(2);
 		ptransform->power(0, rnd1);
 		ptransform->mul(2);
-		ptransform->copy_mask(2, 0, uint8_t(mask));
+		ptransform->copy_mask(2, 0, mask);
 
 		ptransform->power(1, rnd2);
 		ptransform->copy(1, 0);
