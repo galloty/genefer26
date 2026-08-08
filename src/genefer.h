@@ -360,6 +360,10 @@ private:
 		{
 			ptransform->square_dup(0);
 			ptransform->mul_mask(e.get_bit_mask(i));
+			// validate copy_mask function, reg 3 is free
+			// ptransform->copy(3, 0);
+			// ptransform->mul();
+			// ptransform->copy_mask(0, 3, ~e.get_bit_mask(i));
 		}
 	}
 

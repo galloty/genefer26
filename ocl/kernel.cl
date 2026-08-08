@@ -810,3 +810,17 @@ void copyp(__global uint_32 * restrict const zp, __global const uint_32 * restri
 	const sz_t id = (sz_t)get_global_id(0);
 	zp[id] = z[3 * VN_SZ * src + id];
 }
+
+__kernel
+void copy_mask(__global uint_32 * restrict const z, const sz_t dst, const sz_t src, const uint_32 mask)
+{
+	const sz_t id = (sz_t)get_global_id(0);
+	if ((mask & (1u << (id % VSIZE))) != 0) z[3 * VN_SZ * dst + id] = z[3 * VN_SZ * src + id];
+}
+
+__kernel
+void cosmic_ray(__global uint_32 * restrict const z)
+{
+	const sz_t id = (sz_t)get_global_id(0);
+	if (id == VN_SZ / 2) z[id] = addmod(z[id], 1, P1);
+}

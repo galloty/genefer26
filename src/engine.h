@@ -52,6 +52,7 @@ public:
 	int32 get_int() const { return (_n >= P / 2) ? int32(_n - P) : int32(_n); }
 	ZPT & set_int(const int32 i) { _n = (i < 0) ? (uint32(i) + P) : uint32(i); return *this; }
 
+	ZPT add(const ZPT & rhs) const { return ZPT(_add(_n, rhs._n)); }
 	ZPT mul(const ZPT & rhs) const { return ZPT(_mul(_n, rhs._n)); }
 
 	ZPT pow(const size_t e) const
@@ -92,7 +93,7 @@ private:
 	cl_kernel _mul2x4 = nullptr, _mul4x2 = nullptr, _mul8 = nullptr;
 	cl_kernel _mul2x4_mask = nullptr, _mul4x2_mask = nullptr, _mul8_mask = nullptr;
 	cl_kernel _carry1 = nullptr, _carry2 = nullptr;
-	cl_kernel _set = nullptr, _copy = nullptr, _copyp = nullptr;
+	cl_kernel _set = nullptr, _copy = nullptr, _copyp = nullptr, _copy_mask = nullptr, _cosmic_ray = nullptr;
 
 	static constexpr int ilog2_32(const uint32_t n) { return (n == 0) ? -1 : (31 - __builtin_clz(n)); }
 
@@ -221,6 +222,8 @@ public:
 		CREATE_SETCOPY_KERNEL(set);
 		CREATE_SETCOPY_KERNEL(copy);
 		CREATE_COPYP_KERNEL(copyp);
+		CREATE_SETCOPY_KERNEL(copy_mask);
+		CREATE_SETCOPY_KERNEL(cosmic_ray);
 	}
 
 	void release_kernels()
@@ -236,7 +239,7 @@ public:
 		_releaseKernel(_mul2x4); _releaseKernel(_mul4x2); _releaseKernel(_mul8);
 		_releaseKernel(_mul2x4_mask); _releaseKernel(_mul4x2_mask); _releaseKernel(_mul8_mask);
 		_releaseKernel(_carry1); _releaseKernel(_carry2);
-		_releaseKernel(_set); _releaseKernel(_copy); _releaseKernel(_copyp);
+		_releaseKernel(_set); _releaseKernel(_copy); _releaseKernel(_copyp); _releaseKernel(_copy_mask); _releaseKernel(_cosmic_ray);
 	}
 
 ///////////////////////////////
@@ -244,7 +247,7 @@ public:
 public:
 	void read_memory_z(ZP * const z_ptr, const size_t count = 1) { _readBuffer(_z, z_ptr, 3 * VSIZE * count * _n * sizeof(ZP)); }
 	void write_memory_z(const ZP * const z_ptr, const size_t count = 1) { _writeBuffer(_z, z_ptr, 3 * VSIZE * count * _n * sizeof(ZP)); }
-	void write_memory_w(const ZP * const w_ptr, const size_t offset) { _writeBuffer(_w, w_ptr, _n / 2 * sizeof(ZP), offset * _n / 2 * sizeof(ZP)); }
+	void write_memory_w(const ZP * const w_ptr) { _writeBuffer(_w, w_ptr, 3 * _n / 2 * sizeof(ZP)); }
 	void write_memory_b(const uint32_t * const b, const uint32_t * const b_inv, const int * const b_s)
 	{
 		uint32_2 bb_inv[VSIZE]; for (size_t i = 0; i < VSIZE; ++i) { bb_inv[i].s[0] = b[i]; bb_inv[i].s[1] = b_inv[i]; }
@@ -347,4 +350,15 @@ public:
 		_setKernelArg(_copyp, 2, sizeof(uint32), &isrc);
 		_executeKernel(_copyp, 3 * VSIZE * _n);
 	}
+
+	void copy_mask(const size_t dst, const size_t src, const uint32_t mask)
+	{
+		const uint32 idst = uint32(dst), isrc = uint32(src), imask = uint32(mask);
+		_setKernelArg(_copy_mask, 1, sizeof(uint32), &idst);
+		_setKernelArg(_copy_mask, 2, sizeof(uint32), &isrc);
+		_setKernelArg(_copy_mask, 3, sizeof(uint32), &imask);
+		_executeKernel(_copy_mask, 3 * VSIZE * _n);
+	}
+
+	void cosmic_ray() { _executeKernel(_cosmic_ray, 3 * VSIZE * _n); }
 };

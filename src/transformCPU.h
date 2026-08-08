@@ -817,9 +817,7 @@ public:
 	void copy_mask(const size_t dst, const size_t src, const uint32_t mask) const override
 	{
 		if (mask == 0) return;
-		if (mask == 0xff) { copy(dst, src); return; }
-
-		pio::print("copy_mask");
+		if (mask == (uint32_t(1) << VSIZE) - 1) { copy(dst, src); return; }
 
 		const Complex_8_pair * const z_src = &_z[src * N];
 		Complex_8_pair * const z_dst =  &_z[dst * N];
@@ -862,14 +860,14 @@ inline transform * create_transformCPU(const UInt32_8 & b, const uint32_t n, con
 	transform * ptransform = nullptr;
 	/*if      (n ==  5) ptransform = new transformCPU<(1 <<  4), 8>(b, n, num_regs);
 	else if (n ==  6) ptransform = new transformCPU<(1 <<  5), 8>(b, n, num_regs);
-	else*/ if (n ==  7) ptransform = new transformCPU<(1 <<  6), 8>(b, n, num_regs);
+	else if (n ==  7) ptransform = new transformCPU<(1 <<  6), 8>(b, n, num_regs);
 	else if (n ==  8) ptransform = new transformCPU<(1 <<  7), 8>(b, n, num_regs);
 	else if (n ==  9) ptransform = new transformCPU<(1 <<  8), 8>(b, n, num_regs);
-	/*else if (n == 10) ptransform = new transformCPU<(1 <<  9), 8>(b, n, num_regs);
-	else if (n == 11) ptransform = new transformCPU<(1 << 10), 8>(b, n, num_regs);
+	else if (n == 10) ptransform = new transformCPU<(1 <<  9), 8>(b, n, num_regs);
+	else*/ if (n == 11) ptransform = new transformCPU<(1 << 10), 8>(b, n, num_regs);
 	else if (n == 12) ptransform = new transformCPU<(1 << 11), 8>(b, n, num_regs);
 	else if (n == 13) ptransform = new transformCPU<(1 << 12), 8>(b, n, num_regs);
-	else if (n == 14) ptransform = new transformCPU<(1 << 13), 8>(b, n, num_regs);
+	/*else if (n == 14) ptransform = new transformCPU<(1 << 13), 8>(b, n, num_regs);
 	else if (n == 15) ptransform = new transformCPU<(1 << 14), 8>(b, n, num_regs);
 	else if (n == 16) ptransform = new transformCPU<(1 << 15), 8>(b, n, num_regs);
 	else if (n == 17) ptransform = new transformCPU<(1 << 16), 8>(b, n, num_regs);*/

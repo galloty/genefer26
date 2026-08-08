@@ -288,21 +288,21 @@ public:
 		if ((mode == genefer::EMode::None) || (b_filename.empty()) || (n == 0))
 		{
 			// internal test
-			const bool is_cpu = false;
-			// if (g.check("b7m.txt", 7, genefer::EMode::Quick, device, is_cpu, 5) != genefer::EReturn::Success) return;
-			// if (g.check("b8m.txt", 8, genefer::EMode::Quick, device, is_cpu, 5) != genefer::EReturn::Success) return;
-			// if (g.check("b9m.txt", 9, genefer::EMode::Quick, device, is_cpu, 5) != genefer::EReturn::Success) return;
+			// const bool is_cpu = false;
+			// // if (g.check("b7m.txt", 7, genefer::EMode::Quick, device, is_cpu, 5) != genefer::EReturn::Success) return;
+			// // if (g.check("b8m.txt", 8, genefer::EMode::Quick, device, is_cpu, 5) != genefer::EReturn::Success) return;
+			// // if (g.check("b9m.txt", 9, genefer::EMode::Quick, device, is_cpu, 5) != genefer::EReturn::Success) return;
 
-			if (g.check("b7m.txt", 7, genefer::EMode::Proof, device, is_cpu, 5) != genefer::EReturn::Success) return;
-			if (g.check("b7m.txt", 7, genefer::EMode::Server, device, is_cpu, 5) != genefer::EReturn::Success) return;
-			if (g.check("b7m.txt", 7, genefer::EMode::Check, device, is_cpu, 5) != genefer::EReturn::Success) return;
-			if (g.check("b8m.txt", 8, genefer::EMode::Proof, device, is_cpu, 5) != genefer::EReturn::Success) return;
-			if (g.check("b8m.txt", 8, genefer::EMode::Server, device, is_cpu, 5) != genefer::EReturn::Success) return;
-			if (g.check("b8m.txt", 8, genefer::EMode::Check, device, is_cpu, 5) != genefer::EReturn::Success) return;
-			if (g.check("b9m.txt", 9, genefer::EMode::Proof, device, is_cpu, 5) != genefer::EReturn::Success) return;
-			if (g.check("b9m.txt", 9, genefer::EMode::Server, device, is_cpu, 5) != genefer::EReturn::Success) return;
-			if (g.check("b9m.txt", 9, genefer::EMode::Check, device, is_cpu, 5) != genefer::EReturn::Success) return;
-			return;
+			// if (g.check("b7m.txt", 7, genefer::EMode::Proof, device, is_cpu, 5) != genefer::EReturn::Success) return;
+			// if (g.check("b7m.txt", 7, genefer::EMode::Server, device, is_cpu, 5) != genefer::EReturn::Success) return;
+			// if (g.check("b7m.txt", 7, genefer::EMode::Check, device, is_cpu, 5) != genefer::EReturn::Success) return;
+			// if (g.check("b8m.txt", 8, genefer::EMode::Proof, device, is_cpu, 5) != genefer::EReturn::Success) return;
+			// if (g.check("b8m.txt", 8, genefer::EMode::Server, device, is_cpu, 5) != genefer::EReturn::Success) return;
+			// if (g.check("b8m.txt", 8, genefer::EMode::Check, device, is_cpu, 5) != genefer::EReturn::Success) return;
+			// if (g.check("b9m.txt", 9, genefer::EMode::Proof, device, is_cpu, 5) != genefer::EReturn::Success) return;
+			// if (g.check("b9m.txt", 9, genefer::EMode::Server, device, is_cpu, 5) != genefer::EReturn::Success) return;
+			// if (g.check("b9m.txt", 9, genefer::EMode::Check, device, is_cpu, 5) != genefer::EReturn::Success) return;
+			// return;
 
 			pio::print(usage());
 			if (genefer::display_devices() == 0) throw std::runtime_error("No OpenCL device");
