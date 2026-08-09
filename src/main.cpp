@@ -181,7 +181,7 @@ public:
 
 		pio::print(header(args, true));
 
-		uint32_t n = 0;
+		int n = 0;
 		std::string b_filename;
 		genefer::EMode mode = genefer::EMode::None;
 		size_t device = 0;
@@ -199,7 +199,7 @@ public:
 			if (arg.substr(0, 2) == "-n")
 			{
 				const std::string nstr = ((arg == "-n") && (i + 1 < size)) ? args[++i] : arg.substr(2);
-				n = static_cast<uint32_t>(std::atoi(nstr.c_str()));
+				n = std::atoi(nstr.c_str());
 				if (n < 5) throw std::runtime_error("n < 5 is not supported");
 				if (n > 17) throw std::runtime_error("n > 17 is not supported");
 			}
@@ -278,7 +278,7 @@ public:
 			ss << "." << std::endl;
 			pio::print(ss.str());
 
-			for (size_t n = 7; n <= 9; ++n)
+			for (int n = 7; n <= 9; ++n)
 			{
 				if (g.check("", n, mode, device, isCPU) != genefer::EReturn::Success) return;
 			}

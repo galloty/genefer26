@@ -419,7 +419,7 @@ private:
 	double _error;
 
 public:
-	transformCPU(const UInt32_8 & b, const uint32_t n, const size_t num_regs) : transform(b, n, EKind::CPU),
+	transformCPU(const UInt32_8 & b, const int n, const size_t num_regs) : transform(b, n, EKind::CPU),
 		_num_regs(num_regs), _base(UInt32_8_to_Double_8(b)), _base_inv(_base.inverse()),
 		_z(static_cast<Complex_8_pair *>(align_new(num_regs * N * sizeof(Complex_8_pair), 2 * 1024 * 1024))),
 		_zp(static_cast<Complex_8_pair *>(align_new(N * sizeof(Complex_8_pair), sizeof(Complex_8_pair)))),
@@ -855,7 +855,7 @@ public:
 	void cosmic_ray() override { const Complex_8 z = _z[N / 2].get(); Double_8 x = z.real(); x.cosmic_ray(); _z[N / 2].set(Complex_8(x, z.imag())); }
 };
 
-inline transform * create_transformCPU(const UInt32_8 & b, const uint32_t n, const size_t num_regs)
+inline transform * create_transformCPU(const UInt32_8 & b, const int n, const size_t num_regs)
 {
 	transform * ptransform = nullptr;
 	/*if      (n ==  5) ptransform = new transformCPU<(1 <<  4), 8>(b, n, num_regs);

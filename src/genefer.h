@@ -51,7 +51,6 @@ private:
 	bool _get_boinc_ids = false;
 	transform * _transform = nullptr;
 	std::string _main_filename;
-	uint32_t _n = 0;
 	int _print_range = 0, _print_i = 0;
 	bool _print_sr = true;
 
@@ -83,7 +82,7 @@ public:
 	static size_t display_devices() { return transform::display_devices(); }
 
 private:
-	void create_transform_GPU(const UInt32_8 & b, const uint32_t n, const size_t num_regs, const size_t device,
+	void create_transform_GPU(const UInt32_8 & b, const int n, const size_t num_regs, const size_t device,
 							const bool verbose = true, const bool full = true)
 	{
 		delete_transform();
@@ -103,7 +102,7 @@ private:
 		}
 	}
 
-	void create_transform_CPU(const UInt32_8 & b, const uint32_t n, const size_t num_regs,
+	void create_transform_CPU(const UInt32_8 & b, const int n, const size_t num_regs,
 							const bool verbose = true, const bool full = true)
 	{
 		delete_transform();
@@ -142,7 +141,7 @@ private:
 		return ss.str();
 	}
 
-	static std::string gfn(const uint32_t b, const uint32_t n)
+	static std::string gfn(const uint32_t b, const int n)
 	{
 		std::ostringstream ss; ss << b << "^{2^" << n << "} + 1";
 		return ss.str();
@@ -924,7 +923,7 @@ private:
 		return EReturn::Success;
 	}
 
-	EReturn bench(const uint32_t n, const size_t device, const bool isCPU, const int depth)
+	EReturn bench(const int n, const size_t device, const bool isCPU, const int depth)
 	{
 		static constexpr uint32_t bn[3] = { 1000000000, 1000000000, 1000000000 };
 		const size_t num_regs = 3 + (size_t(1) << depth);
@@ -999,10 +998,8 @@ private:
 	}
 
 public:
-	EReturn check(const std::string & b_filename, const uint32_t n, const EMode mode, const size_t device, const bool isCPU, const int depth = 7)
+	EReturn check(const std::string & b_filename, const int n, const EMode mode, const size_t device, const bool isCPU, const int depth = 7)
 	{
-		_n = n;
-
 		UInt32_8 b; if (!b_filename.empty()) parse_b(b_filename, b); else b = UInt32_8(1000000000);
 
 		const bool empty_main_filename = _main_filename.empty();

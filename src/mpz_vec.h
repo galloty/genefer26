@@ -31,7 +31,7 @@ public:
 		for (size_t j = 0; j < SIZE; ++j) mpz_set_ui(_z[j], n[j]);
 	}
 
-	void set_exponent(const UInt32_8 & b, const uint32_t n)
+	void set_exponent(const UInt32_8 & b, const int n)
 	{
 		for (size_t j = 0; j < SIZE; ++j) mpz_ui_pow_ui(_z[j], b[j], 1u << n);
 	}

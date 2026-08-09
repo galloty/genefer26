@@ -26,7 +26,7 @@ protected:
 
 private:
 	const UInt32_8 _b;
-	const uint32_t _n;
+	const int _n;
 	const EKind _kind;
 	Int32_8 * const _d;
 	std::string _type;
@@ -64,16 +64,16 @@ public:
 	virtual void cosmic_ray() = 0;
 
 private:
-	static transform * create_ocl(const UInt32_8 & b, const uint32_t n, const size_t num_regs, const size_t device,
+	static transform * create_ocl(const UInt32_8 & b, const int n, const size_t num_regs, const size_t device,
 								  const bool is_boinc, const bool get_boinc_ids);
-	static transform * create_avx10(const UInt32_8 & b, const uint32_t n, const size_t num_regs);
-	static transform * create_512(const UInt32_8 & b, const uint32_t n, const size_t num_regs);
-	static transform * create_fma(const UInt32_8 & b, const uint32_t n, const size_t num_regs);
-	static transform * create_avx(const UInt32_8 & b, const uint32_t n, const size_t num_regs);
-	static transform * create_sse4(const UInt32_8 & b, const uint32_t n, const size_t num_regs);
+	static transform * create_avx10(const UInt32_8 & b, const int n, const size_t num_regs);
+	static transform * create_512(const UInt32_8 & b, const int n, const size_t num_regs);
+	static transform * create_fma(const UInt32_8 & b, const int n, const size_t num_regs);
+	static transform * create_avx(const UInt32_8 & b, const int n, const size_t num_regs);
+	static transform * create_sse4(const UInt32_8 & b, const int n, const size_t num_regs);
 
 public:
-	transform(const UInt32_8 & b, const uint32_t n, const EKind kind) : _b(b), _n(n), _kind(kind),
+	transform(const UInt32_8 & b, const int n, const EKind kind) : _b(b), _n(n), _kind(kind),
 		_d(static_cast<Int32_8 *>(align_new(sizeof(Int32_8) << n, sizeof(Int32_8)))) { _unbalanced = false; }
 	virtual ~transform() { align_delete(_d); }
 
@@ -131,7 +131,7 @@ private:
 
 protected:
 	const UInt32_8 & get_b() const { return _b; }
-	uint32_t get_n() const { return _n; }
+	int get_n() const { return _n; }
 	EKind get_kind() const { return _kind; }
 	void set_type(const std::string & type) { _type = type; }
 
@@ -217,7 +217,7 @@ protected:
 	}
 
 public:
-	static transform * create_gpu(const UInt32_8 & b, const uint32_t n, const size_t num_regs, const size_t device,
+	static transform * create_gpu(const UInt32_8 & b, const int n, const size_t num_regs, const size_t device,
 								  const bool isBoinc, const bool get_boinc_ids)
 	{
 		transform * const ptransform = transform::create_ocl(b, n, num_regs, device, isBoinc, get_boinc_ids);
@@ -226,7 +226,7 @@ public:
 		return ptransform;
 	}
 
-	static transform * create_cpu(const UInt32_8 & b, const uint32_t n, const size_t num_regs)
+	static transform * create_cpu(const UInt32_8 & b, const int n, const size_t num_regs)
 	{
 		transform * ptransform = nullptr;
 

@@ -96,6 +96,43 @@ Please give feedback to the authors if improvement is realized. It is distribute
 template<size_t VSIZE, bool IS32>
 class transformGPU : public transform
 {
+	template<uint32 P, uint32 Q, uint32 R, uint32 H>
+	class ZPT : public ZP
+	{
+	private:
+		// static uint32 _add(const uint32 a, const uint32 b) { return a + b - ((a >= P - b) ? P : 0); }
+		static uint32 _sub(const uint32 a, const uint32 b) { return a - b + ((a < b) ? P : 0); }
+
+		static uint32 _mul(const uint32 lhs, const uint32 rhs)
+		{
+			const uint64 t = lhs * uint64(rhs);
+			const uint32 lo = uint32(t), hi = uint32(t >> 32);
+			const uint32 mp = uint32(((lo * Q) * uint64(P)) >> 32);
+			return _sub(hi, mp);
+		}
+
+		ZPT pow(const size_t e) const
+		{
+			if (e == 0) return ZPT(R);	// MF of one is R
+			ZPT r = ZPT(R), y = *this;
+			for (size_t i = e; i != 1; i /= 2) { if (i % 2 != 0) r *= y; y *= y; }
+			r *= y;
+			return r;
+		}
+
+	public:
+		ZPT() {}
+		explicit ZPT(const uint32 n) : ZP(n) {}
+
+		int32 get_int() const { return (_n >= P / 2) ? int32(_n - P) : int32(_n); }
+		ZPT & set_int(const int32 i) { _n = (i < 0) ? (uint32(i) + P) : uint32(i); return *this; }
+
+		ZPT & operator*=(const ZPT & rhs) { _n = _mul(_n, rhs._n); return *this; }
+
+		static const ZPT primroot_ln(const int ln) { return ZPT(H).pow((P - 1) >> ln); }
+		static ZPT norm_ln(const int ln) { return ZPT(P - ((P - 1) >> ln)); }
+	};
+
 	using ZP1 = ZPT<IS32 ? P1U : P1S, IS32 ? Q1U : Q1S, IS32 ? R1U : R1S, IS32 ? H1U : H1S>;
 	using ZP2 = ZPT<IS32 ? P2U : P2S, IS32 ? Q2U : Q2S, IS32 ? R2U : R2S, IS32 ? H2U : H2S>;
 	using ZP3 = ZPT<IS32 ? P3U : P3S, IS32 ? Q3U : Q3S, IS32 ? R3U : R3S, IS32 ? H3U : H3S>;
@@ -108,9 +145,9 @@ private:
 	engine<VSIZE, IS32> * _engine = nullptr;
 
 public:
-	transformGPU(const UInt32_8 & b, const uint32_t n, const size_t num_regs, const size_t device_id,
+	transformGPU(const UInt32_8 & b, const int n, const size_t num_regs, const size_t device_id,
 				 const bool is_boinc, const cl_platform_id boinc_platform_id, const cl_device_id boinc_device_id)
-				: transform(b, n, EKind::GPU), _num_regs(num_regs), _lsize(int(n)), _size(size_t(1) << n),
+				: transform(b, n, EKind::GPU), _num_regs(num_regs), _lsize(n), _size(size_t(1) << n),
 				_z(new ZP[3 * VSIZE * num_regs * _size])
 	{
 		const size_t size = _size;
@@ -162,9 +199,9 @@ public:
 		src << "#define P1P2P3_2H\t" << (IS32 ? P1P2P3_2HU : P1P2P3_2HS) << "ul" << std::endl;
 
 		// Not converted into Montgomery form such that output is converted out of MF
-		src << "#define NORM1\t" << ZP1::norm(uint32(size / 2)).get() << "u" << std::endl;
-		src << "#define NORM2\t" << ZP2::norm(uint32(size / 2)).get() << "u" << std::endl;
-		src << "#define NORM3\t" << ZP3::norm(uint32(size / 2)).get() << "u" << std::endl;
+		src << "#define NORM1\t" << ZP1::norm_ln(n - 1).get() << "u" << std::endl;
+		src << "#define NORM2\t" << ZP2::norm_ln(n - 1).get() << "u" << std::endl;
+		src << "#define NORM3\t" << ZP3::norm_ln(n - 1).get() << "u" << std::endl;
 
 		src << "#define W_SZ\t" << size / 2 << "u" << std::endl;
 
@@ -183,18 +220,19 @@ public:
 		ZP2 * const w2 = reinterpret_cast<ZP2 *>(&w[1 * size / 2]);
 		ZP3 * const w3 = reinterpret_cast<ZP3 *>(&w[2 * size / 2]);
 
-		for (size_t s = 1; s < size / 2; s *= 2)
+		ZP1 prs1 = ZP1::primroot_ln(n); ZP2 prs2 = ZP2::primroot_ln(n); ZP3 prs3 = ZP3::primroot_ln(n);
+		for (int ls = n - 2; ls >= 0; --ls)
 		{
-			const ZP1 r_s1 = ZP1::primroot_n(4 * s);
-			const ZP2 r_s2 = ZP2::primroot_n(4 * s);
-			const ZP3 r_s3 = ZP3::primroot_n(4 * s);
+			ZP1 r_s1 = prs1; prs1 *= prs1; const ZP1 & r_s1sq = prs1;
+			ZP2 r_s2 = prs2; prs2 *= prs2; const ZP2 & r_s2sq = prs2;
+			ZP3 r_s3 = prs3; prs3 *= prs3; const ZP3 & r_s3sq = prs3;
 
+			const size_t s = size_t(1) << ls;
 			for (size_t j = 0; j < s; ++j)
 			{
-				const size_t e = bitrev(j, 2 * s) + 1;
-				w1[s + j] = r_s1.pow(e);
-				w2[s + j] = r_s2.pow(e);
-				w3[s + j] = r_s3.pow(e);
+				const size_t jr = bitrev(j, s);
+				w1[s + jr] = r_s1; w2[s + jr] = r_s2; w3[s + jr] = r_s3;
+				r_s1 *= r_s1sq; r_s2 *= r_s2sq; r_s3 *= r_s3sq;
 			}
 		}
 
