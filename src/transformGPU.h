@@ -13,6 +13,9 @@ Please give feedback to the authors if improvement is realized. It is distribute
 #include "engine.h"
 #include "ocl/kernel.h"
 
+namespace arch_g_namespace
+{
+
 #define	P1S			(127 * (uint32(1) << 24) + 1)
 #define	Q1S			2164260865u		// p * q = 1 (mod 2^32)
 #define	R1S			33554430u		// 2^32 mod p
@@ -156,7 +159,7 @@ public:
 		const platform eng_platform = is_boinc_platform ? platform(boinc_platform_id, boinc_device_id) : platform();
 
 		_engine = new engine<VSIZE, IS32>(eng_platform, is_boinc_platform ? 0 : device_id, static_cast<int>(n), is_boinc, num_regs);
-		set_type(_engine->getType());
+		set_gpu_type(_engine->getType());
 
 		std::ostringstream src;
 
@@ -420,3 +423,5 @@ public:
 
 	void cosmic_ray() override { _engine->cosmic_ray(); }
 };
+
+}

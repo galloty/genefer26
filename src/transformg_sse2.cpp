@@ -1,0 +1,54 @@
+/*
+Copyright 2026, Yves Gallot
+
+genefer is free source code, under the MIT license (see LICENSE). You can redistribute, use and/or modify it.
+Please give feedback to the authors if improvement is realized. It is distributed in the hope that it will be useful.
+*/
+
+#include <stdexcept>
+
+#define arch_g_namespace	arch_g_sse2_namespace
+
+#include "transformGPU.h"
+
+size_t transform::display_devices()
+{
+	platform pfm;
+	return pfm.displayDevices();
+}
+
+transform * transform::create_ocl_sse2(const UInt32_8 & b, const int n, const size_t num_regs, const size_t device,
+								  const bool is_boinc, const bool get_boinc_ids)
+{
+	cl_platform_id boinc_platform_id = 0;
+	cl_device_id boinc_device_id = 0;
+#if defined(BOINC)
+	if (get_boinc_ids)
+	{
+		const int err = boinc_get_opencl_ids(argc, argv, 0, &boinc_device_id, &boinc_platform_id);
+		if ((err != 0) || (boinc_device_id == 0) || (boinc_platform_id == 0))
+		{
+			std::ostringstream ss; ss << "boinc_get_opencl_ids() failed, err = " << err;
+			pio::error(ss.str());
+			// continue using default OpenCL device
+			boinc_device_id = 0; boinc_platform_id = 0;
+		}
+	}
+#else
+	(void)get_boinc_ids;
+#endif
+
+	transform * ptransform = nullptr;
+	const uint32_t b_max = b.max();
+
+	if (b_max <= 1000000000)
+	{
+		ptransform = new arch_g_sse2_namespace::transformGPU<8, false>(b, n, num_regs, device, is_boinc, boinc_platform_id, boinc_device_id);
+	}
+	else
+	{
+		ptransform = new arch_g_sse2_namespace::transformGPU<8, true>(b, n, num_regs, device, is_boinc, boinc_platform_id, boinc_device_id);
+	}
+	ptransform->set_type("SSE2");
+	return ptransform;
+}

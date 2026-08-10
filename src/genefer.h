@@ -82,44 +82,33 @@ public:
 	static size_t display_devices() { return transform::display_devices(); }
 
 private:
+	void display_info(const bool full) const
+	{
+		std::ostringstream ss; ss << "Using " << _transform->get_type() << " implementation";
+		if (!_transform->get_gpu_type().empty()) ss << "." << std::endl << "Running on " << _transform->get_gpu_type();
+		if (full)
+		{
+			ss << ", data size: " << std::setprecision(3) << _transform->get_data_size() / (1024 * 1024.0) << " MB";
+			ss << ", cache size: " << std::setprecision(3) << _transform->get_cache_size() / (1024 * 1024.0) << " MB";
+		}
+		ss << "." << std::endl;
+		pio::print(ss.str());
+	}
+
 	void create_transform_GPU(const UInt32_8 & b, const int n, const size_t num_regs, const size_t device,
 							const bool verbose = true, const bool full = true)
 	{
 		delete_transform();
-
-		std::string ttype;
 		_transform = transform::create_gpu(b, n, num_regs, device, _is_boinc, _get_boinc_ids);
-		if (verbose)
-		{
-			std::ostringstream ss; ss << "Running on " << _transform->get_type();
-			if (full)
-			{
-				ss << ", data size: " << std::setprecision(3) << _transform->get_data_size() / (1024 * 1024.0) << " MB";
-				ss << ", cache size: " << std::setprecision(3) << _transform->get_cache_size() / (1024 * 1024.0) << " MB";
-			}
-			ss << "." << std::endl;
-			pio::print(ss.str());
-		}
+		if (verbose) display_info(full);
 	}
 
 	void create_transform_CPU(const UInt32_8 & b, const int n, const size_t num_regs,
 							const bool verbose = true, const bool full = true)
 	{
 		delete_transform();
-
-		std::string ttype;
 		_transform = transform::create_cpu(b, n, num_regs);
-		if (verbose)
-		{
-			std::ostringstream ss; ss << "Using " << _transform->get_type() << " implementation";
-			if (full)
-			{
-				ss << ", data size: " << std::setprecision(3) << _transform->get_data_size() / (1024 * 1024.0) << " MB";
-				ss << ", cache size: " << std::setprecision(3) << _transform->get_cache_size() / (1024 * 1024.0) << " MB";
-			}
-			ss << "." << std::endl;
-			pio::print(ss.str());
-		}
+		if (verbose) display_info(full);
 	}
 
 	void delete_transform()

@@ -29,7 +29,7 @@ private:
 	const int _n;
 	const EKind _kind;
 	Int32_8 * const _d;
-	std::string _type;
+	std::string _type, _gpu_type;
 	mutable bool _unbalanced;
 
 protected:
@@ -64,10 +64,12 @@ public:
 	virtual void cosmic_ray() = 0;
 
 private:
-	static transform * create_ocl(const UInt32_8 & b, const int n, const size_t num_regs, const size_t device,
-								  const bool is_boinc, const bool get_boinc_ids);
+	static transform * create_ocl_avx512(const UInt32_8 & b, const int n, const size_t num_regs, const size_t device, const bool is_boinc, const bool get_boinc_ids);
+	static transform * create_ocl_avx2(const UInt32_8 & b, const int n, const size_t num_regs, const size_t device, const bool is_boinc, const bool get_boinc_ids);
+	static transform * create_ocl_sse2(const UInt32_8 & b, const int n, const size_t num_regs, const size_t device, const bool is_boinc, const bool get_boinc_ids);
+
 	static transform * create_avx10(const UInt32_8 & b, const int n, const size_t num_regs);
-	static transform * create_512(const UInt32_8 & b, const int n, const size_t num_regs);
+	static transform * create_avx512(const UInt32_8 & b, const int n, const size_t num_regs);
 	static transform * create_fma(const UInt32_8 & b, const int n, const size_t num_regs);
 	static transform * create_avx(const UInt32_8 & b, const int n, const size_t num_regs);
 	static transform * create_sse4(const UInt32_8 & b, const int n, const size_t num_regs);
@@ -134,6 +136,7 @@ protected:
 	int get_n() const { return _n; }
 	EKind get_kind() const { return _kind; }
 	void set_type(const std::string & type) { _type = type; }
+	void set_gpu_type(const std::string & type) { _gpu_type = type; }
 
 	static constexpr int ilog2_32(const uint32_t n) { return (n == 0) ? -1 : (31 - __builtin_clz(n)); }
 
@@ -220,9 +223,19 @@ public:
 	static transform * create_gpu(const UInt32_8 & b, const int n, const size_t num_regs, const size_t device,
 								  const bool isBoinc, const bool get_boinc_ids)
 	{
-		transform * const ptransform = transform::create_ocl(b, n, num_regs, device, isBoinc, get_boinc_ids);
+		transform * ptransform = nullptr;
 
-		if (ptransform == nullptr) throw std::runtime_error("OpenCL device not found");
+		__builtin_cpu_init();
+		if (__builtin_cpu_supports("avx512f") != 0)
+		{
+			ptransform =  transform::create_ocl_avx512(b, n, num_regs, device, isBoinc, get_boinc_ids);
+		}
+		else if (__builtin_cpu_supports("avx2") != 0)
+		{
+			ptransform = transform::create_ocl_avx2(b, n, num_regs, device, isBoinc, get_boinc_ids);
+		}
+		else ptransform = transform::create_ocl_sse2(b, n, num_regs, device, isBoinc, get_boinc_ids);	// SSE2 is mandatory for x64 
+
 		return ptransform;
 	}
 
@@ -237,7 +250,7 @@ public:
 		}
 		else if (__builtin_cpu_supports("avx512f") != 0)
 		{
-			ptransform = transform::create_512(b, n, num_regs);
+			ptransform = transform::create_avx512(b, n, num_regs);
 		}
 		else if ((__builtin_cpu_supports("fma") != 0) && (__builtin_cpu_supports("avx2") != 0))
 		{
@@ -259,6 +272,7 @@ public:
 	static size_t display_devices();
 
 	const std::string get_type() const { return _type; }
+	const std::string get_gpu_type() const { return _gpu_type; }
 
 	void mul(const size_t src)
 	{

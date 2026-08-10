@@ -7,15 +7,11 @@ Please give feedback to the authors if improvement is realized. It is distribute
 
 #include <stdexcept>
 
+#define arch_g_namespace	arch_g_avx2_namespace
+
 #include "transformGPU.h"
 
-size_t transform::display_devices()
-{
-	platform pfm;
-	return pfm.displayDevices();
-}
-
-transform * transform::create_ocl(const UInt32_8 & b, const int n, const size_t num_regs, const size_t device,
+transform * transform::create_ocl_avx2(const UInt32_8 & b, const int n, const size_t num_regs, const size_t device,
 								  const bool is_boinc, const bool get_boinc_ids)
 {
 	cl_platform_id boinc_platform_id = 0;
@@ -41,11 +37,12 @@ transform * transform::create_ocl(const UInt32_8 & b, const int n, const size_t 
 
 	if (b_max <= 1000000000)
 	{
-		ptransform = new transformGPU<8, false>(b, n, num_regs, device, is_boinc, boinc_platform_id, boinc_device_id);
+		ptransform = new arch_g_avx2_namespace::transformGPU<8, false>(b, n, num_regs, device, is_boinc, boinc_platform_id, boinc_device_id);
 	}
 	else
 	{
-		ptransform = new transformGPU<8, true>(b, n, num_regs, device, is_boinc, boinc_platform_id, boinc_device_id);
+		ptransform = new arch_g_avx2_namespace::transformGPU<8, true>(b, n, num_regs, device, is_boinc, boinc_platform_id, boinc_device_id);
 	}
+	ptransform->set_type("AVX2");
 	return ptransform;
 }
