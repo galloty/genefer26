@@ -261,7 +261,7 @@ public:
 		genefer & g = genefer::get_instance();
 		g.set_boinc(b_boinc);
 #if defined(BOINC)
-		g.set_boinc_param(b_boinc && !boinc_is_standalone() && !ext_device);
+		g.set_boinc_param(b_boinc && !boinc_is_standalone() && !ext_device, argc, argv);
 #endif
 		g.set_filename(main_filename);
 

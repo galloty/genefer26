@@ -64,9 +64,12 @@ public:
 	virtual void cosmic_ray() = 0;
 
 private:
-	static transform * create_ocl_avx512(const UInt32_8 & b, const int n, const size_t num_regs, const size_t device, const bool is_boinc, const bool get_boinc_ids);
-	static transform * create_ocl_avx2(const UInt32_8 & b, const int n, const size_t num_regs, const size_t device, const bool is_boinc, const bool get_boinc_ids);
-	static transform * create_ocl_sse2(const UInt32_8 & b, const int n, const size_t num_regs, const size_t device, const bool is_boinc, const bool get_boinc_ids);
+	static transform * create_ocl_avx512(const UInt32_8 & b, const int n, const size_t num_regs, const size_t device,
+		const bool is_boinc, const bool get_boinc_ids, int _boinc_argc, char ** _boinc_argv);
+	static transform * create_ocl_avx2(const UInt32_8 & b, const int n, const size_t num_regs, const size_t device,
+		const bool is_boinc, const bool get_boinc_ids, int _boinc_argc, char ** _boinc_argv);
+	static transform * create_ocl_sse2(const UInt32_8 & b, const int n, const size_t num_regs, const size_t device,
+		const bool is_boinc, const bool get_boinc_ids, int _boinc_argc, char ** _boinc_argv);
 
 	static transform * create_avx10(const UInt32_8 & b, const int n, const size_t num_regs);
 	static transform * create_avx512(const UInt32_8 & b, const int n, const size_t num_regs);
@@ -221,20 +224,21 @@ protected:
 
 public:
 	static transform * create_gpu(const UInt32_8 & b, const int n, const size_t num_regs, const size_t device,
-								  const bool isBoinc, const bool get_boinc_ids)
+								  const bool isBoinc, const bool get_boinc_ids, int _boinc_argc, char ** _boinc_argv)
+
 	{
 		transform * ptransform = nullptr;
 
 		__builtin_cpu_init();
 		if (__builtin_cpu_supports("avx512f") != 0)
 		{
-			ptransform =  transform::create_ocl_avx512(b, n, num_regs, device, isBoinc, get_boinc_ids);
+			ptransform =  transform::create_ocl_avx512(b, n, num_regs, device, isBoinc, get_boinc_ids, _boinc_argc, _boinc_argv);
 		}
 		else if (__builtin_cpu_supports("avx2") != 0)
 		{
-			ptransform = transform::create_ocl_avx2(b, n, num_regs, device, isBoinc, get_boinc_ids);
+			ptransform = transform::create_ocl_avx2(b, n, num_regs, device, isBoinc, get_boinc_ids, _boinc_argc, _boinc_argv);
 		}
-		else ptransform = transform::create_ocl_sse2(b, n, num_regs, device, isBoinc, get_boinc_ids);	// SSE2 is mandatory for x64 
+		else ptransform = transform::create_ocl_sse2(b, n, num_regs, device, isBoinc, get_boinc_ids, _boinc_argc, _boinc_argv);	// SSE2 is mandatory for x64 
 
 		return ptransform;
 	}

@@ -11,31 +11,37 @@ Please give feedback to the authors if improvement is realized. It is distribute
 
 #include "transformGPU.h"
 
-size_t transform::display_devices()
+// OpenCL headers are required
+size_t transform::display_devices() { platform pfm; return pfm.displayDevices(); }
+
+#if defined(BOINC)
+
+#include "boinc_opencl.h"
+
+void get_opencl_ids(int argc, char * argv[], cl_device_id & boinc_device_id, cl_platform_id & boinc_platform_id)
 {
-	platform pfm;
-	return pfm.displayDevices();
+	const int err = boinc_get_opencl_ids(argc, argv, 0, &boinc_device_id, &boinc_platform_id);
+	if ((err != 0) || (boinc_device_id == 0) || (boinc_platform_id == 0))
+	{
+		std::ostringstream ss; ss << "boinc_get_opencl_ids() failed, err = " << err;
+		pio::error(ss.str());
+		// continue using default OpenCL device
+		boinc_device_id = 0; boinc_platform_id = 0;
+	}
 }
+#endif
 
 transform * transform::create_ocl_sse2(const UInt32_8 & b, const int n, const size_t num_regs, const size_t device,
-								  const bool is_boinc, const bool get_boinc_ids)
+								  const bool is_boinc, const bool get_boinc_ids, int _boinc_argc, char ** _boinc_argv)
 {
 	cl_platform_id boinc_platform_id = 0;
 	cl_device_id boinc_device_id = 0;
 #if defined(BOINC)
-	if (get_boinc_ids)
-	{
-		const int err = boinc_get_opencl_ids(argc, argv, 0, &boinc_device_id, &boinc_platform_id);
-		if ((err != 0) || (boinc_device_id == 0) || (boinc_platform_id == 0))
-		{
-			std::ostringstream ss; ss << "boinc_get_opencl_ids() failed, err = " << err;
-			pio::error(ss.str());
-			// continue using default OpenCL device
-			boinc_device_id = 0; boinc_platform_id = 0;
-		}
-	}
+	if (get_boinc_ids) get_opencl_ids(_boinc_argc, _boinc_argv, boinc_device_id, boinc_platform_id);
 #else
 	(void)get_boinc_ids;
+	(void)_boinc_argc;
+	(void)_boinc_argv;
 #endif
 
 	transform * ptransform = nullptr;

@@ -1,0 +1,97 @@
+# Compiler: select gcc or clang
+COMP = gcc
+#COMP = clang
+# Comment this line if Boinc is not needed
+BOINC = true
+
+ifeq ($(COMP), gcc)
+CC = g++ -std=c++17
+else
+CC = clang++ -std=c++17
+endif
+RM = del
+
+ROOT_DIR = ..
+
+BIN_DIR = $(ROOT_DIR)/bin
+SRC_DIR = $(ROOT_DIR)/src
+
+OCL_INC = -I$(ROOT_DIR)/Khronos
+OCL_LIB = C:/Windows/System32/OpenCL.dll
+
+ifdef BOINC
+# BOINC source code: https://github.com/BOINC/boinc/archive/refs/tags/client_release/8.2/8.2.9.zip
+# lib: Makefile.mingw => libboinc_api.a libboinc.a libboinc_opencl.a
+BOINC_DIR = $(ROOT_DIR)/../boinc
+BOINC_INC = -I$(BOINC_DIR) -I$(BOINC_DIR)/api -I$(BOINC_DIR)/lib -I$(BOINC_DIR)/win_build
+BOINC_LIB_DIR = $(BOINC_DIR)/lib
+BOINC_LIB = $(BOINC_LIB_DIR)/libboinc_api.a $(BOINC_LIB_DIR)/libboinc.a
+BOINC_LIB_OCL = $(BOINC_LIB_DIR)/libboinc_opencl.a
+endif
+
+CFLAGS = -Wall -Wextra -Wsign-conversion
+ifdef BOINC
+CFLAGS += -DBOINC $(BOINC_INC)
+endif
+ifeq ($(COMP), gcc)
+OFLAGS = -ffinite-math-only -frename-registers -fprefetch-loop-arrays
+else
+OFLAGS = -ffinite-math-only -ffp-contract=fast -fno-trapping-math -fno-signed-zeros
+endif
+FLAGS = -O3
+
+OBJS = main.o transform_sse4.o transform_avx.o transform_fma.o transform_avx512.o transform_avx10.o transformg_sse2.o transformg_avx2.o transformg_avx512.o
+DEPS_COMMON = $(SRC_DIR)/transform.h $(SRC_DIR)/vint.h $(SRC_DIR)/mpz_vec.h $(SRC_DIR)/file.h $(SRC_DIR)/pio.h $(SRC_DIR)/boinc.h $(SRC_DIR)/alignment.h
+DEPS_MAIN = $(SRC_DIR)/genefer.h $(SRC_DIR)/timer.h $(DEPS_COMMON)
+DEPS_TRANSFORM_CPU = $(SRC_DIR)/transformCPU.h $(SRC_DIR)/vdouble.h $(DEPS_COMMON)
+DEPS_TRANSFORM_GPU = $(SRC_DIR)/transformGPU.h $(SRC_DIR)/engine.h $(SRC_DIR)/ocl.h $(SRC_DIR)/ocl/kernel.h $(DEPS_COMMON)
+
+EXEC = $(BIN_DIR)/geneferv.exe
+
+.PHONY: all clean_obj rebuild
+
+all: $(EXEC)
+
+clean_obj:
+	$(RM) $(OBJS)
+
+rebuild: clean_obj all
+
+main.o: $(SRC_DIR)/main.cpp $(DEPS_MAIN)
+	$(CC) $(CFLAGS) $(FLAGS) -c $< -o $@
+# 	$(CC) $(CFLAGS) $(FLAGS) -S $< -o main.asm
+
+transform_sse4.o: $(SRC_DIR)/transform_sse4.cpp $(DEPS_TRANSFORM_CPU)
+	$(CC) $(CFLAGS) $(OFLAGS) $(FLAGS) -msse4.1 -mtune=westmere -c $< -o $@
+#	$(CC) $(CFLAGS) $(OFLAGS) $(FLAGS) -msse4.1 -mtune=westmere -S $< -o sse4.asm
+
+transform_avx.o: $(SRC_DIR)/transform_avx.cpp $(DEPS_TRANSFORM_CPU)
+	$(CC) $(CFLAGS) $(OFLAGS) $(FLAGS) -mavx -mtune=skylake -c $< -o $@
+#	$(CC) $(CFLAGS) $(OFLAGS) $(FLAGS) -mavx -mtune=skylake -S $< -o avx.asm
+
+transform_fma.o: $(SRC_DIR)/transform_fma.cpp $(DEPS_TRANSFORM_CPU)
+	$(CC) $(CFLAGS) $(OFLAGS) $(FLAGS) -mavx -mfma -mtune=skylake -c $< -o $@
+#	$(CC) $(CFLAGS) $(OFLAGS) $(FLAGS) -mavx -mfma -mtune=skylake -S $< -o fma.asm
+
+transform_avx512.o: $(SRC_DIR)/transform_avx512.cpp $(DEPS_TRANSFORM_CPU)
+	$(CC) $(CFLAGS) $(OFLAGS) $(FLAGS) -mavx512f -mtune=znver5 -c $< -o $@
+#	$(CC) $(CFLAGS) $(OFLAGS) $(FLAGS) -mavx512f -mtune=znver5 -S $< -o avx512.asm
+
+transform_avx10.o: $(SRC_DIR)/transform_avx10.cpp $(DEPS_TRANSFORM_CPU)
+	$(CC) $(CFLAGS) $(OFLAGS) $(FLAGS) -mavx10.2 -mtune=novalake -c $< -o $@
+#	$(CC) $(CFLAGS) $(OFLAGS) $(FLAGS) -mavx10.2 -mtune=novalake -S $< -o avx10.asm
+
+transformg_sse2.o: $(SRC_DIR)/transformg_sse2.cpp $(DEPS_TRANSFORM_GPU)
+	$(CC) $(CFLAGS) $(FLAGS) $(OCL_INC) -mtune=westmere -c $< -o $@
+#	$(CC) $(CFLAGS) $(FLAGS) $(OCL_INC) -mtune=westmere -S $< -o sse2g.asm
+
+transformg_avx2.o: $(SRC_DIR)/transformg_avx2.cpp $(DEPS_TRANSFORM_GPU)
+	$(CC) $(CFLAGS) $(FLAGS) $(OCL_INC) -mavx2 -mtune=skylake -c $< -o $@
+#	$(CC) $(CFLAGS) $(FLAGS) $(OCL_INC) -mavx2 -mtune=skylake -S $< -o avx2g.asm
+
+transformg_avx512.o: $(SRC_DIR)/transformg_avx512.cpp $(DEPS_TRANSFORM_GPU)
+	$(CC) $(CFLAGS) $(FLAGS) $(OCL_INC) -mavx512f -mtune=skylake-avx512 -c $< -o $@
+#	$(CC) $(CFLAGS) $(FLAGS) $(OCL_INC) -mavx512f -mtune=skylake-avx512 -S $< -o avx512g.asm
+
+$(EXEC): $(OBJS)
+	$(CC) $(FLAGS) -static $^ -lgmp $(BOINC_LIB) $(BOINC_LIB_OCL) $(OCL_LIB) -o $@

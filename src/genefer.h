@@ -49,6 +49,8 @@ private:
 	std::atomic_bool _quit = false;
 	bool _is_boinc = false;
 	bool _get_boinc_ids = false;
+	int _boinc_argc = 0;
+	char ** _boinc_argv = nullptr;
 	transform * _transform = nullptr;
 	std::string _main_filename;
 	int _print_range = 0, _print_i = 0;
@@ -75,7 +77,17 @@ public:
 	}
 
 	void set_boinc(const bool is_boinc) { _is_boinc = is_boinc; }
-	void set_boinc_param(const bool get_boinc_ids) { _get_boinc_ids = get_boinc_ids; }
+	void set_boinc_param(const bool get_boinc_ids, int argc, char * argv[])
+	{
+		_get_boinc_ids = get_boinc_ids;
+		_boinc_argc = argc;
+		_boinc_argv = (char **)malloc(size_t(argc) * sizeof(char *));
+		for (int i = 0; i < argc; ++i)
+		{
+			_boinc_argv[i] = (char *)malloc(strlen(argv[i]) + 1);
+			strcpy(_boinc_argv[i], argv[i]);
+		}
+	}
 
 	void set_filename(const std::string & main_filename) { _main_filename = main_filename; }
 
@@ -99,7 +111,7 @@ private:
 							const bool verbose = true, const bool full = true)
 	{
 		delete_transform();
-		_transform = transform::create_gpu(b, n, num_regs, device, _is_boinc, _get_boinc_ids);
+		_transform = transform::create_gpu(b, n, num_regs, device, _is_boinc, _get_boinc_ids, _boinc_argc, _boinc_argv);
 		if (verbose) display_info(full);
 	}
 
