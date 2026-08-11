@@ -40,6 +40,7 @@ OFLAGS = -ffinite-math-only -ffp-contract=fast -fno-trapping-math -fno-signed-ze
 endif
 FLAGS = -O3
 
+# AVX10.2 was introduced in GCC 15 and LLVM/Clang 22. Remove transform_avx10.o if the compiler is older.
 OBJS = main.o transform_sse4.o transform_avx.o transform_fma.o transform_avx512.o transform_avx10.o transformg_sse2.o transformg_avx2.o transformg_avx512.o
 DEPS_COMMON = $(SRC_DIR)/transform.h $(SRC_DIR)/vint.h $(SRC_DIR)/mpz_vec.h $(SRC_DIR)/file.h $(SRC_DIR)/pio.h $(SRC_DIR)/boinc.h $(SRC_DIR)/alignment.h
 DEPS_MAIN = $(SRC_DIR)/genefer.h $(SRC_DIR)/timer.h $(DEPS_COMMON)

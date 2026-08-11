@@ -57,7 +57,7 @@ public:
 	finline Complex_8_pair operator+(const Complex_8_pair & rhs) const { return Complex_8_pair(_l + rhs._l, _h + rhs._h); }
 	finline Complex_8_pair operator-(const Complex_8_pair & rhs) const { return Complex_8_pair(_l - rhs._l, _h - rhs._h); }
 	finline Complex_8_pair operator*(const double rhs) const { return Complex_8_pair(_l * rhs, _h * rhs); }
-	finline Complex_8_pair operator*(const Double_8 rhs) const { return Complex_8_pair(_l * rhs, _h * rhs); }
+	finline Complex_8_pair operator*(const Double_8 & rhs) const { return Complex_8_pair(_l * rhs, _h * rhs); }
 	finline Complex_8_pair addi(const Complex_8_pair & rhs) const { return Complex_8_pair(_l.addi(rhs._l), _h.addi(rhs._h)); }
 	finline Complex_8_pair subi(const Complex_8_pair & rhs) const { return Complex_8_pair(_l.subi(rhs._l), _h.subi(rhs._h)); }
 	// finline Complex_8_pair muli() const { return Complex_8_pair(_l.muli(), _h.muli()); }
@@ -858,16 +858,14 @@ public:
 inline transform * create_transformCPU(const UInt32_8 & b, const int n, const size_t num_regs)
 {
 	transform * ptransform = nullptr;
-	/*if      (n ==  5) ptransform = new transformCPU<(1 <<  4), 8>(b, n, num_regs);
-	else if (n ==  6) ptransform = new transformCPU<(1 <<  5), 8>(b, n, num_regs);
-	else if (n ==  7) ptransform = new transformCPU<(1 <<  6), 8>(b, n, num_regs);
+	if (n ==  7) ptransform = new transformCPU<(1 <<  6), 8>(b, n, num_regs);
 	else if (n ==  8) ptransform = new transformCPU<(1 <<  7), 8>(b, n, num_regs);
 	else if (n ==  9) ptransform = new transformCPU<(1 <<  8), 8>(b, n, num_regs);
-	else if (n == 10) ptransform = new transformCPU<(1 <<  9), 8>(b, n, num_regs);
-	else*/ if (n == 11) ptransform = new transformCPU<(1 << 10), 8>(b, n, num_regs);
+	/*else if (n == 10) ptransform = new transformCPU<(1 <<  9), 8>(b, n, num_regs);
+	else if (n == 11) ptransform = new transformCPU<(1 << 10), 8>(b, n, num_regs);
 	else if (n == 12) ptransform = new transformCPU<(1 << 11), 8>(b, n, num_regs);
 	else if (n == 13) ptransform = new transformCPU<(1 << 12), 8>(b, n, num_regs);
-	/*else if (n == 14) ptransform = new transformCPU<(1 << 13), 8>(b, n, num_regs);
+	else if (n == 14) ptransform = new transformCPU<(1 << 13), 8>(b, n, num_regs);
 	else if (n == 15) ptransform = new transformCPU<(1 << 14), 8>(b, n, num_regs);
 	else if (n == 16) ptransform = new transformCPU<(1 << 15), 8>(b, n, num_regs);
 	else if (n == 17) ptransform = new transformCPU<(1 << 16), 8>(b, n, num_regs);*/
