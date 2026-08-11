@@ -15,8 +15,8 @@ Please give feedback to the authors if improvement is realized. It is distribute
 #include <Windows.h>
 #else
 #include <signal.h>
-// #include <sys/time.h>
-// #include <sys/resource.h>
+#include <sys/time.h>
+#include <sys/resource.h>
 #endif
 
 #if defined(BOINC)

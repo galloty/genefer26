@@ -199,7 +199,7 @@ protected:
 
 		const size_t size = size_t(1) << _n;
 		const Int32_8 * const d = _d;
-		UInt64_8 hash64 = UInt64_8(0ull);
+		UInt64_8 hash64 = UInt64_8(uint64_t(0));
 
 		Int32_8 zero = Int32_8(-1);
 		for (size_t i = 0; i < size; ++i)
@@ -248,11 +248,15 @@ public:
 		transform * ptransform = nullptr;
 
 		__builtin_cpu_init();
+
+#if (defined(__GNUC__) && (__GNUC__ >= 15)) || (defined(__clang__) && (__clang_major__ >= 22))
 		if (__builtin_cpu_supports("avx10.2") != 0)
 		{
 			ptransform = transform::create_avx10(b, n, num_regs);
 		}
-		else if (__builtin_cpu_supports("avx512f") != 0)
+		else
+#endif
+		if (__builtin_cpu_supports("avx512f") != 0)
 		{
 			ptransform = transform::create_avx512(b, n, num_regs);
 		}
