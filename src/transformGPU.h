@@ -96,7 +96,7 @@ namespace arch_g_namespace
 #define	P1P2P3_2LU	1811939328u					// (P1 * P2 * P3 / 2) mod 2^32
 #define	P1P2P3_2HU	7848451443805552641ul		// (P1 * P2 * P3 / 2) >> 32
 
-template<size_t VSIZE, bool IS32>
+template<size_t VSIZE, size_t OCL_VSIZE, bool IS32>
 class transformGPU : public transform
 {
 	template<uint32 P, uint32 Q, uint32 R, uint32 H>
@@ -145,7 +145,7 @@ private:
 	const int _lsize;
 	const size_t _size;
 	ZP * const _z;
-	engine<VSIZE, IS32> * _engine = nullptr;
+	engine<VSIZE, OCL_VSIZE, IS32> * _engine = nullptr;
 
 public:
 	transformGPU(const UInt32_8 & b, const int n, const size_t num_regs, const size_t device_id,
@@ -158,7 +158,7 @@ public:
 		const bool is_boinc_platform = is_boinc && (boinc_device_id != 0) && (boinc_platform_id != 0);
 		const platform eng_platform = is_boinc_platform ? platform(boinc_platform_id, boinc_device_id) : platform();
 
-		_engine = new engine<VSIZE, IS32>(eng_platform, is_boinc_platform ? 0 : device_id, static_cast<int>(n), is_boinc, num_regs);
+		_engine = new engine<VSIZE, OCL_VSIZE, IS32>(eng_platform, is_boinc_platform ? 0 : device_id, static_cast<int>(n), is_boinc, num_regs);
 		set_gpu_type(_engine->getType());
 
 		std::ostringstream src;
@@ -207,6 +207,8 @@ public:
 		src << "#define NORM3\t" << ZP3::norm_ln(n - 1).get() << "u" << std::endl;
 
 		src << "#define W_SZ\t" << size / 2 << "u" << std::endl;
+
+		src << "#define OCL_VSIZE\t" << OCL_VSIZE << std::endl;
 
 		src << "#define CARRY_WG_SZ\t" << _engine->get_carry_workgroup_size() << "u" << std::endl;
 

@@ -10,7 +10,6 @@ Please give feedback to the authors if improvement is realized. It is distribute
 #include <cstdint>
 
 #include "ocl.h"
-#include "vint.h"
 
 typedef cl_uint		uint32;
 typedef cl_int		int32;
@@ -37,7 +36,7 @@ public:
 #define CREATE_SETCOPY_KERNEL(name) _##name = create_set_copy_kernel(#name);
 #define CREATE_COPYP_KERNEL(name) _##name = create_copyp_kernel(#name);
 
-template<size_t VSIZE, bool IS32>
+template<size_t VSIZE, size_t OCL_VSIZE, bool IS32>
 class engine : public device
 {
 private:
@@ -226,7 +225,7 @@ public:
 		const int32 ilm = int32(lm); const uint32 is = uint32(s);
 		_setKernelArg(_forward8, 2, sizeof(int32), &ilm);
 		_setKernelArg(_forward8, 3, sizeof(uint32), &is);
-		_executeKernel(_forward8, 3 * VSIZE * _n / 8);
+		_executeKernel(_forward8, 3 * VSIZE / OCL_VSIZE * _n / 8);
 	}
 
 	void backward8(const int lm, const size_t s)
@@ -234,14 +233,14 @@ public:
 		const int32 ilm = int32(lm); const uint32 is = uint32(s);
 		_setKernelArg(_backward8, 2, sizeof(int32), &ilm);
 		_setKernelArg(_backward8, 3, sizeof(uint32), &is);
-		_executeKernel(_backward8, 3 * VSIZE * _n / 8);
+		_executeKernel(_backward8, 3 * VSIZE / OCL_VSIZE * _n / 8);
 	}
 
-	void forward8_0() { _executeKernel(_forward8_0, 3 * VSIZE * _n / 8); }
+	void forward8_0() { _executeKernel(_forward8_0, 3 * VSIZE / OCL_VSIZE * _n / 8); }
 
-	void square2x4() { _executeKernel(_square2x4, 3 * VSIZE * _n / 8); }
-	void square4x2() { _executeKernel(_square4x2, 3 * VSIZE * _n / 8); }
-	void square8() { _executeKernel(_square8, 3 * VSIZE * _n / 8); }
+	void square2x4() { _executeKernel(_square2x4, 3 * VSIZE / OCL_VSIZE * _n / 8); }
+	void square4x2() { _executeKernel(_square4x2, 3 * VSIZE / OCL_VSIZE * _n / 8); }
+	void square8() { _executeKernel(_square8, 3 * VSIZE / OCL_VSIZE * _n / 8); }
 
 	void forward8p(const int lm, const size_t s)
 	{
@@ -257,12 +256,12 @@ public:
 		set_transform_arg0(_forward8_0);
 	}
 
-	void fwd4x2() { _executeKernel(_fwd4x2, 3 * VSIZE * _n / 8); }
-	void fwd8() { _executeKernel(_fwd8, 3 * VSIZE * _n / 8); }
+	void fwd4x2() { _executeKernel(_fwd4x2, 3 * VSIZE / OCL_VSIZE * _n / 8); }
+	void fwd8() { _executeKernel(_fwd8, 3 * VSIZE / OCL_VSIZE * _n / 8); }
 
-	void mul2x4() { _executeKernel(_mul2x4, 3 * VSIZE * _n / 8); }
-	void mul4x2() { _executeKernel(_mul4x2, 3 * VSIZE * _n / 8); }
-	void mul8() { _executeKernel(_mul8, 3 * VSIZE * _n / 8); }
+	void mul2x4() { _executeKernel(_mul2x4, 3 * VSIZE / OCL_VSIZE * _n / 8); }
+	void mul4x2() { _executeKernel(_mul4x2, 3 * VSIZE / OCL_VSIZE * _n / 8); }
+	void mul8() { _executeKernel(_mul8, 3 * VSIZE / OCL_VSIZE * _n / 8); }
 
 	void mul2x4_mask(const uint32_t mask)
 	{

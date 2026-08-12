@@ -34,11 +34,11 @@ transform * transform::create_ocl_avx512(const UInt32_8 & b, const int n, const 
 
 	if (b_max <= 1000000000)
 	{
-		ptransform = new arch_g_avx512_namespace::transformGPU<8, false>(b, n, num_regs, device, is_boinc, boinc_platform_id, boinc_device_id);
+		ptransform = new arch_g_avx512_namespace::transformGPU<8, 1, false>(b, n, num_regs, device, is_boinc, boinc_platform_id, boinc_device_id);
 	}
 	else
 	{
-		ptransform = new arch_g_avx512_namespace::transformGPU<8, true>(b, n, num_regs, device, is_boinc, boinc_platform_id, boinc_device_id);
+		ptransform = new arch_g_avx512_namespace::transformGPU<8, 1, true>(b, n, num_regs, device, is_boinc, boinc_platform_id, boinc_device_id);
 	}
 	ptransform->set_type("AVX-512");
 	return ptransform;
