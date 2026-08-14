@@ -56,7 +56,7 @@ Please give feedback to the authors if improvement is realized. It is distribute
 #define CARRY_WG_SZ	256u
 #endif
 
-#define VN_SZ		(N_SZ * VSIZE)
+#define N_VSIZE		(N_SZ * VSIZE)
 #define VLEN		(VSIZE / OCL_VSIZE)
 #define N_VLEN		(N_SZ * VLEN)
 
@@ -601,13 +601,13 @@ INLINE void mul8io_1(const uint2_32 pq, __global uint_32 * restrict const z, __g
 	__global const VTYPE * restrict const zp = &zpg[lid * N_VLEN];
 
 #define DECLARE_VAR_REG_1() \
-	const sz_t gid = (sz_t)get_global_id(0), lid = gid / (VN_SZ / 8), id = gid % (VN_SZ / 8); \
+	const sz_t gid = (sz_t)get_global_id(0), lid = gid / (N_VSIZE / 8), id = gid % (N_VSIZE / 8); \
 	const uint2_32 pq = g_pq[lid]; \
-	__global uint_32 * restrict const z = &zg[lid * VN_SZ]; \
+	__global uint_32 * restrict const z = &zg[lid * N_VSIZE]; \
 	__global const uint_32 * restrict const w = &wg[lid * W_SZ];
 
 #define DECLARE_VARP_REG_1() \
-	__global const uint_32 * restrict const zp = &zpg[lid * VN_SZ];
+	__global const uint_32 * restrict const zp = &zpg[lid * N_VSIZE];
 
 // --- transform without local mem ---
 
@@ -810,9 +810,9 @@ INLINE int96 garner3(const uint_32 r1, const uint_32 r2, const uint_32 r3)
 
 INLINE void write_rns(__global uint_32 * restrict const z, const int_32 r)
 {
-	z[0 * VN_SZ] = set_int(r, P1);
-	z[1 * VN_SZ] = set_int(r, P2);
-	z[2 * VN_SZ] = set_int(r, P3);
+	z[0 * N_VSIZE] = set_int(r, P1);
+	z[1 * N_VSIZE] = set_int(r, P2);
+	z[2 * N_VSIZE] = set_int(r, P3);
 }
 
 INLINE void carry_1(__global uint_32 * restrict const zk, __global int_64 * restrict const c, __local int_64 * const cl,
@@ -823,9 +823,9 @@ INLINE void carry_1(__global uint_32 * restrict const zk, __global int_64 * rest
 	int_64 f = 0;
 	for (sz_t j = 0; j < 8; ++j)
 	{
-		const uint_32 u1 = mulmod(zk[j * VSIZE + 0 * VN_SZ], NORM1, PQ1);
-		const uint_32 u2 = mulmod(zk[j * VSIZE + 1 * VN_SZ], NORM2, PQ2);
-		const uint_32 u3 = mulmod(zk[j * VSIZE + 2 * VN_SZ], NORM3, PQ3);
+		const uint_32 u1 = mulmod(zk[j * VSIZE + 0 * N_VSIZE], NORM1, PQ1);
+		const uint_32 u2 = mulmod(zk[j * VSIZE + 1 * N_VSIZE], NORM2, PQ2);
+		const uint_32 u3 = mulmod(zk[j * VSIZE + 2 * N_VSIZE], NORM3, PQ3);
 		int96 l = garner3(u1, u2, u3);
 		if (dup) l = int96_add(l, l);
 		l = int96_add_64(l, f);
@@ -903,36 +903,36 @@ void carry2(const __global uint2_32 * restrict const bb_inv, const __global int_
 // --- misc ---
 
 __kernel
-void set(__global uint_32 * restrict const z, const uint_32 a)
+void set(__global VTYPE * restrict const z, const uint_32 a)
 {
 	const sz_t id = (sz_t)get_global_id(0);
-	z[id] = (id % VN_SZ < VSIZE) ? a : 0;
+	z[id] = (id % N_VLEN < VLEN) ? (VTYPE)(a) :(VTYPE)(0);
 }
 
 __kernel
-void copy(__global uint_32 * restrict const z, const sz_t dst, const sz_t src)
+void copy(__global VTYPE * restrict const z, const sz_t dst, const sz_t src)
 {
 	const sz_t id = (sz_t)get_global_id(0);
-	z[3 * VN_SZ * dst + id] = z[3 * VN_SZ * src + id];
+	z[3 * N_VLEN * dst + id] = z[3 * N_VLEN * src + id];
 }
 
 __kernel
-void copyp(__global uint_32 * restrict const zp, __global const uint_32 * restrict const z, const sz_t src)
+void copyp(__global VTYPE * restrict const zp, __global const VTYPE * restrict const z, const sz_t src)
 {
 	const sz_t id = (sz_t)get_global_id(0);
-	zp[id] = z[3 * VN_SZ * src + id];
+	zp[id] = z[3 * N_VLEN * src + id];
 }
 
 __kernel
 void copy_mask(__global uint_32 * restrict const z, const sz_t dst, const sz_t src, const uint_32 mask)
 {
 	const sz_t id = (sz_t)get_global_id(0);
-	if ((mask & (1u << (id % VSIZE))) != 0) z[3 * VN_SZ * dst + id] = z[3 * VN_SZ * src + id];
+	if ((mask & (1u << (id % VSIZE))) != 0) z[3 * N_VSIZE * dst + id] = z[3 * N_VSIZE * src + id];
 }
 
 __kernel
 void cosmic_ray(__global uint_32 * restrict const z)
 {
 	const sz_t id = (sz_t)get_global_id(0);
-	if (id == VN_SZ / 2) z[id] = addmod(z[id], 1, P1);
+	if (id == N_VSIZE / 2) z[id] = addmod(z[id], 1, P1);
 }

@@ -207,12 +207,8 @@ public:
 		src << "#define NORM3\t" << ZP3::norm_ln(n - 1).get() << "u" << std::endl;
 
 		src << "#define W_SZ\t" << size / 2 << "u" << std::endl;
-
 		src << "#define OCL_VSIZE\t" << OCL_VSIZE << std::endl;
-
 		src << "#define CARRY_WG_SZ\t" << _engine->get_carry_workgroup_size() << "u" << std::endl;
-
-// std::cout << src.str() << std::endl; // TODO
 
 		if (is_boinc || !_engine->readOpenCL("ocl/kernel.cl", "src/ocl/kernel.h", "src_ocl_kernel", src)) src << src_ocl_kernel;
 

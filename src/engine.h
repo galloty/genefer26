@@ -294,7 +294,7 @@ public:
 	{
 		const uint32 ia = uint32(a);
 		_setKernelArg(_set, 1, sizeof(uint32), &ia);
-		_executeKernel(_set, 3 * VSIZE * _n);
+		_executeKernel(_set, 3 * VSIZE / OCL_VSIZE * _n);
 	}
 
 	void copy(const size_t dst, const size_t src)
@@ -302,14 +302,14 @@ public:
 		const uint32 idst = uint32(dst), isrc = uint32(src);
 		_setKernelArg(_copy, 1, sizeof(uint32), &idst);
 		_setKernelArg(_copy, 2, sizeof(uint32), &isrc);
-		_executeKernel(_copy, 3 * VSIZE * _n);
+		_executeKernel(_copy, 3 * VSIZE / OCL_VSIZE * _n);
 	}
 
 	void copyp(const size_t src)
 	{
 		const uint32 isrc = uint32(src);
 		_setKernelArg(_copyp, 2, sizeof(uint32), &isrc);
-		_executeKernel(_copyp, 3 * VSIZE * _n);
+		_executeKernel(_copyp, 3 * VSIZE / OCL_VSIZE * _n);
 	}
 
 	void copy_mask(const size_t dst, const size_t src, const uint32_t mask)
