@@ -67,7 +67,6 @@ typedef ulong	uint_64;
 typedef long	int_64;
 typedef uint2	uint2_32;
 typedef uint4	uint4_32;
-// typedef int4	int4_32;
 
 // --- modular arithmetic
 
@@ -816,91 +815,78 @@ INLINE void write_rns(__global uint_32 * restrict const z, const int_32 r)
 	z[2 * VN_SZ] = set_int(r, P3);
 }
 
-// INLINE int4_32 carry_1(__global uint4_32 * restrict const zi, __global int_64 * restrict const c,
-// 	__local int_64 * const cl, const sz_t gid, const sz_t lid,
-// 	const uint_32 b, const uint_32 b_inv, const int b_s, const uint_32 dup)
-// {
-// 	const uint4_32 u1 = mulmod4(zi[0 * VN_SZ / 4], NORM1, PQ1), u2 = mulmod4(zi[1 * VN_SZ / 4], NORM2, PQ2), u3 = mulmod4(zi[2 * VN_SZ / 4], NORM3, PQ3);
-// 	int4_32 r;
-
-// 	int96 l0 = garner3(u1.s0, u2.s0, u3.s0), l1 = garner3(u1.s1, u2.s1, u3.s1);
-// 	int96 l2 = garner3(u1.s2, u2.s2, u3.s2), l3 = garner3(u1.s3, u2.s3, u3.s3);
-
-// 	if (dup) { l0 = int96_add(l0, l0); l1 = int96_add(l1, l1);  l2 = int96_add(l2, l2); l3 = int96_add(l3, l3); }	// TODO
-
-// 	int96 f96 = l0; r.s0 = reduce96(&f96, b, b_inv, b_s);
-// 	f96 = int96_add(f96, l1); r.s1 = reduce96(&f96, b, b_inv, b_s);
-// 	f96 = int96_add(f96, l2); r.s2 = reduce96(&f96, b, b_inv, b_s);
-// 	f96 = int96_add(f96, l3); r.s3 = reduce96(&f96, b, b_inv, b_s);
-// 	int_64 f = int96_get_si(f96);
-
-// 	cl[lid] = f;
-
-// 	if (lid == CARRY_WG_SZ - 1)
-// 	{
-// 		const sz_t i = (gid / CARRY_WG_SZ + 1) % (N_SZ / 4 / CARRY_WG_SZ);
-// 		c[i] = (i == 0) ? -f : f;
-// 	}
-
-// 	return r;
-// }
-
-// INLINE void carry_2(__global uint4_32 * restrict const zi, __local int_64 * const cl, const sz_t lid,
-// 	const int4_32 r, const uint_32 b, const uint_32 b_inv, const int b_s)
-// {
-// 	int_64 f = (lid == 0) ? 0 : cl[lid - 1];
-// 	int4_32 ro;
-// 	f += r.s0; ro.s0 = reduce64(&f, b, b_inv, b_s);
-// 	f += r.s1; ro.s1 = reduce64(&f, b, b_inv, b_s);
-// 	f += r.s2; ro.s2 = reduce64(&f, b, b_inv, b_s);
-// 	f += r.s3; ro.s3 = (sz_t)(f);
-
-// 	write_rns(zi, ro);
-// }
-
-__kernel // __attribute__((reqd_work_group_size(CARRY_WG_SZ, 1, 1)))
-void carry1(const __global uint2_32 * restrict const bb_inv, const __global int_32 * restrict const bs,
-	__global uint_32 * restrict const z, __global int_64 * restrict const c, const uint_32 dup)
+INLINE void carry_1(__global uint_32 * restrict const zk, __global int_64 * restrict const c, __local int_64 * const cl,
+	int_32 r[8], const sz_t id, const uint2_32 bb_inv_i, const int bs_i, const bool dup)
 {
-	const sz_t id = (sz_t)get_global_id(0), i = id % VSIZE, k = 7 * (id & ~(VSIZE - 1)) + id;
-	const uint2_32 bb_inv_i = bb_inv[i]; const int_32 bs_i = bs[i];
+	// Tn vloadn(size_t offset, const Q T *p)
 
 	int_64 f = 0;
 	for (sz_t j = 0; j < 8; ++j)
 	{
-		const uint_32 u1 = mulmod(z[k + j * VSIZE + 0 * VN_SZ], NORM1, PQ1);
-		const uint_32 u2 = mulmod(z[k + j * VSIZE + 1 * VN_SZ], NORM2, PQ2);
-		const uint_32 u3 = mulmod(z[k + j * VSIZE + 2 * VN_SZ], NORM3, PQ3);
+		const uint_32 u1 = mulmod(zk[j * VSIZE + 0 * VN_SZ], NORM1, PQ1);
+		const uint_32 u2 = mulmod(zk[j * VSIZE + 1 * VN_SZ], NORM2, PQ2);
+		const uint_32 u3 = mulmod(zk[j * VSIZE + 2 * VN_SZ], NORM3, PQ3);
 		int96 l = garner3(u1, u2, u3);
-		if ((dup & (1u << i)) != 0) l = int96_add(l, l);
+		if (dup) l = int96_add(l, l);
 		l = int96_add_64(l, f);
-		const int_32 r = reduce96(&f, l, bb_inv_i.s0, bb_inv_i.s1, bs_i);
-		write_rns(&z[k + j * VSIZE], r);
+		r[j] = reduce96(&f, l, bb_inv_i.s0, bb_inv_i.s1, bs_i);
 	}
 
-	const sz_t vid = ((id / VSIZE) + 1) % (N_SZ / 8);
-	c[vid * VSIZE + i] = (vid == 0) ? -f : f;
+	const sz_t lid = id % CARRY_WG_SZ;
+	cl[lid] = f;
 
+	if (lid >= CARRY_WG_SZ - VSIZE)
+	{
+		const sz_t vid = ((id / VSIZE) + 1) % (N_SZ / 8);
+		const sz_t cid = vid / (CARRY_WG_SZ / VSIZE) * VSIZE + id % VSIZE;
+		c[cid] = (vid == 0) ? -f : f;
+	}
+}
 
-	// const sz_t gid = (sz_t)get_global_id(0), lid = gid % CARRY_WG_SZ;
-	// __global uint4_32 * restrict const zi = &z[gid];
-	// __local int_64 cl[CARRY_WG_SZ];
+INLINE void carry_2(__global uint_32 * restrict const zk, const __local int_64 * const cl,
+	int_32 r[8], const sz_t id, const uint2_32 bb_inv_i, const int bs_i)
+{
+	const sz_t lid = id % CARRY_WG_SZ;
+	if (lid >= VSIZE)
+	{
+		int_64 f = cl[lid - VSIZE];
+		for (size_t j = 0; j < 7; ++j)
+		{
+			f += r[j];
+			r[j] = reduce64(&f, bb_inv_i.s0, bb_inv_i.s1, bs_i);
+			if (f == 0) break;
+		}
+		r[7] += (int_32)(f);
+	}
 
-	// const int4_32 r = carry_1(zi, c, cl, gid, lid, b, b_inv, b_s, dup);
+	for (size_t j = 0; j < 8; ++j) write_rns(&zk[j * VSIZE], r[j]);
+}
 
-	// barrier(CLK_LOCAL_MEM_FENCE);
+__kernel __attribute__((reqd_work_group_size(CARRY_WG_SZ, 1, 1)))
+void carry1(const __global uint2_32 * restrict const bb_inv, const __global int_32 * restrict const bs,
+	__global uint_32 * restrict const z, __global int_64 * restrict const c, const uint_32 dup)
+{
+	__local int_64 cl[CARRY_WG_SZ];
 
-	// carry_2(zi, cl, lid, r, b, b_inv, b_s);
+	const sz_t id = (sz_t)get_global_id(0), i = id % VSIZE, k = 7 * (id & ~(VSIZE - 1)) + id;
+	const uint2_32 bb_inv_i = bb_inv[i]; const int_32 bs_i = bs[i];
+	int_32 r[8];
+
+	carry_1(&z[k], c, cl, r, id, bb_inv_i, bs_i, (dup & (1u << i)) != 0);
+
+	barrier(CLK_LOCAL_MEM_FENCE);
+
+	carry_2(&z[k], cl, r, id, bb_inv_i, bs_i);
 }
 
 __kernel
 void carry2(const __global uint2_32 * restrict const bb_inv, const __global int_32 * restrict const bs,
 	__global uint_32 * restrict const z, const __global int_64 * restrict const c)
 {
-	const sz_t id = (sz_t)get_global_id(0), i = id % VSIZE, k = 7 * (id & ~(VSIZE - 1)) + id;
+	const sz_t gid = (sz_t)get_global_id(0), i = gid % VSIZE, id = (gid / VSIZE) * CARRY_WG_SZ + i, k = 7 * (id & ~(VSIZE - 1)) + id;
 	const uint2_32 bb_inv_i = bb_inv[i]; const int_32 bs_i = bs[i];
 
-	int_64 f = c[id];
+	int_64 f = c[gid];
 	for (size_t j = 0; j < 7; ++j)
 	{
 		f += get_int(z[k + j * VSIZE], P1);
@@ -912,23 +898,6 @@ void carry2(const __global uint2_32 * restrict const bb_inv, const __global int_
 	f += get_int(z[k + 7 * VSIZE], P1);
 	const int_32 r = (int_32)(f);
 	write_rns(&z[k + 7 * VSIZE], r);
-
-// 	const sz_t gid = (sz_t)get_global_id(0);
-// 	__global uint4_32 * restrict const zi = &z[CARRY_WG_SZ * gid];
-
-// 	const uint4_32 u1 = zi[0 * N_SZ / 4];
-// 	int4_32 r;
-
-// 	int_64 f = c[gid] + get_int(u1.s0, P1);
-// 	r.s0 = reduce64(&f, b, b_inv, b_s);
-// 	f += get_int(u1.s1, P1);
-// 	r.s1 = reduce64(&f, b, b_inv, b_s);
-// 	f += get_int(u1.s2, P1);
-// 	r.s2 = reduce64(&f, b, b_inv, b_s);
-// 	f += get_int(u1.s3, P1);
-// 	r.s3 = (int_32)(f);
-
-// 	write_rns(zi, r);
 }
 
 // --- misc ---
