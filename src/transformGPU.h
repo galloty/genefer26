@@ -264,6 +264,13 @@ public:
 	}
 
 protected:
+size_t k_new32(const size_t k) const	// TODO
+{
+	const size_t i = k % VSIZE, j = k / VSIZE;
+	const size_t i_n = i % OCL_VSIZE, l = i / OCL_VSIZE;
+	return i_n + OCL_VSIZE * j + (_size * OCL_VSIZE) * l;
+}
+
 	void getZi(Int32_8 * const zi) const override
 	{
 		const size_t size = _size;
@@ -273,7 +280,7 @@ protected:
 
 		for (size_t k = 0; k < size; ++k)
 		{
-			int32 d[VSIZE]; for (size_t j = 0; j < VSIZE; ++j) d[j] = z1[VSIZE * k + j].get_int();
+			int32 d[VSIZE]; for (size_t j = 0; j < VSIZE; ++j) d[j] = z1[k_new32(VSIZE * k + j)].get_int();
 			zi[k] = Int32_8(d);
 		}
 	}
@@ -291,9 +298,9 @@ protected:
 			for (size_t j = 0; j < VSIZE; ++j)
 			{
 				const int32 d = zk[j];
-				z1[VSIZE * k + j].set_int(d);
-				z2[VSIZE * k + j].set_int(d);
-				z3[VSIZE * k + j].set_int(d);
+				z1[k_new32(VSIZE * k + j)].set_int(d);
+				z2[k_new32(VSIZE * k + j)].set_int(d);
+				z3[k_new32(VSIZE * k + j)].set_int(d);
 			}
 		}
 
