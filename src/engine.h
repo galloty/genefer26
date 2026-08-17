@@ -61,10 +61,10 @@ private:
 public:
 	engine(const platform & platform, const size_t device_id, const int ln, const bool is_boinc, const size_t num_regs)
 		: device(platform, device_id), _n(size_t(1) << ln), _ln(ln), _is_boinc(is_boinc), _num_regs(num_regs),
-		_lcarry_wgsize(ilog2_32(uint32_t(std::min(VSIZE * _n / 8, std::min(size_t(256), getMaxWorkGroupSize())) / VSIZE))) {}
+		_lcarry_wgsize(ilog2_32(uint32_t(std::min(OCL_VSIZE * _n / 8, std::min(size_t(256), getMaxWorkGroupSize())) / OCL_VSIZE))) {}
 	virtual ~engine() {}
 
-	size_t get_carry_workgroup_size() const { return VSIZE << _lcarry_wgsize; }
+	size_t get_carry_workgroup_size() const { return OCL_VSIZE << _lcarry_wgsize; }
 
 ///////////////////////////////
 
@@ -286,7 +286,7 @@ public:
 	{
 		const uint32 idup = uint32(dup);
 		_setKernelArg(_carry1, 4, sizeof(uint32), &idup);
-		_executeKernel(_carry1, VSIZE * _n / 8, VSIZE << _lcarry_wgsize);
+		_executeKernel(_carry1, VSIZE * _n / 8, OCL_VSIZE << _lcarry_wgsize);
 		_executeKernel(_carry2, (VSIZE * _n / 8) >> _lcarry_wgsize);
 	}
 
