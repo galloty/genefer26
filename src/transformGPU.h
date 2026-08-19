@@ -96,7 +96,7 @@ namespace arch_g_namespace
 #define	P1P2P3_2LU	1811939328u					// (P1 * P2 * P3 / 2) mod 2^32
 #define	P1P2P3_2HU	7848451443805552641ul		// (P1 * P2 * P3 / 2) >> 32
 
-template<size_t VSIZE, size_t OCL_VSIZE, bool IS32>
+template<size_t VSIZE, bool IS32>
 class transformGPU : public transform
 {
 	template<uint32 P, uint32 Q, uint32 R, uint32 H>
@@ -145,7 +145,8 @@ private:
 	const int _lsize;
 	const size_t _size;
 	ZP * const _z;
-	engine<VSIZE, OCL_VSIZE, IS32> * _engine = nullptr;
+	static const size_t OCL_VSIZE = 4, OCL_CARRY_VSIZE = 2;	// we must have OCL_VSIZE >= OCL_CARRY_VSIZE
+	engine<VSIZE, OCL_VSIZE, OCL_CARRY_VSIZE, IS32> * _engine = nullptr;
 
 public:
 	transformGPU(const UInt32_8 & b, const int n, const size_t num_regs, const size_t device_id,
@@ -158,7 +159,7 @@ public:
 		const bool is_boinc_platform = is_boinc && (boinc_device_id != 0) && (boinc_platform_id != 0);
 		const platform eng_platform = is_boinc_platform ? platform(boinc_platform_id, boinc_device_id) : platform();
 
-		_engine = new engine<VSIZE, OCL_VSIZE, IS32>(eng_platform, is_boinc_platform ? 0 : device_id, static_cast<int>(n), is_boinc, num_regs);
+		_engine = new engine<VSIZE, OCL_VSIZE, OCL_CARRY_VSIZE, IS32>(eng_platform, is_boinc_platform ? 0 : device_id, static_cast<int>(n), is_boinc, num_regs);
 		set_gpu_type(_engine->getType());
 
 		std::ostringstream src;
@@ -208,7 +209,10 @@ public:
 
 		src << "#define W_SZ\t" << size / 2 << "u" << std::endl;
 		src << "#define OCL_VSIZE\t" << OCL_VSIZE << std::endl;
+		src << "#define OCL_CARRY_VSIZE\t" << OCL_CARRY_VSIZE << std::endl;
 		src << "#define CARRY_WG_SZ\t" << _engine->get_carry_workgroup_size() << "u" << std::endl;
+		
+		// std::cout << "CARRY_WG_SZ = " << _engine->get_carry_workgroup_size() << ", " << (VSIZE * size / 8) / (_engine->get_carry_workgroup_size() / OCL_VSIZE) << std::endl;
 
 		if (is_boinc || !_engine->readOpenCL("ocl/kernel.cl", "src/ocl/kernel.h", "src_ocl_kernel", src)) src << src_ocl_kernel;
 
@@ -264,12 +268,10 @@ public:
 	}
 
 protected:
-size_t k_new32(const size_t k) const	// TODO
-{
-	const size_t i = k % VSIZE, j = k / VSIZE;
-	const size_t i_n = i % OCL_VSIZE, l = i / OCL_VSIZE;
-	return i_n + OCL_VSIZE * j + (_size * OCL_VSIZE) * l;
-}
+	static size_t gpu_index(const size_t k, const size_t j, const size_t size)
+	{
+		return (j % OCL_VSIZE) + OCL_VSIZE * k + (size * OCL_VSIZE) * (j / OCL_VSIZE);
+	}
 
 	void getZi(Int32_8 * const zi) const override
 	{
@@ -280,7 +282,7 @@ size_t k_new32(const size_t k) const	// TODO
 
 		for (size_t k = 0; k < size; ++k)
 		{
-			int32 d[VSIZE]; for (size_t j = 0; j < VSIZE; ++j) d[j] = z1[k_new32(VSIZE * k + j)].get_int();
+			int32 d[VSIZE]; for (size_t j = 0; j < VSIZE; ++j) d[j] = z1[gpu_index(k, j, size)].get_int();
 			zi[k] = Int32_8(d);
 		}
 	}
@@ -298,9 +300,8 @@ size_t k_new32(const size_t k) const	// TODO
 			for (size_t j = 0; j < VSIZE; ++j)
 			{
 				const int32 d = zk[j];
-				z1[k_new32(VSIZE * k + j)].set_int(d);
-				z2[k_new32(VSIZE * k + j)].set_int(d);
-				z3[k_new32(VSIZE * k + j)].set_int(d);
+				const size_t i = gpu_index(k, j, size);
+				z1[i].set_int(d); z2[i].set_int(d); z3[i].set_int(d);
 			}
 		}
 

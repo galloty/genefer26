@@ -36,7 +36,7 @@ public:
 #define CREATE_SETCOPY_KERNEL(name) _##name = create_set_copy_kernel(#name);
 #define CREATE_COPYP_KERNEL(name) _##name = create_copyp_kernel(#name);
 
-template<size_t VSIZE, size_t OCL_VSIZE, bool IS32>
+template<size_t VSIZE, size_t OCL_VSIZE, size_t OCL_CARRY_VSIZE, bool IS32>
 class engine : public device
 {
 private:
@@ -64,7 +64,7 @@ public:
 		_lcarry_wgsize(ilog2_32(uint32_t(std::min(OCL_VSIZE * _n / 8, std::min(size_t(256), getMaxWorkGroupSize())) / OCL_VSIZE))) {}
 	virtual ~engine() {}
 
-	size_t get_carry_workgroup_size() const { return OCL_VSIZE << _lcarry_wgsize; }
+	size_t get_carry_workgroup_size() const { return (OCL_VSIZE << _lcarry_wgsize) / OCL_CARRY_VSIZE; }
 
 ///////////////////////////////
 
@@ -286,7 +286,7 @@ public:
 	{
 		const uint32 idup = uint32(dup);
 		_setKernelArg(_carry1, 4, sizeof(uint32), &idup);
-		_executeKernel(_carry1, VSIZE * _n / 8, OCL_VSIZE << _lcarry_wgsize);
+		_executeKernel(_carry1, VSIZE / OCL_CARRY_VSIZE * _n / 8, get_carry_workgroup_size());
 		_executeKernel(_carry2, (VSIZE * _n / 8) >> _lcarry_wgsize);
 	}
 
