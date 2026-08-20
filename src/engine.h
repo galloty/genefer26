@@ -36,7 +36,7 @@ public:
 #define CREATE_SETCOPY_KERNEL(name) _##name = create_set_copy_kernel(#name);
 #define CREATE_COPYP_KERNEL(name) _##name = create_copyp_kernel(#name);
 
-template<size_t VSIZE, size_t OCL_VSIZE, size_t OCL_CARRY_VSIZE, bool IS32>
+template<size_t VSIZE, size_t CARRY_LENGTH, size_t OCL_VSIZE, size_t OCL_CARRY_VSIZE, bool IS32>
 class engine : public device
 {
 private:
@@ -44,7 +44,7 @@ private:
 	const int _ln;
 	const bool _is_boinc;
 	const size_t _num_regs;
-	const int _lcarry_wgsize;
+	const int _carry_shift;
 
 	cl_mem _z = nullptr, _zp = nullptr, _w = nullptr, _c = nullptr, _bb_inv = nullptr, _bs = nullptr;
 
@@ -61,10 +61,11 @@ private:
 public:
 	engine(const platform & platform, const size_t device_id, const int ln, const bool is_boinc, const size_t num_regs)
 		: device(platform, device_id), _n(size_t(1) << ln), _ln(ln), _is_boinc(is_boinc), _num_regs(num_regs),
-		_lcarry_wgsize(ilog2_32(uint32_t(std::min(OCL_VSIZE * _n / 8, std::min(size_t(256), getMaxWorkGroupSize())) / OCL_VSIZE))) {}
+		_carry_shift(ilog2_32(uint32_t(std::min(OCL_VSIZE * _n / 8, std::min(size_t(256), getMaxWorkGroupSize())) / OCL_VSIZE))) {}
 	virtual ~engine() {}
 
-	size_t get_carry_workgroup_size() const { return (OCL_VSIZE << _lcarry_wgsize) / OCL_CARRY_VSIZE; }
+	int get_carry_shift() const { return _carry_shift; }
+	size_t get_carry_workgroup_size() const { return (OCL_VSIZE << _carry_shift) / OCL_CARRY_VSIZE; }
 
 ///////////////////////////////
 
@@ -286,8 +287,8 @@ public:
 	{
 		const uint32 idup = uint32(dup);
 		_setKernelArg(_carry1, 4, sizeof(uint32), &idup);
-		_executeKernel(_carry1, VSIZE / OCL_CARRY_VSIZE * _n / 8, get_carry_workgroup_size());
-		_executeKernel(_carry2, (VSIZE * _n / 8) >> _lcarry_wgsize);
+		_executeKernel(_carry1, VSIZE / OCL_CARRY_VSIZE * _n / CARRY_LENGTH, get_carry_workgroup_size());
+		_executeKernel(_carry2, (VSIZE * _n / CARRY_LENGTH) >> _carry_shift);
 	}
 
 	void set(const uint32_t a)

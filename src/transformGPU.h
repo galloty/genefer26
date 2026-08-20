@@ -141,12 +141,15 @@ class transformGPU : public transform
 	using ZP3 = ZPT<IS32 ? P3U : P3S, IS32 ? Q3U : Q3S, IS32 ? R3U : R3S, IS32 ? H3U : H3S>;
 
 private:
+	// Necessary conditions are OCL_VSIZE >= OCL_CARRY_VSIZE and CARRY_LENGTH >= OCL_VSIZE
+	static const size_t OCL_VSIZE = 4, OCL_CARRY_VSIZE = 2, CARRY_LENGTH = 8;
+	using xengine = engine<VSIZE, CARRY_LENGTH, OCL_VSIZE, OCL_CARRY_VSIZE, IS32>;
+
 	const size_t _num_regs;
 	const int _lsize;
 	const size_t _size;
 	ZP * const _z;
-	static const size_t OCL_VSIZE = 4, OCL_CARRY_VSIZE = 2;	// we must have OCL_VSIZE >= OCL_CARRY_VSIZE
-	engine<VSIZE, OCL_VSIZE, OCL_CARRY_VSIZE, IS32> * _engine = nullptr;
+	xengine * _engine = nullptr;
 
 public:
 	transformGPU(const UInt32_8 & b, const int n, const size_t num_regs, const size_t device_id,
@@ -159,7 +162,7 @@ public:
 		const bool is_boinc_platform = is_boinc && (boinc_device_id != 0) && (boinc_platform_id != 0);
 		const platform eng_platform = is_boinc_platform ? platform(boinc_platform_id, boinc_device_id) : platform();
 
-		_engine = new engine<VSIZE, OCL_VSIZE, OCL_CARRY_VSIZE, IS32>(eng_platform, is_boinc_platform ? 0 : device_id, static_cast<int>(n), is_boinc, num_regs);
+		_engine = new xengine(eng_platform, is_boinc_platform ? 0 : device_id, static_cast<int>(n), is_boinc, num_regs);
 		set_gpu_type(_engine->getType());
 
 		std::ostringstream src;
@@ -210,9 +213,12 @@ public:
 		src << "#define W_SZ\t" << size / 2 << "u" << std::endl;
 		src << "#define OCL_VSIZE\t" << OCL_VSIZE << std::endl;
 		src << "#define OCL_CARRY_VSIZE\t" << OCL_CARRY_VSIZE << std::endl;
+		src << "#define CARRY_LENGTH\t" << CARRY_LENGTH << std::endl;
 		src << "#define CARRY_WG_SZ\t" << _engine->get_carry_workgroup_size() << "u" << std::endl;
 		
-		// std::cout << "CARRY_WG_SZ = " << _engine->get_carry_workgroup_size() << ", " << (VSIZE * size / 8) / (_engine->get_carry_workgroup_size() / OCL_VSIZE) << std::endl;
+		std::cout << "transform: " << 3 * VSIZE / OCL_VSIZE * size / CARRY_LENGTH << "; "
+			<< "carry1: " << VSIZE / OCL_CARRY_VSIZE * size / CARRY_LENGTH << ", " << _engine->get_carry_workgroup_size() << "; "
+			<< "carry2: " << ((VSIZE * size / CARRY_LENGTH) >> _engine->get_carry_shift()) << std::endl;
 
 		if (is_boinc || !_engine->readOpenCL("ocl/kernel.cl", "src/ocl/kernel.h", "src_ocl_kernel", src)) src << src_ocl_kernel;
 
