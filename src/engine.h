@@ -61,7 +61,7 @@ private:
 public:
 	engine(const platform & platform, const size_t device_id, const int ln, const bool is_boinc, const size_t num_regs)
 		: device(platform, device_id), _n(size_t(1) << ln), _ln(ln), _is_boinc(is_boinc), _num_regs(num_regs),
-		_carry_shift(ilog2_32(uint32_t(std::min(OCL_VSIZE * _n / 8, std::min(size_t(256), getMaxWorkGroupSize())) / OCL_VSIZE))) {}
+		_carry_shift(ilog2_32(uint32_t(std::min(_n / CARRY_LENGTH, std::min(size_t(256), getMaxWorkGroupSize())) / OCL_VSIZE))) {}
 	virtual ~engine() {}
 
 	int get_carry_shift() const { return _carry_shift; }

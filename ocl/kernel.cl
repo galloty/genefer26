@@ -840,20 +840,6 @@ INLINE void write_rns(__global uint_32 * restrict const z, const int_32 r)
 	z[2 * N_VSIZE] = set_int(r, P3);
 }
 
-INLINE void write_rns2(__global uint2_32 * restrict const z, const int2_32 r)
-{
-	z[0 * N_CARRY_VSIZE] = set_int2(r, P1);
-	z[1 * N_CARRY_VSIZE] = set_int2(r, P2);
-	z[2 * N_CARRY_VSIZE] = set_int2(r, P3);
-}
-
-INLINE void write_rns4(__global uint4_32 * restrict const z, const int4_32 r)
-{
-	z[0 * N_CARRY_VSIZE] = set_int4(r, P1);
-	z[1 * N_CARRY_VSIZE] = set_int4(r, P2);
-	z[2 * N_CARRY_VSIZE] = set_int4(r, P3);
-}
-
 #if OCL_CARRY_VSIZE == 4
 
 INLINE void carry_1x4(__global uint4_32 * restrict const zk, __global int4_64 * restrict const c, __local int4_64 * const cl,
@@ -907,7 +893,12 @@ INLINE void carry_2x4(__global uint4_32 * restrict const zk, const __local int4_
 		r[CARRY_LENGTH - 1].s3 = (int_32)(f3 + r[CARRY_LENGTH - 1].s3);
 	}
 
-	for (size_t j = 0; j < CARRY_LENGTH; ++j) write_rns4(&zk[j * CARRY_VSIZE], r[j]);
+	for (size_t j = 0; j < CARRY_LENGTH; ++j)
+	{
+		zk[j * CARRY_VSIZE + 0 * N_CARRY_VSIZE] = set_int4(r[j], P1);
+		zk[j * CARRY_VSIZE + 1 * N_CARRY_VSIZE] = set_int4(r[j], P2);
+		zk[j * CARRY_VSIZE + 2 * N_CARRY_VSIZE] = set_int4(r[j], P3);
+	}
 }
 
 __kernel __attribute__((reqd_work_group_size(CARRY_WG_SZ, 1, 1)))
@@ -930,10 +921,10 @@ void carry1(const __global uint8_32 * restrict const bb_inv, const __global int4
 #elif OCL_CARRY_VSIZE == 2
 
 INLINE void carry_1x2(__global uint2_32 * restrict const zk, __global int2_64 * restrict const c, __local int2_64 * const cl,
-	int2_32 r[8], const sz_t id, const uint4_32 bb_inv_i, const int2_32 bs_i, const uint_32 dup)
+	int2_32 r[CARRY_LENGTH], const sz_t id, const uint4_32 bb_inv_i, const int2_32 bs_i, const uint_32 dup)
 {
 	int_64 f0 = 0, f1 = 0;
-	for (sz_t j = 0; j < 8; ++j)
+	for (sz_t j = 0; j < CARRY_LENGTH; ++j)
 	{
 		const uint2_32 u1 = mulmods2(zk[j * CARRY_VSIZE + 0 * N_CARRY_VSIZE], NORM1, PQ1);
 		const uint2_32 u2 = mulmods2(zk[j * CARRY_VSIZE + 1 * N_CARRY_VSIZE], NORM2, PQ2);
@@ -948,33 +939,38 @@ INLINE void carry_1x2(__global uint2_32 * restrict const zk, __global int2_64 * 
 
 	if (lid >= CARRY_WG_SZ - CARRY_VSIZE)
 	{
-		const sz_t svid = (id / CARRY_VSIZE) & ~(N_SZ / 8 - 1);
-		const sz_t vid = (id / CARRY_VSIZE + 1) % (N_SZ / 8);
+		const sz_t svid = (id / CARRY_VSIZE) & ~(N_SZ / CARRY_LENGTH - 1);
+		const sz_t vid = (id / CARRY_VSIZE + 1) % (N_SZ / CARRY_LENGTH);
 		const sz_t cid = (id % CARRY_VSIZE) + CARRY_VSIZE * ((svid + vid) / (CARRY_WG_SZ / CARRY_VSIZE));
 		c[cid] = (vid == 0) ? -f : f;
 	}
 }
 
 INLINE void carry_2x2(__global uint2_32 * restrict const zk, const __local int2_64 * const cl,
-	int2_32 r[8], const sz_t id, const uint4_32 bb_inv_i, const int2_32 bs_i)
+	int2_32 r[CARRY_LENGTH], const sz_t id, const uint4_32 bb_inv_i, const int2_32 bs_i)
 {
 	const sz_t lid = id % CARRY_WG_SZ;
 	if (lid >= CARRY_VSIZE)
 	{
 		const int2_64 f = cl[lid - CARRY_VSIZE];
 		int_64 f0 = f.s0, f1 = f.s1;
-		for (size_t j = 0; j < 7; ++j)
+		for (size_t j = 0; j < CARRY_LENGTH - 1; ++j)
 		{
 			f0 += r[j].s0; f1 += r[j].s1;
 			r[j].s0 = reduce64(&f0, bb_inv_i.s0, bb_inv_i.s1, bs_i.s0);
 			r[j].s1 = reduce64(&f1, bb_inv_i.s2, bb_inv_i.s3, bs_i.s1);
 			if ((f0 == 0) && (f1 == 0)) break;
 		}
-		r[7].s0 = (int_32)(f0 + r[7].s0);
-		r[7].s1 = (int_32)(f1 + r[7].s1);
+		r[CARRY_LENGTH - 1].s0 = (int_32)(f0 + r[CARRY_LENGTH - 1].s0);
+		r[CARRY_LENGTH - 1].s1 = (int_32)(f1 + r[CARRY_LENGTH - 1].s1);
 	}
 
-	for (size_t j = 0; j < 8; ++j) write_rns2(&zk[j * CARRY_VSIZE], r[j]);
+	for (size_t j = 0; j < CARRY_LENGTH; ++j)
+	{
+		zk[j * CARRY_VSIZE + 0 * N_CARRY_VSIZE] = set_int2(r[j], P1);
+		zk[j * CARRY_VSIZE + 1 * N_CARRY_VSIZE] = set_int2(r[j], P2);
+		zk[j * CARRY_VSIZE + 2 * N_CARRY_VSIZE] = set_int2(r[j], P3);
+	}
 }
 
 __kernel __attribute__((reqd_work_group_size(CARRY_WG_SZ, 1, 1)))
@@ -983,9 +979,9 @@ void carry1(const __global uint4_32 * restrict const bb_inv, const __global int2
 {
 	__local int2_64 cl[CARRY_WG_SZ];
 
-	const sz_t id = (sz_t)get_global_id(0), i = (id % CARRY_VSIZE) + ((id / (N_SZ / 8)) & ~(CARRY_VSIZE - 1)), k = 7 * (id & ~(CARRY_VSIZE - 1)) + id;
+	const sz_t id = (sz_t)get_global_id(0), i = (id % CARRY_VSIZE) + ((id / (N_SZ / CARRY_LENGTH)) & ~(CARRY_VSIZE - 1)), k = (CARRY_LENGTH - 1) * (id & ~(CARRY_VSIZE - 1)) + id;
 	const uint4_32 bb_inv_i = bb_inv[i]; const int2_32 bs_i = bs[i];
-	int2_32 r[8];
+	int2_32 r[CARRY_LENGTH];
 
 	carry_1x2(&z[k], c, cl, r, id, bb_inv_i, bs_i, dup >> (2 * i));
 
@@ -994,13 +990,13 @@ void carry1(const __global uint4_32 * restrict const bb_inv, const __global int2
 	carry_2x2(&z[k], cl, r, id, bb_inv_i, bs_i);
 }
 
-#else	// OCL_CARRY_VSIZE == 1
+#else	// OCL_CARRY_VSIZE = 1
 
 INLINE void carry_1x1(__global uint_32 * restrict const zk, __global int_64 * restrict const c, __local int_64 * const cl,
-	int_32 r[8], const sz_t id, const uint2_32 bb_inv_i, const int_32 bs_i, const uint_32 dup)
+	int_32 r[CARRY_LENGTH], const sz_t id, const uint2_32 bb_inv_i, const int_32 bs_i, const uint_32 dup)
 {
 	int_64 f = 0;
-	for (sz_t j = 0; j < 8; ++j)
+	for (sz_t j = 0; j < CARRY_LENGTH; ++j)
 	{
 		const uint_32 u1 = mulmod(zk[j * CARRY_VSIZE + 0 * N_CARRY_VSIZE], NORM1, PQ1);
 		const uint_32 u2 = mulmod(zk[j * CARRY_VSIZE + 1 * N_CARRY_VSIZE], NORM2, PQ2);
@@ -1013,30 +1009,30 @@ INLINE void carry_1x1(__global uint_32 * restrict const zk, __global int_64 * re
 
 	if (lid >= CARRY_WG_SZ - CARRY_VSIZE)
 	{
-		const sz_t svid = (id / CARRY_VSIZE) & ~(N_SZ / 8 - 1);
-		const sz_t vid = (id / CARRY_VSIZE + 1) % (N_SZ / 8);
+		const sz_t svid = (id / CARRY_VSIZE) & ~(N_SZ / CARRY_LENGTH - 1);
+		const sz_t vid = (id / CARRY_VSIZE + 1) % (N_SZ / CARRY_LENGTH);
 		const sz_t cid = (id % CARRY_VSIZE) + CARRY_VSIZE * ((svid + vid) / (CARRY_WG_SZ / CARRY_VSIZE));
 		c[cid] = (vid == 0) ? -f : f;
 	}
 }
 
 INLINE void carry_2x1(__global uint_32 * restrict const zk, const __local int_64 * const cl,
-	int_32 r[8], const sz_t id, const uint2_32 bb_inv_i, const int_32 bs_i)
+	int_32 r[CARRY_LENGTH], const sz_t id, const uint2_32 bb_inv_i, const int_32 bs_i)
 {
 	const sz_t lid = id % CARRY_WG_SZ;
 	if (lid >= CARRY_VSIZE)
 	{
 		int_64 f = cl[lid - CARRY_VSIZE];
-		for (size_t j = 0; j < 7; ++j)
+		for (size_t j = 0; j < CARRY_LENGTH - 1; ++j)
 		{
 			f += r[j];
 			r[j] = reduce64(&f, bb_inv_i.s0, bb_inv_i.s1, bs_i);
 			if (f == 0) break;
 		}
-		r[7] = (int_32)(f + r[7]);
+		r[CARRY_LENGTH - 1] = (int_32)(f + r[CARRY_LENGTH - 1]);
 	}
 
-	for (size_t j = 0; j < 8; ++j) write_rns(&zk[j * CARRY_VSIZE], r[j]);
+	for (size_t j = 0; j < CARRY_LENGTH; ++j) write_rns(&zk[j * CARRY_VSIZE], r[j]);
 }
 
 __kernel __attribute__((reqd_work_group_size(CARRY_WG_SZ, 1, 1)))
@@ -1045,9 +1041,9 @@ void carry1(const __global uint2_32 * restrict const bb_inv, const __global int_
 {
 	__local int_64 cl[CARRY_WG_SZ];
 
-	const sz_t id = (sz_t)get_global_id(0), i = (id % CARRY_VSIZE) + ((id / (N_SZ / 8)) & ~(CARRY_VSIZE - 1)), k = 7 * (id & ~(CARRY_VSIZE - 1)) + id;
+	const sz_t id = (sz_t)get_global_id(0), i = (id % CARRY_VSIZE) + ((id / (N_SZ / CARRY_LENGTH)) & ~(CARRY_VSIZE - 1)), k = (CARRY_LENGTH - 1) * (id & ~(CARRY_VSIZE - 1)) + id;
 	const uint2_32 bb_inv_i = bb_inv[i]; const int_32 bs_i = bs[i];
-	int_32 r[8];
+	int_32 r[CARRY_LENGTH];
 
 	carry_1x1(&z[k], c, cl, r, id, bb_inv_i, bs_i, dup >> i);
 

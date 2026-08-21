@@ -387,6 +387,7 @@ public:
 		if (!clFile.is_open()) return false;
 		
 		// if .cl file exists then generate header file
+		std::remove(headerFileName);
 		std::ofstream hFile(headerFileName, std::ios::binary);	// binary: don't convert line endings to `CRLF` 
 		if (!hFile.is_open()) throw std::runtime_error("cannot write openCL header file");
 

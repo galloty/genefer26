@@ -141,7 +141,7 @@ class transformGPU : public transform
 	using ZP3 = ZPT<IS32 ? P3U : P3S, IS32 ? Q3U : Q3S, IS32 ? R3U : R3S, IS32 ? H3U : H3S>;
 
 private:
-	// Necessary conditions are OCL_VSIZE >= OCL_CARRY_VSIZE and CARRY_LENGTH >= OCL_VSIZE
+	// Necessary conditions are OCL_VSIZE >= OCL_CARRY_VSIZE and CARRY_LENGTH >= OCL_VSIZE.
 	static const size_t OCL_VSIZE = 4, OCL_CARRY_VSIZE = 2, CARRY_LENGTH = 8;
 	using xengine = engine<VSIZE, CARRY_LENGTH, OCL_VSIZE, OCL_CARRY_VSIZE, IS32>;
 
@@ -215,10 +215,12 @@ public:
 		src << "#define OCL_CARRY_VSIZE\t" << OCL_CARRY_VSIZE << std::endl;
 		src << "#define CARRY_LENGTH\t" << CARRY_LENGTH << std::endl;
 		src << "#define CARRY_WG_SZ\t" << _engine->get_carry_workgroup_size() << "u" << std::endl;
-		
-		std::cout << "transform: " << 3 * VSIZE / OCL_VSIZE * size / CARRY_LENGTH << "; "
-			<< "carry1: " << VSIZE / OCL_CARRY_VSIZE * size / CARRY_LENGTH << ", " << _engine->get_carry_workgroup_size() << "; "
-			<< "carry2: " << ((VSIZE * size / CARRY_LENGTH) >> _engine->get_carry_shift()) << std::endl;
+
+		std::cout << "N_SZ = " << size << ", VSIZE = " << VSIZE << ", OCL_VSIZE = " << OCL_VSIZE << ", OCL_CARRY_VSIZE = " << OCL_CARRY_VSIZE
+			<< ", CARRY_LENGTH = " << CARRY_LENGTH << ", CARRY_WG_SZ = " << _engine->get_carry_workgroup_size() << std::endl;
+		std::cout << "transform: " << 3 * VSIZE / OCL_VSIZE * size / 8
+			<< ", carry1: " << VSIZE / OCL_CARRY_VSIZE * size / CARRY_LENGTH << " / " << _engine->get_carry_workgroup_size()
+			<< ", carry2: " << ((VSIZE * size / CARRY_LENGTH) >> _engine->get_carry_shift()) << std::endl;
 
 		if (is_boinc || !_engine->readOpenCL("ocl/kernel.cl", "src/ocl/kernel.h", "src_ocl_kernel", src)) src << src_ocl_kernel;
 
