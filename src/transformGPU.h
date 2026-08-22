@@ -329,11 +329,19 @@ public:
 		_engine->forward8_0();
 
 		int lm = ln_8;
-		for (size_t s = 8; lm > 3; lm -= 3, s *= 8) _engine->forward8(lm - 3, s);
+		// for (size_t s = 8; lm > 3; lm -= 3, s *= 8)
+		// {
+		// 	_engine->forward8(lm - 3, s);
+		// 	std::cout << "forward8: " << lm - 3 << ", " << s << std::endl;
+		// }
+		// std::cout << "square: " << lm << std::endl;
+		// exit(0);
 
-		if (lm == 3) _engine->square8();
-		else if (lm == 2) _engine->square4x2();
-		else if (lm == 1) _engine->square2x4();
+		for (size_t s = 8; lm > 6; lm -= 3, s *= 8) _engine->forward8(lm - 3, s);
+
+		if (lm == 6) _engine->square64();
+		else if (lm == 5) _engine->square32();
+		else if (lm == 4) _engine->square16();
 
 		for (size_t s = size_t(1) << (ln_8 - lm); s >= 1; lm += 3, s /= 8) _engine->backward8(lm, s);
 

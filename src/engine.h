@@ -50,6 +50,7 @@ private:
 
 	cl_kernel _forward8 = nullptr, _backward8 = nullptr, _forward8_0 = nullptr;
 	cl_kernel _square2x4 = nullptr, _square4x2 = nullptr, _square8 = nullptr;
+	cl_kernel _square16 = nullptr, _square32 = nullptr, _square64 = nullptr;
 	cl_kernel _fwd4x2 = nullptr, _fwd8 = nullptr;
 	cl_kernel _mul2x4 = nullptr, _mul4x2 = nullptr, _mul8 = nullptr;
 	cl_kernel _mul2x4_mask = nullptr, _mul4x2_mask = nullptr, _mul8_mask = nullptr;
@@ -166,6 +167,9 @@ public:
 		CREATE_TRANSFORM_KERNEL(square2x4);
 		CREATE_TRANSFORM_KERNEL(square4x2);
 		CREATE_TRANSFORM_KERNEL(square8);
+		CREATE_TRANSFORM_KERNEL(square16);
+		CREATE_TRANSFORM_KERNEL(square32);
+		CREATE_TRANSFORM_KERNEL(square64);
 
 		CREATE_TRANSFORM_KERNELP(fwd4x2);
 		CREATE_TRANSFORM_KERNELP(fwd8);
@@ -197,6 +201,7 @@ public:
 
 		_releaseKernel(_forward8); _releaseKernel(_backward8); _releaseKernel(_forward8_0);
 		_releaseKernel(_square2x4); _releaseKernel(_square4x2); _releaseKernel(_square8);
+		_releaseKernel(_square16); _releaseKernel(_square32); _releaseKernel(_square64);
 		_releaseKernel(_fwd4x2); _releaseKernel(_fwd8);
 		_releaseKernel(_mul2x4); _releaseKernel(_mul4x2); _releaseKernel(_mul8);
 		_releaseKernel(_mul2x4_mask); _releaseKernel(_mul4x2_mask); _releaseKernel(_mul8_mask);
@@ -242,6 +247,10 @@ public:
 	void square2x4() { _executeKernel(_square2x4, 3 * VSIZE / OCL_VSIZE * _n / 8); }
 	void square4x2() { _executeKernel(_square4x2, 3 * VSIZE / OCL_VSIZE * _n / 8); }
 	void square8() { _executeKernel(_square8, 3 * VSIZE / OCL_VSIZE * _n / 8); }
+
+	void square16() { _executeKernel(_square16, 3 * VSIZE / OCL_VSIZE * _n / 8, 16 / 8); }	// { forward8(1, (_n / 8) >> 1); square2x4(); backward8(1, (_n / 8) >> 1); }
+	void square32() { _executeKernel(_square32, 3 * VSIZE / OCL_VSIZE * _n / 8, 32 / 8); }	// { forward8(2, (_n / 8) >> 2); square4x2(); backward8(2, (_n / 8) >> 2); }
+	void square64() { _executeKernel(_square64, 3 * VSIZE / OCL_VSIZE * _n / 8, 64 / 8); }	// { forward8(3, (_n / 8) >> 3); square8(); backward8(3, (_n / 8) >> 3); }
 
 	void forward8p(const int lm, const size_t s)
 	{
