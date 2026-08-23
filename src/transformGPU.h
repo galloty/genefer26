@@ -96,6 +96,7 @@ namespace arch_g_namespace
 #define	P1P2P3_2LU	1811939328u					// (P1 * P2 * P3 / 2) mod 2^32
 #define	P1P2P3_2HU	7848451443805552641ul		// (P1 * P2 * P3 / 2) >> 32
 
+
 template<size_t VSIZE, bool IS32>
 class transformGPU : public transform
 {
@@ -141,9 +142,7 @@ class transformGPU : public transform
 	using ZP3 = ZPT<IS32 ? P3U : P3S, IS32 ? Q3U : Q3S, IS32 ? R3U : R3S, IS32 ? H3U : H3S>;
 
 private:
-	// Necessary conditions are OCL_VSIZE >= OCL_CARRY_VSIZE and CARRY_LENGTH >= OCL_VSIZE.
-	static const size_t OCL_VSIZE = 4, OCL_CARRY_VSIZE = 2, CARRY_LENGTH = 8;
-	using xengine = engine<VSIZE, CARRY_LENGTH, OCL_VSIZE, OCL_CARRY_VSIZE, IS32>;
+	using xengine = engine<VSIZE, IS32>;
 
 	const size_t _num_regs;
 	const int _lsize;
@@ -216,11 +215,33 @@ public:
 		src << "#define CARRY_LENGTH\t" << CARRY_LENGTH << std::endl;
 		src << "#define CARRY_WG_SZ\t" << _engine->get_carry_workgroup_size() << "u" << std::endl;
 
+		src << "#define BLK16\t" << BLK16 << std::endl;
+		src << "#define BLK32\t" << BLK32 << std::endl;
+		src << "#define BLK64\t" << BLK64 << std::endl;
+		src << "#define BLK128\t" << BLK128 << std::endl;
+		src << "#define BLK256\t" << BLK256 << std::endl;
+		src << "#define BLK512\t" << BLK512 << std::endl;
+
 		std::cout << "N_SZ = " << size << ", VSIZE = " << VSIZE << ", OCL_VSIZE = " << OCL_VSIZE << ", OCL_CARRY_VSIZE = " << OCL_CARRY_VSIZE
 			<< ", CARRY_LENGTH = " << CARRY_LENGTH << ", CARRY_WG_SZ = " << _engine->get_carry_workgroup_size() << std::endl;
 		std::cout << "transform: " << 3 * VSIZE / OCL_VSIZE * size / 8
 			<< ", carry1: " << VSIZE / OCL_CARRY_VSIZE * size / CARRY_LENGTH << " / " << _engine->get_carry_workgroup_size()
 			<< ", carry2: " << ((VSIZE * size / CARRY_LENGTH) >> _engine->get_carry_shift()) << std::endl;
+
+		const int ln_8 = n - 3;
+		std::cout << "forward8_0, ";
+		int lm = ln_8;
+		for (size_t s = 8; lm > 9; lm -= 3, s *= 8) std::cout << "forward8(" << lm - 3 << ", " << s << "), ";
+		if      (lm == 9) std::cout << "square512";
+		else if (lm == 8) std::cout << "square256";
+		else if (lm == 7) std::cout << "square128";
+		else if (lm == 6) std::cout << "square64";
+		else if (lm == 5) std::cout << "square32";
+		else if (lm == 4) std::cout << "square16";
+		else if (lm == 3) std::cout << "square8";
+		else if (lm == 2) std::cout << "square4x2";
+		else if (lm == 1) std::cout << "square2x4";
+		std::cout << std::endl;
 
 		if (is_boinc || !_engine->readOpenCL("ocl/kernel.cl", "src/ocl/kernel.h", "src_ocl_kernel", src)) src << src_ocl_kernel;
 
@@ -329,19 +350,17 @@ public:
 		_engine->forward8_0();
 
 		int lm = ln_8;
-		// for (size_t s = 8; lm > 3; lm -= 3, s *= 8)
-		// {
-		// 	_engine->forward8(lm - 3, s);
-		// 	std::cout << "forward8: " << lm - 3 << ", " << s << std::endl;
-		// }
-		// std::cout << "square: " << lm << std::endl;
-		// exit(0);
+		for (size_t s = 8; lm > 9; lm -= 3, s *= 8) _engine->forward8(lm - 3, s);
 
-		for (size_t s = 8; lm > 6; lm -= 3, s *= 8) _engine->forward8(lm - 3, s);
-
-		if (lm == 6) _engine->square64();
+		if      (lm == 9) _engine->square512();
+		else if (lm == 8) _engine->square256();
+		else if (lm == 7) _engine->square128();
+		else if (lm == 6) _engine->square64();
 		else if (lm == 5) _engine->square32();
 		else if (lm == 4) _engine->square16();
+		else if (lm == 3) _engine->square8();
+		else if (lm == 2) _engine->square4x2();
+		else if (lm == 1) _engine->square2x4();
 
 		for (size_t s = size_t(1) << (ln_8 - lm); s >= 1; lm += 3, s /= 8) _engine->backward8(lm, s);
 

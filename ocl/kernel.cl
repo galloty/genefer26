@@ -56,6 +56,12 @@ Please give feedback to the authors if improvement is realized. It is distribute
 #define OCL_CARRY_VSIZE	2
 #define CARRY_LENGTH	8
 #define CARRY_WG_SZ		128u
+#define BLK16			32
+#define BLK32			16
+#define BLK64			8
+#define BLK128			4
+#define BLK256			2
+#define BLK512			1
 #endif
 
 #define N_VSIZE		(N_SZ * VSIZE)
@@ -475,6 +481,19 @@ INLINE void forward8i(const uint2_32 pq, const sz_t vml, __local VTYPE * restric
 	_storel(8, Z, vml, zl);
 }
 
+INLINE void forward8l(const uint2_32 pq, const sz_t vm, __local VTYPE * restrict const Z,
+	__global const uint_32 * restrict const w, const sz_t sj)
+{
+	const uint_32 w1 = w[sj];
+	const uint2_32 w2 = _load2g(w, sj);
+	const uint4_32 w4 = _load4g(w, sj);
+
+	barrier(CLK_LOCAL_MEM_FENCE);
+	VTYPE zl[8]; _loadl(8, zl, Z, vm);
+	_forward8(pq, zl, w1, w2, w4);
+	_storel(8, Z, vm, zl);
+}
+
 INLINE void backward8g(const uint2_32 pq, const sz_t vm, __global VTYPE * restrict const z,
 	__global const uint_32 * restrict const w, const sz_t sji)
 {
@@ -487,16 +506,30 @@ INLINE void backward8g(const uint2_32 pq, const sz_t vm, __global VTYPE * restri
 	_storeg(8, z, vm, zl);
 }
 
-INLINE void backward8o(const uint2_32 pq, const sz_t vm, __global VTYPE * restrict const z, const sz_t vml,
+INLINE void backward8l(const uint2_32 pq, const sz_t vm, __local VTYPE * restrict const Z,
+	__global const uint_32 * restrict const w, const sz_t sji)
+{
+	const uint_32 wi1 = w[sji];
+	const uint2_32 wi2r = _load2g(w, sji);
+	const uint4_32 wi4r = _load4g(w, sji);
+
+	barrier(CLK_LOCAL_MEM_FENCE);
+	VTYPE zl[8]; _loadl(8, zl, Z, vm);
+	_backward8r(pq, zl, wi1, wi2r, wi4r);
+	_storel(8, Z, vm, zl);
+}
+
+INLINE void backward8o(const uint2_32 pq, const sz_t vmg, __global VTYPE * restrict const z, const sz_t vml,
 	__local VTYPE * restrict const Z, __global const uint_32 * restrict const w, const sz_t sji)
 {
 	const uint_32 wi1 = w[sji];
 	const uint2_32 wi2r = _load2g(w, sji);
 	const uint4_32 wi4r = _load4g(w, sji);
 
-	VTYPE zl[8]; _loadl(8, zl, Z, vm);
+	barrier(CLK_LOCAL_MEM_FENCE);
+	VTYPE zl[8]; _loadl(8, zl, Z, vml);
 	_backward8r(pq, zl, wi1, wi2r, wi4r);
-	_storeg(8, z, vm, zl);
+	_storeg(8, z, vmg, zl);
 }
 
 INLINE void forward8_0g(const uint2_32 pq, const uint4_32 f0, const sz_t vm,
@@ -524,6 +557,7 @@ INLINE void square2x4l(const uint2_32 pq, const sz_t vm, __local VTYPE * restric
 {
 	const uint2_32 w2 = _load2g(w, sj);
 
+	barrier(CLK_LOCAL_MEM_FENCE);
 	VTYPE zl[8]; _loadl(8, zl, Z, vm);
 	_square2x4(pq, zl, w2);
 	_storel(8, Z, vm, zl);
@@ -544,6 +578,7 @@ INLINE void square4x2l(const uint2_32 pq, const sz_t vm, __local VTYPE * restric
 {
 	const uint2_32 w2 = _load2g(w, sj), wi2r = _load2g(w, sji);
 
+	barrier(CLK_LOCAL_MEM_FENCE);
 	VTYPE zl[8]; _loadl(8, zl, Z, vm);
 	_square4x2r(pq, zl, w2, wi2r);
 	_storel(8, Z, vm, zl);
@@ -566,6 +601,7 @@ INLINE void square8l(const uint2_32 pq, const sz_t vm, __local VTYPE * restrict 
 	const uint_32 w1 = w[sj], wi1 = w[sji];
 	const uint2_32 w2 = _load2g(w, sj), wi2r = _load2g(w, sji);
 
+	barrier(CLK_LOCAL_MEM_FENCE);
 	VTYPE zl[8]; _loadl(8, zl, Z, vm);
 	_square8r(pq, zl, w1, wi1, w2, wi2r);
 	_storel(8, Z, vm, zl);
@@ -769,46 +805,83 @@ void square8(__global VTYPE * restrict const zg, __global const uint_32 * restri
 	square8g(pq, 1, &z[k], w, s + j, s + ji);
 }
 
-__kernel __attribute__((reqd_work_group_size(16 / 8, 1, 1)))
+#define DECLARE_VAR_SQRMUL(N, BLK_N) \
+	__local VTYPE Z[N * BLK_N]; \
+	DECLARE_VAR_REG(); \
+	const sz_t block_id = (id / (N / 8)) % BLK_N; \
+	__local VTYPE * const Zb = &Z[N * block_id]; \
+	const sz_t s = N_SZ / 8, j = id % (N_SZ / 8), ji = s - j - 1, k = 8 * id;
+
+__kernel __attribute__((reqd_work_group_size(16 / 8 * BLK16, 1, 1)))
 void square16(__global VTYPE * restrict const zg, __global const uint_32 * restrict const wg)
 {
-	__local VTYPE Z[16];
+	DECLARE_VAR_SQRMUL(16, BLK16);
+	const sz_t k2 = 7 * (id & ~(2 - 1)) + id;
 
-	DECLARE_VAR_REG();
-	const sz_t s = N_SZ / 8, j = id % (N_SZ / 8), ji = s - j - 1;
-	const sz_t k = 8 * id, k2 = 7 * (id & ~(2 - 1)) + id;
-
-	forward8i(pq, 2, &Z[k2 % 16], 2, &z[k2], w, (s + j) / 2);
-	square2x4l(pq, 1, &Z[k % 16], w, s + j);
-	backward8o(pq, 2, &z[k2], 2, &Z[k2 % 16], w, (s + ji) / 2);
+	forward8i(pq, 2, &Zb[k2 % 16], 2, &z[k2], w, (s + j) / 2);
+	square2x4l(pq, 1, &Zb[k % 16], w, s + j);
+	backward8o(pq, 2, &z[k2], 2, &Zb[k2 % 16], w, (s + ji) / 2);
 }
 
-__kernel __attribute__((reqd_work_group_size(32 / 8, 1, 1)))
+__kernel __attribute__((reqd_work_group_size(32 / 8 * BLK32, 1, 1)))
 void square32(__global VTYPE * restrict const zg, __global const uint_32 * restrict const wg)
 {
-	__local VTYPE Z[32];
+	DECLARE_VAR_SQRMUL(32, BLK32);
+	const sz_t k4 = 7 * (id & ~(4 - 1)) + id;
 
-	DECLARE_VAR_REG();
-	const sz_t s = N_SZ / 8, j = id % (N_SZ / 8), ji = s - j - 1;
-	const sz_t k = 8 * id, k4 = 7 * (id & ~(4 - 1)) + id;
-
-	forward8i(pq, 4, &Z[k4 % 32], 4, &z[k4], w, (s + j) / 4);
-	square4x2l(pq, 1, &Z[k % 32], w, s + j, s + ji);
-	backward8o(pq, 4, &z[k4], 4, &Z[k4 % 32], w, (s + ji) / 4);
+	forward8i(pq, 4, &Zb[k4 % 32], 4, &z[k4], w, (s + j) / 4);
+	square4x2l(pq, 1, &Zb[k % 32], w, s + j, s + ji);
+	backward8o(pq, 4, &z[k4], 4, &Zb[k4 % 32], w, (s + ji) / 4);
 }
 
-__kernel __attribute__((reqd_work_group_size(64 / 8, 1, 1)))
+__kernel __attribute__((reqd_work_group_size(64 / 8 * BLK64, 1, 1)))
 void square64(__global VTYPE * restrict const zg, __global const uint_32 * restrict const wg)
 {
-	__local VTYPE Z[64];
+	DECLARE_VAR_SQRMUL(64, BLK64);
+	const sz_t k8 = 7 * (id & ~(8 - 1)) + id;
 
-	DECLARE_VAR_REG();
-	const sz_t s = N_SZ / 8, j = id % (N_SZ / 8), ji = s - j - 1;
-	const sz_t k = 8 * id, k8 = 7 * (id & ~(8 - 1)) + id;
+	forward8i(pq, 8, &Zb[k8 % 64], 8, &z[k8], w, (s + j) / 8);
+	square8l(pq, 1, &Zb[k % 64], w, s + j, s + ji);
+	backward8o(pq, 8, &z[k8], 8, &Zb[k8 % 64], w, (s + ji) / 8);
+}
 
-	forward8i(pq, 8, &Z[k8 % 64], 8, &z[k8], w, (s + j) / 8);
-	square8l(pq, 1, &Z[k % 64], w, s + j, s + ji);
-	backward8o(pq, 8, &z[k8], 8, &Z[k8 % 64], w, (s + ji) / 8);
+__kernel __attribute__((reqd_work_group_size(128 / 8 * BLK128, 1, 1)))
+void square128(__global VTYPE * restrict const zg, __global const uint_32 * restrict const wg)
+{
+	DECLARE_VAR_SQRMUL(128, BLK128);
+	const sz_t k2 = 7 * (id & ~(2 - 1)) + id, k16 = 7 * (id & ~(16 - 1)) + id;
+
+	forward8i(pq, 16, &Zb[k16 % 128], 16, &z[k16], w, (s + j) / 16);
+	forward8l(pq, 2, &Zb[k2 % 128], w, (s + j) / 2);
+	square2x4l(pq, 1, &Zb[k % 128], w, s + j);
+	backward8l(pq, 2, &Zb[k2 % 128], w, (s + ji) / 2);
+	backward8o(pq, 16, &z[k16], 16, &Zb[k16 % 128], w, (s + ji) / 16);
+}
+
+__kernel __attribute__((reqd_work_group_size(256 / 8 * BLK256, 1, 1)))
+void square256(__global VTYPE * restrict const zg, __global const uint_32 * restrict const wg)
+{
+	DECLARE_VAR_SQRMUL(256, BLK256);
+	const sz_t k4 = 7 * (id & ~(4 - 1)) + id, k32 = 7 * (id & ~(32 - 1)) + id;
+
+	forward8i(pq, 32, &Zb[k32 % 256], 32, &z[k32], w, (s + j) / 32);
+	forward8l(pq, 4, &Zb[k4 % 256], w, (s + j) / 4);
+	square4x2l(pq, 1, &Zb[k % 256], w, s + j, s + ji);
+	backward8l(pq, 4, &Zb[k4 % 256], w, (s + ji) / 4);
+	backward8o(pq, 32, &z[k32], 32, &Zb[k32 % 256], w, (s + ji) / 32);
+}
+
+__kernel __attribute__((reqd_work_group_size(512 / 8 * BLK512, 1, 1)))
+void square512(__global VTYPE * restrict const zg, __global const uint_32 * restrict const wg)
+{
+	DECLARE_VAR_SQRMUL(512, BLK512);
+	const sz_t k8 = 7 * (id & ~(8 - 1)) + id, k64 = 7 * (id & ~(64 - 1)) + id;
+
+	forward8i(pq, 64, &Zb[k64 % 512], 64, &z[k64], w, (s + j) / 64);
+	forward8l(pq, 8, &Zb[k8 % 512], w, (s + j) / 8);
+	square8l(pq, 1, &Zb[k % 512], w, s + j, s + ji);
+	backward8l(pq, 8, &Zb[k8 % 512], w, (s + ji) / 8);
+	backward8o(pq, 64, &z[k64], 64, &Zb[k64 % 512], w, (s + ji) / 64);
 }
 
 __kernel
