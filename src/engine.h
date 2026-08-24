@@ -65,7 +65,11 @@ private:
 	cl_kernel _square16 = nullptr, _square32 = nullptr, _square64 = nullptr;
 	cl_kernel _square128 = nullptr, _square256 = nullptr, _square512 = nullptr;
 	cl_kernel _fwd4x2 = nullptr, _fwd8 = nullptr;
+	cl_kernel _fwd16 = nullptr, _fwd32 = nullptr, _fwd64 = nullptr;
+	cl_kernel _fwd128 = nullptr, _fwd256 = nullptr, _fwd512 = nullptr;
 	cl_kernel _mul2x4 = nullptr, _mul4x2 = nullptr, _mul8 = nullptr;
+	cl_kernel _mul16 = nullptr, _mul32 = nullptr, _mul64 = nullptr;
+	cl_kernel _mul128 = nullptr, _mul256 = nullptr, _mul512 = nullptr;
 	cl_kernel _mul2x4_mask = nullptr, _mul4x2_mask = nullptr, _mul8_mask = nullptr;
 	cl_kernel _carry1 = nullptr, _carry2 = nullptr;
 	cl_kernel _set = nullptr, _copy = nullptr, _copyp = nullptr, _copy_mask = nullptr, _cosmic_ray = nullptr;
@@ -189,10 +193,23 @@ public:
 
 		CREATE_TRANSFORM_KERNELP(fwd4x2);
 		CREATE_TRANSFORM_KERNELP(fwd8);
+		CREATE_TRANSFORM_KERNELP(fwd8);
+		CREATE_TRANSFORM_KERNELP(fwd16);
+		CREATE_TRANSFORM_KERNELP(fwd32);
+		CREATE_TRANSFORM_KERNELP(fwd64);
+		CREATE_TRANSFORM_KERNELP(fwd128);
+		CREATE_TRANSFORM_KERNELP(fwd256);
+		CREATE_TRANSFORM_KERNELP(fwd512);
 
 		CREATE_MUL_KERNEL(mul2x4);
 		CREATE_MUL_KERNEL(mul4x2);
 		CREATE_MUL_KERNEL(mul8);
+		CREATE_MUL_KERNEL(mul16);
+		CREATE_MUL_KERNEL(mul32);
+		CREATE_MUL_KERNEL(mul64);
+		CREATE_MUL_KERNEL(mul128);
+		CREATE_MUL_KERNEL(mul256);
+		CREATE_MUL_KERNEL(mul512);
 
 		CREATE_MUL_KERNEL(mul2x4_mask);
 		CREATE_MUL_KERNEL(mul4x2_mask);
@@ -220,7 +237,11 @@ public:
 		_releaseKernel(_square16); _releaseKernel(_square32); _releaseKernel(_square64);
 		_releaseKernel(_square128); _releaseKernel(_square256); _releaseKernel(_square512);
 		_releaseKernel(_fwd4x2); _releaseKernel(_fwd8);
+		_releaseKernel(_fwd16); _releaseKernel(_fwd32); _releaseKernel(_fwd64);
+		_releaseKernel(_fwd128); _releaseKernel(_fwd256); _releaseKernel(_fwd512);
 		_releaseKernel(_mul2x4); _releaseKernel(_mul4x2); _releaseKernel(_mul8);
+		_releaseKernel(_mul16); _releaseKernel(_mul32); _releaseKernel(_mul64);
+		_releaseKernel(_mul128); _releaseKernel(_mul256); _releaseKernel(_mul512);
 		_releaseKernel(_mul2x4_mask); _releaseKernel(_mul4x2_mask); _releaseKernel(_mul8_mask);
 		_releaseKernel(_carry1); _releaseKernel(_carry2);
 		_releaseKernel(_set); _releaseKernel(_copy); _releaseKernel(_copyp); _releaseKernel(_copy_mask); _releaseKernel(_cosmic_ray);
@@ -287,10 +308,22 @@ public:
 
 	void fwd4x2() { _executeKernel(_fwd4x2, 3 * VSIZE / OCL_VSIZE * _n / 8); }
 	void fwd8() { _executeKernel(_fwd8, 3 * VSIZE / OCL_VSIZE * _n / 8); }
+	void fwd16() { _executeKernel(_fwd16, 3 * VSIZE / OCL_VSIZE * _n / 8); }
+	void fwd32() { _executeKernel(_fwd32, 3 * VSIZE / OCL_VSIZE * _n / 8, 32 / 8 * BLK32); }
+	void fwd64() { _executeKernel(_fwd64, 3 * VSIZE / OCL_VSIZE * _n / 8, 64 / 8 * BLK64); }
+	void fwd128() { _executeKernel(_fwd128, 3 * VSIZE / OCL_VSIZE * _n / 8, 128 / 8 * BLK128); }
+	void fwd256() { _executeKernel(_fwd256, 3 * VSIZE / OCL_VSIZE * _n / 8, 256 / 8 * BLK256); }
+	void fwd512() { _executeKernel(_fwd512, 3 * VSIZE / OCL_VSIZE * _n / 8, 512 / 8 * BLK512); }
 
 	void mul2x4() { _executeKernel(_mul2x4, 3 * VSIZE / OCL_VSIZE * _n / 8); }
 	void mul4x2() { _executeKernel(_mul4x2, 3 * VSIZE / OCL_VSIZE * _n / 8); }
 	void mul8() { _executeKernel(_mul8, 3 * VSIZE / OCL_VSIZE * _n / 8); }
+	void mul16() { _executeKernel(_mul16, 3 * VSIZE / OCL_VSIZE * _n / 8, 16 / 8 * BLK16); }
+	void mul32() { _executeKernel(_mul32, 3 * VSIZE / OCL_VSIZE * _n / 8, 32 / 8 * BLK32); }
+	void mul64() { _executeKernel(_mul64, 3 * VSIZE / OCL_VSIZE * _n / 8, 64 / 8 * BLK64); }
+	void mul128() { _executeKernel(_mul128, 3 * VSIZE / OCL_VSIZE * _n / 8, 128 / 8 * BLK128); }
+	void mul256() { _executeKernel(_mul256, 3 * VSIZE / OCL_VSIZE * _n / 8, 256 / 8 * BLK256); }
+	void mul512() { _executeKernel(_mul512, 3 * VSIZE / OCL_VSIZE * _n / 8, 512 / 8 * BLK512); }
 
 	void mul2x4_mask(const uint32_t mask)
 	{

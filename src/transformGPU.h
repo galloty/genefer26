@@ -376,9 +376,15 @@ public:
 		_engine->forward8_0p();
 
 		int lm = ln_8;
-		for (size_t s = 8; lm > 3; lm -= 3, s *= 8) _engine->forward8p(lm - 3, s);
+		for (size_t s = 8; lm > 9; lm -= 3, s *= 8) _engine->forward8p(lm - 3, s);
 
-		if (lm == 3) _engine->fwd8();
+		if      (lm == 9) _engine->fwd512();
+		else if (lm == 8) _engine->fwd256();
+		else if (lm == 7) _engine->fwd128();
+		else if (lm == 6) _engine->fwd64();
+		else if (lm == 5) _engine->fwd32();
+		else if (lm == 4) _engine->fwd16();
+		else if (lm == 3) _engine->fwd8();
 		else if (lm == 2) _engine->fwd4x2();
 	}
 
@@ -389,9 +395,15 @@ public:
 		_engine->forward8_0();
 
 		int lm = ln_8;
-		for (size_t s = 8; lm > 3; lm -= 3, s *= 8) _engine->forward8(lm - 3, s);
+		for (size_t s = 8; lm > 9; lm -= 3, s *= 8) _engine->forward8(lm - 3, s);
 
-		if (lm == 3) _engine->mul8();
+		if      (lm == 9) _engine->mul512();
+		else if (lm == 8) _engine->mul256();
+		else if (lm == 7) _engine->mul128();
+		else if (lm == 6) _engine->mul64();
+		else if (lm == 5) _engine->mul32();
+		else if (lm == 4) _engine->mul16();
+		else if (lm == 3) _engine->mul8();
 		else if (lm == 2) _engine->mul4x2();
 		else if (lm == 1) _engine->mul2x4();
 
