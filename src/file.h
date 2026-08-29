@@ -65,7 +65,7 @@ public:
 			// Calculate CRC table
 			for (size_t i = 0; i < 256; ++i)
 			{
-				uint32_t rem = static_cast<uint32_t>(i);  // remainder from polynomial division
+				uint32_t rem = uint32_t(i);  // remainder from polynomial division
 				for (size_t j = 0; j < 8; ++j)
 				{
 					if (rem & 1)
@@ -83,7 +83,7 @@ public:
 		uint32_t crc = ~crc32;
 		for (size_t i = 0; i < len; ++i)
 		{
-			const uint8_t octet = static_cast<uint8_t>(buf[i]);  // Cast to unsigned octet
+			const uint8_t octet = uint8_t(buf[i]);  // Cast to unsigned octet
 			crc = (crc >> 8) ^ table[(crc & 0xff) ^ octet];
 		}
 		return ~crc;
@@ -113,7 +113,7 @@ public:
 		for (size_t i = 0; i < VSIZE; ++i)
 		{
 			const size_t ret = mpz_inp_raw(z[i], _cfile);
-			_crc32 = _crc32 ^ static_cast<uint32_t>(mpz_fdiv_ui(z[i], 0xfedcba98));	// fake crc32
+			_crc32 = _crc32 ^ uint32_t(mpz_fdiv_ui(z[i], 0xfedcba98));	// fake crc32
 			if (ret == 0) { error("failure of a read operation"); return false;}
 		}
 		return true;
@@ -125,7 +125,7 @@ public:
 		for (size_t i = 0; i < VSIZE; ++i)
 		{
 			const size_t ret = mpz_out_raw(_cfile, z[i]);
-			_crc32 = _crc32 ^ static_cast<uint32_t>(mpz_fdiv_ui(z[i], 0xfedcba98));	// fake crc32
+			_crc32 = _crc32 ^ uint32_t(mpz_fdiv_ui(z[i], 0xfedcba98));	// fake crc32
 			if (ret == 0) { error("failure of a write operation"); return false; }
 		}
 		return true;

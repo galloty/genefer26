@@ -34,12 +34,14 @@ public:
 #define OCL_CARRY_VSIZE	2u
 #define CARRY_LENGTH	8u
 
-#define BLK16		32	// local size = sizeof(VTYPE) * 512, workgroup size = 64
+#define BLK16		32	// local size = BLK16 * 16 * sizeof(VTYPE), workgroup size = BLK16 * 16 / 8
 #define BLK32		16
 #define BLK64		 8
 #define BLK128		 4
 #define BLK256		 2
 #define BLK512		 1
+#define CHUNK64		 4	// local size = CHUNK64 * 64 * sizeof(VTYPE), workgroup size = CHUNK64 * 64 / 8
+#define CHUNK512	 2
 
 #define CREATE_TRANSFORM_KERNEL(name) _##name = create_transform_kernel(#name);
 #define CREATE_TRANSFORM_KERNELP(name) _##name = create_transform_kernel(#name, false);
@@ -61,6 +63,7 @@ private:
 	cl_mem _z = nullptr, _zp = nullptr, _w = nullptr, _c = nullptr, _bb_inv = nullptr, _bs = nullptr;
 
 	cl_kernel _forward8 = nullptr, _backward8 = nullptr, _forward8_0 = nullptr;
+	cl_kernel _forward64_0 = nullptr, _forward512_0 = nullptr;
 	cl_kernel _square2x4 = nullptr, _square4x2 = nullptr, _square8 = nullptr;
 	cl_kernel _square16 = nullptr, _square32 = nullptr, _square64 = nullptr;
 	cl_kernel _square128 = nullptr, _square256 = nullptr, _square512 = nullptr;
@@ -180,6 +183,8 @@ public:
 		CREATE_TRANSFORM_KERNEL(forward8);
 		CREATE_TRANSFORM_KERNEL(backward8);
 		CREATE_TRANSFORM_KERNEL(forward8_0);
+		CREATE_TRANSFORM_KERNEL(forward64_0);
+		CREATE_TRANSFORM_KERNEL(forward512_0);
 
 		CREATE_TRANSFORM_KERNEL(square2x4);
 		CREATE_TRANSFORM_KERNEL(square4x2);
@@ -233,6 +238,7 @@ public:
 #endif
 
 		_releaseKernel(_forward8); _releaseKernel(_backward8); _releaseKernel(_forward8_0);
+		_releaseKernel(_forward64_0); _releaseKernel(_forward512_0);
 		_releaseKernel(_square2x4); _releaseKernel(_square4x2); _releaseKernel(_square8);
 		_releaseKernel(_square16); _releaseKernel(_square32); _releaseKernel(_square64);
 		_releaseKernel(_square128); _releaseKernel(_square256); _releaseKernel(_square512);
@@ -256,7 +262,7 @@ public:
 	void write_memory_b(const uint32_t * const b, const uint32_t * const b_inv, const int * const b_s)
 	{
 		uint32_2 bb_inv[VSIZE]; for (size_t i = 0; i < VSIZE; ++i) { bb_inv[i].s[0] = b[i]; bb_inv[i].s[1] = b_inv[i]; }
-		int32 bs[8]; for (size_t i = 0; i < VSIZE; ++i) bs[i] = static_cast<int32>(b_s[i]);
+		int32 bs[8]; for (size_t i = 0; i < VSIZE; ++i) bs[i] = int32(b_s[i]);
 		_writeBuffer(_bb_inv, bb_inv, VSIZE * sizeof(uint32_2));
 		_writeBuffer(_bs, bs, VSIZE * sizeof(int32));
 	}
@@ -281,6 +287,8 @@ public:
 	}
 
 	void forward8_0() { _executeKernel(_forward8_0, 3 * VSIZE / OCL_VSIZE * _n / 8); }
+	void forward64_0() { _executeKernel(_forward64_0, 3 * VSIZE / OCL_VSIZE * _n / 8, 64 / 8 * CHUNK64); }
+	void forward512_0() { _executeKernel(_forward512_0, 3 * VSIZE / OCL_VSIZE * _n / 8, 512 / 8 * CHUNK512); }
 
 	void square2x4() { _executeKernel(_square2x4, 3 * VSIZE / OCL_VSIZE * _n / 8); }
 	void square4x2() { _executeKernel(_square4x2, 3 * VSIZE / OCL_VSIZE * _n / 8); }

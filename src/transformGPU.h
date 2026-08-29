@@ -145,29 +145,27 @@ private:
 	using xengine = engine<VSIZE, IS32>;
 
 	const size_t _num_regs;
-	const int _lsize;
-	const size_t _size;
+	const int _ln;
+	const size_t _n;
 	ZP * const _z;
 	xengine * _engine = nullptr;
 
 public:
-	transformGPU(const UInt32_8 & b, const int n, const size_t num_regs, const size_t device_id,
+	transformGPU(const UInt32_8 & b, const int m, const size_t num_regs, const size_t device_id,
 				 const bool is_boinc, const cl_platform_id boinc_platform_id, const cl_device_id boinc_device_id)
-				: transform(b, n, EKind::GPU), _num_regs(num_regs), _lsize(n), _size(size_t(1) << n),
-				_z(new ZP[3 * VSIZE * num_regs * _size])
+				: transform(b, m, EKind::GPU), _num_regs(num_regs), _ln(m), _n(size_t(1) << m),
+				_z(new ZP[3 * VSIZE * num_regs * _n])
 	{
-		const size_t size = _size;
-
 		const bool is_boinc_platform = is_boinc && (boinc_device_id != 0) && (boinc_platform_id != 0);
 		const platform eng_platform = is_boinc_platform ? platform(boinc_platform_id, boinc_device_id) : platform();
 
-		_engine = new xengine(eng_platform, is_boinc_platform ? 0 : device_id, static_cast<int>(n), is_boinc, num_regs);
+		_engine = new xengine(eng_platform, is_boinc_platform ? 0 : device_id, m, is_boinc, num_regs);
 		set_gpu_type(_engine->getType());
 
 		std::ostringstream src;
 
-		src << "#define N_SZ\t" << size << "u" << std::endl;
-		src << "#define LN_SZ\t" << n << std::endl;
+		src << "#define N_SZ\t" << _n << "u" << std::endl;
+		src << "#define LN_SZ\t" << _ln << std::endl;
 		src << "#define VSIZE\t" << VSIZE << std::endl;
 		if (IS32) src << "#define IS32\t" << 1 << std::endl;
 
@@ -205,11 +203,12 @@ public:
 		src << "#define P1P2P3_2H\t" << (IS32 ? P1P2P3_2HU : P1P2P3_2HS) << "ul" << std::endl;
 
 		// Not converted into Montgomery form such that output is converted out of MF
-		src << "#define NORM1\t" << ZP1::norm_ln(n - 1).get() << "u" << std::endl;
-		src << "#define NORM2\t" << ZP2::norm_ln(n - 1).get() << "u" << std::endl;
-		src << "#define NORM3\t" << ZP3::norm_ln(n - 1).get() << "u" << std::endl;
+		src << "#define NORM1\t" << ZP1::norm_ln(m - 1).get() << "u" << std::endl;
+		src << "#define NORM2\t" << ZP2::norm_ln(m - 1).get() << "u" << std::endl;
+		src << "#define NORM3\t" << ZP3::norm_ln(m - 1).get() << "u" << std::endl;
 
-		src << "#define W_SZ\t" << size / 2 << "u" << std::endl;
+		const size_t wsize = _n / 2;
+		src << "#define W_SZ\t" << wsize << "u" << std::endl;
 		src << "#define OCL_VSIZE\t" << OCL_VSIZE << std::endl;
 		src << "#define OCL_CARRY_VSIZE\t" << OCL_CARRY_VSIZE << std::endl;
 		src << "#define CARRY_LENGTH\t" << CARRY_LENGTH << std::endl;
@@ -221,17 +220,18 @@ public:
 		src << "#define BLK128\t" << BLK128 << std::endl;
 		src << "#define BLK256\t" << BLK256 << std::endl;
 		src << "#define BLK512\t" << BLK512 << std::endl;
+		src << "#define CHUNK64\t" << CHUNK64 << std::endl;
+		src << "#define CHUNK512\t" << CHUNK512 << std::endl;
 
-		std::cout << "N_SZ = " << size << ", VSIZE = " << VSIZE << ", OCL_VSIZE = " << OCL_VSIZE << ", OCL_CARRY_VSIZE = " << OCL_CARRY_VSIZE
+		std::cout << "N_SZ = " << _n << ", VSIZE = " << VSIZE << ", OCL_VSIZE = " << OCL_VSIZE << ", OCL_CARRY_VSIZE = " << OCL_CARRY_VSIZE
 			<< ", CARRY_LENGTH = " << CARRY_LENGTH << ", CARRY_WG_SZ = " << _engine->get_carry_workgroup_size() << std::endl;
-		std::cout << "transform: " << 3 * VSIZE / OCL_VSIZE * size / 8
-			<< ", carry1: " << VSIZE / OCL_CARRY_VSIZE * size / CARRY_LENGTH << " / " << _engine->get_carry_workgroup_size()
-			<< ", carry2: " << ((VSIZE * size / CARRY_LENGTH) >> _engine->get_carry_shift()) << std::endl;
+		std::cout << "transform: " << 3 * VSIZE / OCL_VSIZE * _n / 8
+			<< ", carry1: " << VSIZE / OCL_CARRY_VSIZE * _n / CARRY_LENGTH << " / " << _engine->get_carry_workgroup_size()
+			<< ", carry2: " << ((VSIZE * _n / CARRY_LENGTH) >> _engine->get_carry_shift()) << std::endl;
 
-		const int ln_8 = n - 3;
-		std::cout << "forward8_0, ";
-		int lm = ln_8;
-		for (size_t s = 8; lm > 9; lm -= 3, s *= 8) std::cout << "forward8(" << lm - 3 << ", " << s << "), ";
+		std::cout << "forward64_0, ";
+		int lm = _ln - 6; size_t s = 64;
+		for (; lm > 9; lm -= 3, s *= 8) std::cout << "forward8(" << lm - 3 << ", " << s << "), ";
 		if      (lm == 9) std::cout << "square512";
 		else if (lm == 8) std::cout << "square256";
 		else if (lm == 7) std::cout << "square128";
@@ -249,13 +249,13 @@ public:
 		_engine->alloc_memory();
 		_engine->create_kernels();
 
-		ZP * const w = new ZP[3 * size / 2];
-		ZP1 * const w1 = reinterpret_cast<ZP1 *>(&w[0 * size / 2]);
-		ZP2 * const w2 = reinterpret_cast<ZP2 *>(&w[1 * size / 2]);
-		ZP3 * const w3 = reinterpret_cast<ZP3 *>(&w[2 * size / 2]);
+		ZP * const w = new ZP[3 * wsize];
+		ZP1 * const w1 = reinterpret_cast<ZP1 *>(&w[0 * wsize]);
+		ZP2 * const w2 = reinterpret_cast<ZP2 *>(&w[1 * wsize]);
+		ZP3 * const w3 = reinterpret_cast<ZP3 *>(&w[2 * wsize]);
 
-		ZP1 prs1 = ZP1::primroot_ln(n); ZP2 prs2 = ZP2::primroot_ln(n); ZP3 prs3 = ZP3::primroot_ln(n);
-		for (int ls = n - 2; ls >= 0; --ls)
+		ZP1 prs1 = ZP1::primroot_ln(m); ZP2 prs2 = ZP2::primroot_ln(m); ZP3 prs3 = ZP3::primroot_ln(m);
+		for (int ls = m - 2; ls >= 0; --ls)
 		{
 			ZP1 r_s1 = prs1; prs1 *= prs1; const ZP1 & r_s1sq = prs1;
 			ZP2 r_s2 = prs2; prs2 *= prs2; const ZP2 & r_s2sq = prs2;
@@ -279,7 +279,7 @@ public:
 			const uint32_t bi = b[i];
 			const int s = 31 - __builtin_clz(bi) - 1;
 			bu[i] = bi;
-			b_inv[i] = static_cast<uint32_t>((static_cast<uint64_t>(1) << (s + 32)) / bi);
+			b_inv[i] = uint32_t((uint64_t(1) << (s + 32)) / bi);
 			b_s[i] = s;
 		}
 
@@ -297,39 +297,39 @@ public:
 	}
 
 protected:
-	static size_t gpu_index(const size_t k, const size_t j, const size_t size)
+	static size_t gpu_index(const size_t k, const size_t j, const size_t n)
 	{
-		return (j % OCL_VSIZE) + OCL_VSIZE * k + (size * OCL_VSIZE) * (j / OCL_VSIZE);
+		return (j % OCL_VSIZE) + OCL_VSIZE * k + (n * OCL_VSIZE) * (j / OCL_VSIZE);
 	}
 
 	void getZi(Int32_8 * const zi) const override
 	{
-		const size_t size = _size;
+		const size_t n = _n;
 
 		_engine->read_memory_z(_z);
-		const ZP1 * const z1 = reinterpret_cast<ZP1 *>(&_z[0 * VSIZE * size]);
+		const ZP1 * const z1 = reinterpret_cast<ZP1 *>(&_z[0 * VSIZE * n]);
 
-		for (size_t k = 0; k < size; ++k)
+		for (size_t k = 0; k < n; ++k)
 		{
-			int32 d[VSIZE]; for (size_t j = 0; j < VSIZE; ++j) d[j] = z1[gpu_index(k, j, size)].get_int();
+			int32 d[VSIZE]; for (size_t j = 0; j < VSIZE; ++j) d[j] = z1[gpu_index(k, j, n)].get_int();
 			zi[k] = Int32_8(d);
 		}
 	}
 
 	void setZi(const Int32_8 * const zi) override
 	{
-		const size_t size = _size, vsize = VSIZE * size;
-		ZP1 * const z1 = reinterpret_cast<ZP1 *>(&_z[0 * vsize]);
-		ZP2 * const z2 = reinterpret_cast<ZP2 *>(&_z[1 * vsize]);
-		ZP3 * const z3 = reinterpret_cast<ZP3 *>(&_z[2 * vsize]);
+		const size_t n = _n, nvsize = VSIZE * n;
+		ZP1 * const z1 = reinterpret_cast<ZP1 *>(&_z[0 * nvsize]);
+		ZP2 * const z2 = reinterpret_cast<ZP2 *>(&_z[1 * nvsize]);
+		ZP3 * const z3 = reinterpret_cast<ZP3 *>(&_z[2 * nvsize]);
 
-		for (size_t k = 0; k < size; ++k)
+		for (size_t k = 0; k < n; ++k)
 		{
 			const Int32_8 zk = zi[k];
 			for (size_t j = 0; j < VSIZE; ++j)
 			{
 				const int32 d = zk[j];
-				const size_t i = gpu_index(k, j, size);
+				const size_t i = gpu_index(k, j, n);
 				z1[i].set_int(d); z2[i].set_int(d); z3[i].set_int(d);
 			}
 		}
@@ -345,12 +345,16 @@ public:
 
 	void square_dup(const uint32_t dup) override
 	{
-		const int ln_8 = _lsize - 3;
+		// 15: forward64_0, square512 or forward512_0, square64
+		// 16: forward512_0, square128
+		// 17: forward512_0, square256
+		// 18: forward512_0, square512
 
-		_engine->forward8_0();
+		_engine->forward512_0();
 
-		int lm = ln_8;
-		for (size_t s = 8; lm > 9; lm -= 3, s *= 8) _engine->forward8(lm - 3, s);
+		const int ls = 3 * 3;
+		int lm = _ln - ls; size_t s = size_t(1) << ls;
+		for (; lm > 9; lm -= 3, s *= 8) _engine->forward8(lm - 3, s);
 
 		if      (lm == 9) _engine->square512();
 		else if (lm == 8) _engine->square256();
@@ -362,14 +366,14 @@ public:
 		else if (lm == 2) _engine->square4x2();
 		else if (lm == 1) _engine->square2x4();
 
-		for (size_t s = size_t(1) << (ln_8 - lm); s >= 1; lm += 3, s /= 8) _engine->backward8(lm, s);
+		for (s /= 8; s >= 1; lm += 3, s /= 8) _engine->backward8(lm, s);
 
 		_engine->carry(dup);
 	}
 
 	void init_multiplicand(const size_t src) override
 	{
-		const int ln_8 = _lsize - 3;
+		const int ln_8 = _ln - 3;
 
 		_engine->copyp(src);
 
@@ -390,7 +394,7 @@ public:
 
 	void mul() override
 	{
-		const int ln_8 = _lsize - 3;
+		const int ln_8 = _ln - 3;
 
 		_engine->forward8_0();
 
@@ -414,7 +418,7 @@ public:
 
 	void mul_mask(const uint32_t mask) override
 	{
-		const int ln_8 = _lsize - 3;
+		const int ln_8 = _ln - 3;
 
 		_engine->forward8_0();
 
@@ -450,8 +454,8 @@ public:
 	{
 		int kind = 0;
 		if (!cFile.read(reinterpret_cast<char *>(&kind), sizeof(kind))) return false;
-		if (kind != static_cast<int>(get_kind())) return false;
-		if (!cFile.read(reinterpret_cast<char *>(_z), 3 * VSIZE * _num_regs * _size * sizeof(ZP))) return false;
+		if (kind != int(get_kind())) return false;
+		if (!cFile.read(reinterpret_cast<char *>(_z), 3 * VSIZE * _num_regs * _n * sizeof(ZP))) return false;
 
 		_engine->write_memory_z(_z, _num_regs);
 		return true;
@@ -461,13 +465,13 @@ public:
 	{
 		_engine->read_memory_z(_z, _num_regs);
 
-		const int kind = static_cast<int>(get_kind());
+		const int kind = int(get_kind());
 		if (!cFile.write(reinterpret_cast<const char *>(&kind), sizeof(kind))) return;
-		if (!cFile.write(reinterpret_cast<const char *>(_z), 3 * VSIZE * _num_regs * _size * sizeof(ZP))) return;
+		if (!cFile.write(reinterpret_cast<const char *>(_z), 3 * VSIZE * _num_regs * _n * sizeof(ZP))) return;
 	}
 
-	size_t get_data_size() const override { return (3 * (VSIZE * (_num_regs + 1) * _size + _size / 2)) * sizeof(ZP); }
-	size_t get_cache_size() const override { return (3 * (VSIZE * _size + _size / 2)) * sizeof(ZP); }
+	size_t get_data_size() const override { return (3 * (VSIZE * (_num_regs + 1) * _n + _n / 2)) * sizeof(ZP); }
+	size_t get_cache_size() const override { return (3 * (VSIZE * _n + _n / 2)) * sizeof(ZP); }
 	double get_error() const override { return 0; }
 
 	void is_one(bool b[8], UInt64_8 & res64) const override { _is_one(b, res64); }

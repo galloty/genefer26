@@ -35,7 +35,7 @@ public:
 	TwiddleFactor(const size_t a, const size_t b)
 	{
 		const long double alpha = 6.2831853071795864769252867665590057684L * ((long double)(a) / (long double)(b));
-		const double cs = static_cast<double>(cosl(alpha)), sn = static_cast<double>(sinl(alpha));
+		const double cs = double(cosl(alpha)), sn = double(sinl(alpha));
 		_z[0] = cs; _z[1] = sn / cs;
 	}
 

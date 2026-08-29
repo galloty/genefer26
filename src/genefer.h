@@ -161,15 +161,15 @@ private:
 	void init_print_progress(const int i0, const int i_start)
 	{
 		_print_range = i0; _print_i = i_start;
-		if (_is_boinc) boinc_fraction_done((i0 > i_start) ? static_cast<double>(i0 - i_start) / i0 : 0.0);
+		if (_is_boinc) boinc_fraction_done((i0 > i_start) ? double(i0 - i_start) / i0 : 0.0);
 	}
 
 	int print_progress(const double elapsed_time, const double display_time, const int i)
 	{
 		if (_print_i == i) return 1;
-		const double percent = static_cast<double>(_print_range - i) / _print_range;
+		const double percent = double(_print_range - i) / _print_range;
 		const double mul_time = display_time / (_print_i - i); _print_i = i;
-		const int dcount = std::max(static_cast<int>(1.0 / mul_time), 2);
+		const int dcount = std::max(int(1.0 / mul_time), 2);
 		if (_is_boinc) boinc_fraction_done(percent);
 		else
 		{
@@ -356,7 +356,7 @@ private:
 		transform * const ptransform = _transform;
 		ptransform->init_multiplicand(reg);
 		ptransform->set(1);
-		for (int i = static_cast<int>(e.get_max_size()) - 1; i >= 0; --i)
+		for (int i = int(e.get_max_size()) - 1; i >= 0; --i)
 		{
 			ptransform->square_dup(0);
 			ptransform->mul_mask(e.get_bit_mask(i));
@@ -369,13 +369,13 @@ private:
 
 	static int B_GerbiczLi(const size_t esize)
 	{
-		const size_t L = (size_t(2) << (ilog2_32(static_cast<uint32_t>(esize)) / 2));
-		return static_cast<int>((esize - 1) / L) + 1;
+		const size_t L = (size_t(2) << (ilog2_32(uint32_t(esize)) / 2));
+		return int((esize - 1) / L) + 1;
 	}
 
 	static int B_PietrzakLi(const size_t esize, const int depth)
 	{
-		return static_cast<int>((esize - 1) >> depth) + 1;
+		return int((esize - 1) >> depth) + 1;
 	}
 
 	// out: reg_0 is 2^exponent and reg_1 is d(t)
@@ -403,7 +403,7 @@ private:
 		}
 
 		watch chrono(found ? restored_time : 0);
-		int i0 = static_cast<int>(exponent.get_max_size()) - 1;
+		int i0 = int(exponent.get_max_size()) - 1;
 		const int i_start = found ? ri : i0;
 		init_print_progress(i0, i_start);
 		int dcount = 100;
@@ -476,7 +476,7 @@ private:
 
 		// 2^res
 		ptransform->set(1);
-		for (int i = static_cast<int>(res.get_max_size()) - 1; i >= 0; --i)
+		for (int i = int(res.get_max_size()) - 1; i >= 0; --i)
 		{
 			if (_is_boinc) boinc_monitor();
 			if (quitting()) return EReturn::Aborted;
@@ -615,7 +615,7 @@ private:
 		return PL(depth, proof_time, pkey);
 	}
 
-	static uint32_t rand32(const uint32_t rmin, const uint32_t rmax) { return (rmax + rmin) / 2; }	// { return (static_cast<uint32_t>(std::rand()) % (rmax - rmin)) + rmin; } // TODO
+	static uint32_t rand32(const uint32_t rmin, const uint32_t rmax) { return (rmax + rmin) / 2; }	// { return (uint32_t(std::rand()) % (rmax - rmin)) + rmin; } // TODO
 
 	EReturn server(const mpzv & exponent, double & time, bool is_prp[8], UInt64_8 & pkey, UInt64_8 & ckey, UInt64_8 & res64)
 	{
@@ -748,10 +748,10 @@ private:
 			cert_file.check_crc32();
 		}
 
-		const int p2size = static_cast<int>(p2.get_max_size());
+		const int p2size = int(p2.get_max_size());
 
 		// Gerbicz test for v2^{2^B} and Gerbicz-Li test for 2^p2
-		const int L = B_GerbiczLi(static_cast<size_t>(B_PL)), GL = B_GerbiczLi(static_cast<size_t>(p2size));
+		const int L = B_GerbiczLi(size_t(B_PL)), GL = B_GerbiczLi(size_t(p2size));
 
 		watch chrono(found ? restored_time : 0);
 		const int i0 = p2size + B_PL - 1;
@@ -901,7 +901,7 @@ private:
 
 		// 2^res
 		ptransform->set(1);
-		for (int i = static_cast<int>(res.get_max_size()) - 1; i >= 0; --i)
+		for (int i = int(res.get_max_size()) - 1; i >= 0; --i)
 		{
 			if (_is_boinc) boinc_monitor();
 			if (quitting()) return EReturn::Aborted;

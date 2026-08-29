@@ -743,7 +743,7 @@ public:
 	{
 		Complex_8_pair * const z = _z;
 
-		z[0] = Complex_8_pair(static_cast<double>(a));
+		z[0] = Complex_8_pair(double(a));
 		for (size_t k = 1; k < N; ++k) z[k] = Complex_8_pair(0.0);
 	}
 
@@ -832,14 +832,14 @@ public:
 	{
 		int kind = 0;
 		if (!cFile.read(reinterpret_cast<char *>(&kind), sizeof(kind))) return false;
-		if (kind != static_cast<int>(get_kind())) return false;
+		if (kind != int(get_kind())) return false;
 		if (!cFile.read(reinterpret_cast<char *>(_z), _num_regs * N * sizeof(Complex_8_pair))) return false;
 		return true;
 	}
 
 	void save_checkpoint(file & cFile) const override
 	{
-		const int kind = static_cast<int>(get_kind());
+		const int kind = int(get_kind());
 		if (!cFile.write(reinterpret_cast<const char *>(&kind), sizeof(kind))) return;
 		if (!cFile.write(reinterpret_cast<const char *>(_z), _num_regs * N * sizeof(Complex_8_pair))) return;
 	}
