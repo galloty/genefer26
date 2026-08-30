@@ -229,8 +229,9 @@ public:
 			<< ", carry1: " << VSIZE / OCL_CARRY_VSIZE * _n / CARRY_LENGTH << " / " << _engine->get_carry_workgroup_size()
 			<< ", carry2: " << ((VSIZE * _n / CARRY_LENGTH) >> _engine->get_carry_shift()) << std::endl;
 
-		std::cout << "forward64_0, ";
-		int lm = _ln - 6; size_t s = 64;
+		std::cout << "forward512_0, ";
+		const int ls0 = 3 * 3; const size_t s0 = size_t(1) << ls0;
+		int lm = _ln - ls0; size_t s = s0;
 		for (; lm > 9; lm -= 3, s *= 8) std::cout << "forward8(" << lm - 3 << ", " << s << "), ";
 		if      (lm == 9) std::cout << "square512";
 		else if (lm == 8) std::cout << "square256";
@@ -352,8 +353,8 @@ public:
 
 		_engine->forward512_0();
 
-		const int ls = 3 * 3;
-		int lm = _ln - ls; size_t s = size_t(1) << ls;
+		const int ls0 = 3 * 3; const size_t s0 = size_t(1) << ls0;
+		int lm = _ln - ls0; size_t s = s0;
 		for (; lm > 9; lm -= 3, s *= 8) _engine->forward8(lm - 3, s);
 
 		if      (lm == 9) _engine->square512();
@@ -366,21 +367,22 @@ public:
 		else if (lm == 2) _engine->square4x2();
 		else if (lm == 1) _engine->square2x4();
 
-		for (s /= 8; s >= 1; lm += 3, s /= 8) _engine->backward8(lm, s);
+		for (s /= 8; s >= s0; lm += 3, s /= 8) _engine->backward8(lm, s);
+
+		_engine->backward512_0();
 
 		_engine->carry(dup);
 	}
 
 	void init_multiplicand(const size_t src) override
 	{
-		const int ln_8 = _ln - 3;
-
 		_engine->copyp(src);
 
-		_engine->forward8_0p();
+		_engine->forward512_0p();
 
-		int lm = ln_8;
-		for (size_t s = 8; lm > 9; lm -= 3, s *= 8) _engine->forward8p(lm - 3, s);
+		const int ls0 = 3 * 3; const size_t s0 = size_t(1) << ls0;
+		int lm = _ln - ls0;
+		for (size_t s = s0; lm > 9; lm -= 3, s *= 8) _engine->forward8p(lm - 3, s);
 
 		if      (lm == 9) _engine->fwd512();
 		else if (lm == 8) _engine->fwd256();
@@ -394,12 +396,11 @@ public:
 
 	void mul() override
 	{
-		const int ln_8 = _ln - 3;
+		_engine->forward512_0();
 
-		_engine->forward8_0();
-
-		int lm = ln_8;
-		for (size_t s = 8; lm > 9; lm -= 3, s *= 8) _engine->forward8(lm - 3, s);
+		const int ls0 = 3 * 3; const size_t s0 = size_t(1) << ls0;
+		int lm = _ln - ls0; size_t s = s0;
+		for (; lm > 9; lm -= 3, s *= 8) _engine->forward8(lm - 3, s);
 
 		if      (lm == 9) _engine->mul512();
 		else if (lm == 8) _engine->mul256();
@@ -411,25 +412,28 @@ public:
 		else if (lm == 2) _engine->mul4x2();
 		else if (lm == 1) _engine->mul2x4();
 
-		for (size_t s = size_t(1) << (ln_8 - lm); s >= 1; lm += 3, s /= 8) _engine->backward8(lm, s);
+		for (s /= 8; s >= s0; lm += 3, s /= 8) _engine->backward8(lm, s);
+
+		_engine->backward512_0();
 
 		_engine->carry(0);
 	}
 
 	void mul_mask(const uint32_t mask) override
 	{
-		const int ln_8 = _ln - 3;
+		_engine->forward512_0();
 
-		_engine->forward8_0();
-
-		int lm = ln_8;
-		for (size_t s = 8; lm > 3; lm -= 3, s *= 8) _engine->forward8(lm - 3, s);
+		const int ls0 = 3 * 3; const size_t s0 = size_t(1) << ls0;
+		int lm = _ln - ls0; size_t s = s0;
+		for (; lm > 3; lm -= 3, s *= 8) _engine->forward8(lm - 3, s);
 
 		if (lm == 3) _engine->mul8_mask(mask);
 		else if (lm == 2) _engine->mul4x2_mask(mask);
 		else if (lm == 1) _engine->mul2x4_mask(mask);
 
-		for (size_t s = size_t(1) << (ln_8 - lm); s >= 1; lm += 3, s /= 8) _engine->backward8(lm, s);
+		for (s /= 8; s >= s0; lm += 3, s /= 8) _engine->backward8(lm, s);
+
+		_engine->backward512_0();
 
 		_engine->carry(0);
 	}

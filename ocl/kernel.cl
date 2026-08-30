@@ -93,6 +93,7 @@ typedef uint8	uint8_32;
 
 __constant uint2_32 g_pq[3] = { PQ1, PQ2, PQ3 };
 __constant uint4_32 g_f0[3] = { (uint4_32)(RSQ1, MFIM1, SQRTI1, ISQRTI1), (uint4_32)(RSQ2, MFIM2, SQRTI2, ISQRTI2), (uint4_32)(RSQ3, MFIM3, SQRTI3, ISQRTI3) };
+__constant uint4_32 g_f0i[3] = { (uint4_32)(NORM1, IM1, SQRTI1, ISQRTI1), (uint4_32)(NORM2, IM2, SQRTI2, ISQRTI2), (uint4_32)(NORM3, IM3, SQRTI3, ISQRTI3) };
 
 INLINE uint_32 addmod(const uint_32 lhs, const uint_32 rhs, const uint_32 p)
 {
@@ -379,8 +380,14 @@ INLINE void _backward8r(const uint2_32 pq, VTYPE z[8], const uint_32 wi1, const 
 
 INLINE void _forward8_0(const uint2_32 pq, const uint4_32 f0, VTYPE z[8], const uint4_32 w4)
 {
-	z[0] = mulmodsv(z[0], f0.s0, pq); z[1] = mulmodsv(z[1], f0.s0, pq); z[2] = mulmodsv(z[2], f0.s0, pq); z[3] = mulmodsv(z[3], f0.s0, pq);
+	for (sz_t i = 0; i < 4; ++i) z[i] = mulmodsv(z[i], f0.s0, pq);
 	_forward8(pq, z, f0.s1, f0.s23, w4);
+}
+
+INLINE void _backward8r_0(const uint2_32 pq, const uint4_32 f0i, VTYPE z[8], const uint4_32 wi4r)
+{
+	_backward8r(pq, z, f0i.s1, f0i.s23, wi4r);
+	for (sz_t i = 0; i < 8; ++i) z[i] = mulmodsv(z[i], f0i.s0, pq);
 }
 
 INLINE void _square2x4(const uint2_32 pq, VTYPE z[8], const uint2_32 w2)
@@ -532,6 +539,15 @@ INLINE void backward8g(const uint2_32 pq, const sz_t m, __global VTYPE * restric
 	STOREG(m);
 }
 
+INLINE void backward8i(const uint2_32 pq, const sz_t ml, __local VTYPE * restrict const Z, const sz_t mg,
+	__global VTYPE * restrict const z, __global const uint_32 * restrict const w, const sz_t sji)
+{
+	DECLARE_WI124();
+	LOADG(mg);
+	_backward8r(pq, zl, wi1, wi2r, wi4r);
+	STOREL(ml);
+}
+
 INLINE void backward8l(const uint2_32 pq, const sz_t m, __local VTYPE * restrict const Z,
 	__global const uint_32 * restrict const w, const sz_t sji)
 {
@@ -566,6 +582,24 @@ INLINE void forward8_0i(const uint2_32 pq, const uint4_32 f0, const sz_t ml, __l
 	LOADG(mg);
 	_forward8_0(pq, f0, zl, w4);
 	STOREL(ml);
+}
+
+INLINE void backward8_0g(const uint2_32 pq, const uint4_32 f0i, const sz_t m,
+	__global VTYPE * restrict const z, __global const uint_32 * restrict const w)
+{
+	const uint4_32 wi4r = _load4g(w, 1);
+	LOADG(m);
+	_backward8r_0(pq, f0i, zl, wi4r);
+	STOREG(m);
+}
+
+INLINE void backward8_0o(const uint2_32 pq, const uint4_32 f0i, const sz_t mg, __global VTYPE * restrict const z,
+	const sz_t ml, __local VTYPE * restrict const Z, __global const uint_32 * restrict const w)
+{
+	const uint4_32 wi4r = _load4g(w, 1);
+	LOADL(ml);
+	_backward8r_0(pq, f0i, zl, wi4r);
+	STOREG(mg);
 }
 
 INLINE void square2x4g(const uint2_32 pq, __global VTYPE * restrict const z,
@@ -793,21 +827,32 @@ void forward8_0(__global VTYPE * restrict const zg, __global const uint_32 * res
 	forward8_0g(pq, g_f0[lid], m, &z[k], w);
 }
 
+__kernel
+void backward8_0(__global VTYPE * restrict const zg, __global const uint_32 * restrict const wg)
+{
+	DECLARE_VAR_REG();
+	const sz_t m = N_SZ / 8, k = 7 * (vid & ~(m - 1)) + vid;
+	backward8_0g(pq, g_f0i[lid], m, &z[k], w);
+}
+
+#define DECLARE_VAR_FB(N, CHUNK_N) \
+	__local VTYPE Z[N * CHUNK_N]; \
+	DECLARE_VAR_REG(); \
+	const sz_t mid = vid & ~(N_SZ / 8 - 1); \
+	__global VTYPE * restrict const zv = &z[8 * mid]; \
+	const size_t chunk_id = id % CHUNK_N, local_id = (id / CHUNK_N) % (N / 8), block_id = id & ~(N / 8 * CHUNK_N - 1); \
+	__global VTYPE * restrict const zt = &zv[block_id / (N / 8) + chunk_id]; \
+	__local VTYPE * const Zt = &Z[N * chunk_id];
+
+#define DECLARE_VAR_FB64() \
+	const sz_t kl0 = local_id, k0 = kl0 * (N_SZ / 64), ml0 = 8, m0 = ml0 * (N_SZ / 64); \
+	const sz_t kl8 = local_id * 8, k8 = kl8 * (N_SZ / 64), ml8 = 1, m8 = ml8 * (N_SZ / 64);
+
 __kernel __attribute__((reqd_work_group_size(64 / 8 * CHUNK64, 1, 1)))
 void forward64_0(__global VTYPE * restrict const zg, __global const uint_32 * restrict const wg)
 {
-	__local VTYPE Z[64 * CHUNK64];
-
-	DECLARE_VAR_REG();
-	const sz_t mid = vid & ~(N_SZ / 8 - 1);
-	__global VTYPE * restrict const zv = &z[8 * mid];
-
-	const size_t chunk_id = id % CHUNK64, local_id = (id / CHUNK64) % 8, block_id = id & ~(8 * CHUNK64 - 1);
-	const sz_t kl0 = local_id, k0 = kl0 * (N_SZ / 64), ml0 = 8, m0 = ml0 * (N_SZ / 64);
-	const sz_t kl8 = local_id * 8, k8 = kl8 * (N_SZ / 64), ml8 = 1, m8 = ml8 * (N_SZ / 64);
-
-	__global VTYPE * restrict const zt = &zv[block_id / 8 + chunk_id];
-	__local VTYPE * const Zt = &Z[64 * chunk_id];
+	DECLARE_VAR_FB(64, CHUNK64);
+	DECLARE_VAR_FB64();
 
 	forward8_0i(pq, g_f0[lid], ml0, &Zt[kl0], m0, &zt[k0], w);
 
@@ -815,22 +860,28 @@ void forward64_0(__global VTYPE * restrict const zg, __global const uint_32 * re
 	forward8o(pq, m8, &zt[k8], ml8, &Zt[kl8], w, 8 + j8);
 }
 
+__kernel __attribute__((reqd_work_group_size(64 / 8 * CHUNK64, 1, 1)))
+void backward64_0(__global VTYPE * restrict const zg, __global const uint_32 * restrict const wg)
+{
+	DECLARE_VAR_FB(64, CHUNK64);
+	DECLARE_VAR_FB64();
+
+	const sz_t j8 = local_id, j8i = 8 - j8 - 1;
+	backward8i(pq, ml8, &Zt[kl8], m8, &zt[k8], w, 8 + j8i);
+
+	backward8_0o(pq, g_f0i[lid], m0, &zt[k0], ml0, &Zt[kl0], w);
+}
+
+#define DECLARE_VAR_FB512() \
+	const sz_t kl0 = local_id, k0 = kl0 * (N_SZ / 512), ml0 = 64, m0 = ml0 * (N_SZ / 512); \
+	const sz_t kl8 = (local_id % 8) + (local_id / 8) * 64, ml8 = 8; \
+	const sz_t kl64 = local_id * 8, k64 = kl64 * (N_SZ / 512), ml64 = 1, m64 = ml64 * (N_SZ / 512);
+
 __kernel __attribute__((reqd_work_group_size(512 / 8 * CHUNK512, 1, 1)))
 void forward512_0(__global VTYPE * restrict const zg, __global const uint_32 * restrict const wg)
 {
-	__local VTYPE Z[512 * CHUNK512];
-
-	DECLARE_VAR_REG();
-	const sz_t mid = vid & ~(N_SZ / 8 - 1);
-	__global VTYPE * restrict const zv = &z[8 * mid];
-
-	const size_t chunk_id = id % CHUNK512, local_id = (id / CHUNK512) % 64, block_id = id & ~(64 * CHUNK512 - 1);
-	const sz_t kl0 = local_id, k0 = kl0 * (N_SZ / 512), ml0 = 64, m0 = ml0 * (N_SZ / 512);
-	const sz_t kl8 = (local_id % 8) + (local_id / 8) * 64, ml8 = 8;
-	const sz_t kl64 = local_id * 8, k64 = kl64 * (N_SZ / 512), ml64 = 1, m64 = ml64 * (N_SZ / 512);
-
-	__global VTYPE * restrict const zt = &zv[block_id / 64 + chunk_id];
-	__local VTYPE * const Zt = &Z[512 * chunk_id];
+	DECLARE_VAR_FB(512, CHUNK512);
+	DECLARE_VAR_FB512();
 
 	forward8_0i(pq, g_f0[lid], ml0, &Zt[kl0], m0, &zt[k0], w);
 
@@ -839,6 +890,21 @@ void forward512_0(__global VTYPE * restrict const zg, __global const uint_32 * r
 
 	const sz_t j64 = local_id;
 	forward8o(pq, m64, &zt[k64], ml64, &Zt[kl64], w, 64 + j64);
+}
+
+__kernel __attribute__((reqd_work_group_size(512 / 8 * CHUNK512, 1, 1)))
+void backward512_0(__global VTYPE * restrict const zg, __global const uint_32 * restrict const wg)
+{
+	DECLARE_VAR_FB(512, CHUNK512);
+	DECLARE_VAR_FB512();
+
+	const sz_t j64 = local_id, j64i = 64 - j64 - 1;
+	backward8i(pq, ml64, &Zt[kl64], m64, &zt[k64], w, 64 + j64i);
+
+	const sz_t j8 = (local_id / 8) % 8, j8i = 8 - j8 - 1;
+	backward8l(pq, ml8, &Zt[kl8], w, 8 + j8i);
+
+	backward8_0o(pq, g_f0i[lid], m0, &zt[k0], ml0, &Zt[kl0], w);
 }
 
 __kernel
@@ -1238,15 +1304,15 @@ INLINE void write_rns(__global uint_32 * restrict const z, const int_32 r)
 
 #if OCL_CARRY_VSIZE == 4
 
-INLINE void carry_1x4(__global uint4_32 * restrict const zk, __global int4_64 * restrict const c, __local int4_64 * const cl,
+INLINE void carry_1x4(const __global uint4_32 * restrict const zk, __global int4_64 * restrict const c, __local int4_64 * const cl,
 	int4_32 r[CARRY_LENGTH], const sz_t id, const uint8_32 bb_inv_i, const int4_32 bs_i, const uint_32 dup)
 {
 	int_64 f0 = 0, f1 = 0, f2 = 0, f3 = 0;
 	for (sz_t j = 0; j < CARRY_LENGTH; ++j)
 	{
-		const uint4_32 u1 = mulmods4(zk[j * CARRY_VSIZE + 0 * N_CARRY_VSIZE], NORM1, PQ1);
-		const uint4_32 u2 = mulmods4(zk[j * CARRY_VSIZE + 1 * N_CARRY_VSIZE], NORM2, PQ2);
-		const uint4_32 u3 = mulmods4(zk[j * CARRY_VSIZE + 2 * N_CARRY_VSIZE], NORM3, PQ3);
+		const uint4_32 u1 = zk[j * CARRY_VSIZE + 0 * N_CARRY_VSIZE];
+		const uint4_32 u2 = zk[j * CARRY_VSIZE + 1 * N_CARRY_VSIZE];
+		const uint4_32 u3 = zk[j * CARRY_VSIZE + 2 * N_CARRY_VSIZE];
 		r[j].s0 = reduce(&f0, u1.s0, u2.s0, u3.s0, bb_inv_i.s01, bs_i.s0, (dup & 1u) != 0);
 		r[j].s1 = reduce(&f1, u1.s1, u2.s1, u3.s1, bb_inv_i.s23, bs_i.s1, (dup & 2u) != 0);
 		r[j].s2 = reduce(&f2, u1.s2, u2.s2, u3.s2, bb_inv_i.s45, bs_i.s2, (dup & 4u) != 0);
@@ -1303,7 +1369,8 @@ void carry1(const __global uint8_32 * restrict const bb_inv, const __global int4
 {
 	__local int4_64 cl[CARRY_WG_SZ];
 
-	const sz_t id = (sz_t)get_global_id(0), i = (id % CARRY_VSIZE) + ((id / (N_SZ / CARRY_LENGTH)) & ~(CARRY_VSIZE - 1)), k = (CARRY_LENGTH - 1) * (id & ~(CARRY_VSIZE - 1)) + id;
+	const sz_t id = (sz_t)get_global_id(0), i = (id % CARRY_VSIZE) + ((id / (N_SZ / CARRY_LENGTH)) & ~(CARRY_VSIZE - 1));
+	const sz_t k = (CARRY_LENGTH - 1) * (id & ~(CARRY_VSIZE - 1)) + id;
 	const uint8_32 bb_inv_i = bb_inv[i]; const int4_32 bs_i = bs[i];
 	int4_32 r[CARRY_LENGTH];
 
@@ -1316,15 +1383,15 @@ void carry1(const __global uint8_32 * restrict const bb_inv, const __global int4
 
 #elif OCL_CARRY_VSIZE == 2
 
-INLINE void carry_1x2(__global uint2_32 * restrict const zk, __global int2_64 * restrict const c, __local int2_64 * const cl,
+INLINE void carry_1x2(const __global uint2_32 * restrict const zk, __global int2_64 * restrict const c, __local int2_64 * const cl,
 	int2_32 r[CARRY_LENGTH], const sz_t id, const uint4_32 bb_inv_i, const int2_32 bs_i, const uint_32 dup)
 {
 	int_64 f0 = 0, f1 = 0;
 	for (sz_t j = 0; j < CARRY_LENGTH; ++j)
 	{
-		const uint2_32 u1 = mulmods2(zk[j * CARRY_VSIZE + 0 * N_CARRY_VSIZE], NORM1, PQ1);
-		const uint2_32 u2 = mulmods2(zk[j * CARRY_VSIZE + 1 * N_CARRY_VSIZE], NORM2, PQ2);
-		const uint2_32 u3 = mulmods2(zk[j * CARRY_VSIZE + 2 * N_CARRY_VSIZE], NORM3, PQ3);
+		const uint2_32 u1 = zk[j * CARRY_VSIZE + 0 * N_CARRY_VSIZE];
+		const uint2_32 u2 = zk[j * CARRY_VSIZE + 1 * N_CARRY_VSIZE];
+		const uint2_32 u3 = zk[j * CARRY_VSIZE + 2 * N_CARRY_VSIZE];
 		r[j].s0 = reduce(&f0, u1.s0, u2.s0, u3.s0, bb_inv_i.s01, bs_i.s0, (dup & 1u) != 0);
 		r[j].s1 = reduce(&f1, u1.s1, u2.s1, u3.s1, bb_inv_i.s23, bs_i.s1, (dup & 2u) != 0);
 	}
@@ -1375,7 +1442,8 @@ void carry1(const __global uint4_32 * restrict const bb_inv, const __global int2
 {
 	__local int2_64 cl[CARRY_WG_SZ];
 
-	const sz_t id = (sz_t)get_global_id(0), i = (id % CARRY_VSIZE) + ((id / (N_SZ / CARRY_LENGTH)) & ~(CARRY_VSIZE - 1)), k = (CARRY_LENGTH - 1) * (id & ~(CARRY_VSIZE - 1)) + id;
+	const sz_t id = (sz_t)get_global_id(0), i = (id % CARRY_VSIZE) + ((id / (N_SZ / CARRY_LENGTH)) & ~(CARRY_VSIZE - 1));
+	const sz_t k = (CARRY_LENGTH - 1) * (id & ~(CARRY_VSIZE - 1)) + id;
 	const uint4_32 bb_inv_i = bb_inv[i]; const int2_32 bs_i = bs[i];
 	int2_32 r[CARRY_LENGTH];
 
@@ -1388,15 +1456,15 @@ void carry1(const __global uint4_32 * restrict const bb_inv, const __global int2
 
 #else	// OCL_CARRY_VSIZE = 1
 
-INLINE void carry_1x1(__global uint_32 * restrict const zk, __global int_64 * restrict const c, __local int_64 * const cl,
+INLINE void carry_1x1(const __global uint_32 * restrict const zk, __global int_64 * restrict const c, __local int_64 * const cl,
 	int_32 r[CARRY_LENGTH], const sz_t id, const uint2_32 bb_inv_i, const int_32 bs_i, const uint_32 dup)
 {
 	int_64 f = 0;
 	for (sz_t j = 0; j < CARRY_LENGTH; ++j)
 	{
-		const uint_32 u1 = mulmod(zk[j * CARRY_VSIZE + 0 * N_CARRY_VSIZE], NORM1, PQ1);
-		const uint_32 u2 = mulmod(zk[j * CARRY_VSIZE + 1 * N_CARRY_VSIZE], NORM2, PQ2);
-		const uint_32 u3 = mulmod(zk[j * CARRY_VSIZE + 2 * N_CARRY_VSIZE], NORM3, PQ3);
+		const uint_32 u1 = zk[j * CARRY_VSIZE + 0 * N_CARRY_VSIZE];
+		const uint_32 u2 = zk[j * CARRY_VSIZE + 1 * N_CARRY_VSIZE];
+		const uint_32 u3 = zk[j * CARRY_VSIZE + 2 * N_CARRY_VSIZE];
 		r[j] = reduce(&f, u1, u2, u3, bb_inv_i, bs_i, (dup & 1u) != 0);
 	}
 
@@ -1437,7 +1505,8 @@ void carry1(const __global uint2_32 * restrict const bb_inv, const __global int_
 {
 	__local int_64 cl[CARRY_WG_SZ];
 
-	const sz_t id = (sz_t)get_global_id(0), i = (id % CARRY_VSIZE) + ((id / (N_SZ / CARRY_LENGTH)) & ~(CARRY_VSIZE - 1)), k = (CARRY_LENGTH - 1) * (id & ~(CARRY_VSIZE - 1)) + id;
+	const sz_t id = (sz_t)get_global_id(0), i = (id % CARRY_VSIZE) + ((id / (N_SZ / CARRY_LENGTH)) & ~(CARRY_VSIZE - 1));
+	const sz_t k = (CARRY_LENGTH - 1) * (id & ~(CARRY_VSIZE - 1)) + id;
 	const uint2_32 bb_inv_i = bb_inv[i]; const int_32 bs_i = bs[i];
 	int_32 r[CARRY_LENGTH];
 
@@ -1454,7 +1523,8 @@ void carry2(const __global uint2_32 * restrict const bb_inv, const __global int_
 	__global uint_32 * restrict const z, const __global int_64 * restrict const c)
 {
 	const sz_t gid = (sz_t)get_global_id(0), id = (gid / OCL_VSIZE) * CARRY_WG_SZ * OCL_CARRY_VSIZE + (gid % OCL_VSIZE);
-	const sz_t i = (id % OCL_VSIZE) + ((id / (N_SZ / CARRY_LENGTH)) & ~(OCL_VSIZE - 1)), k = (CARRY_LENGTH - 1) * (id & ~(OCL_VSIZE - 1)) + id;
+	const sz_t i = (id % OCL_VSIZE) + ((id / (N_SZ / CARRY_LENGTH)) & ~(OCL_VSIZE - 1));
+	const sz_t k = (CARRY_LENGTH - 1) * (id & ~(OCL_VSIZE - 1)) + id;
 	const uint2_32 bb_inv_i = bb_inv[i]; const int_32 bs_i = bs[i];
 
 	int_64 f = c[gid];

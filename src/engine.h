@@ -49,6 +49,8 @@ public:
 #define CREATE_CARRY_KERNEL(name) _##name = create_carry_kernel(#name);
 #define CREATE_SETCOPY_KERNEL(name) _##name = create_set_copy_kernel(#name);
 #define CREATE_COPYP_KERNEL(name) _##name = create_copyp_kernel(#name);
+#define DEFINE_FORWARD_0P(u) void forward##u##_0p() { set_transform_arg0(_forward##u##_0, false); forward##u##_0(); set_transform_arg0(_forward##u##_0); }
+
 
 template<size_t VSIZE, bool IS32>
 class engine : public device
@@ -62,8 +64,8 @@ private:
 
 	cl_mem _z = nullptr, _zp = nullptr, _w = nullptr, _c = nullptr, _bb_inv = nullptr, _bs = nullptr;
 
-	cl_kernel _forward8 = nullptr, _backward8 = nullptr, _forward8_0 = nullptr;
-	cl_kernel _forward64_0 = nullptr, _forward512_0 = nullptr;
+	cl_kernel _forward8 = nullptr, _backward8 = nullptr, _forward8_0 = nullptr, _backward8_0 = nullptr;
+	cl_kernel _forward64_0 = nullptr, _forward512_0 = nullptr, _backward64_0 = nullptr, _backward512_0 = nullptr;
 	cl_kernel _square2x4 = nullptr, _square4x2 = nullptr, _square8 = nullptr;
 	cl_kernel _square16 = nullptr, _square32 = nullptr, _square64 = nullptr;
 	cl_kernel _square128 = nullptr, _square256 = nullptr, _square512 = nullptr;
@@ -183,8 +185,11 @@ public:
 		CREATE_TRANSFORM_KERNEL(forward8);
 		CREATE_TRANSFORM_KERNEL(backward8);
 		CREATE_TRANSFORM_KERNEL(forward8_0);
+		CREATE_TRANSFORM_KERNEL(backward8_0);
 		CREATE_TRANSFORM_KERNEL(forward64_0);
+		CREATE_TRANSFORM_KERNEL(backward64_0);
 		CREATE_TRANSFORM_KERNEL(forward512_0);
+		CREATE_TRANSFORM_KERNEL(backward512_0);
 
 		CREATE_TRANSFORM_KERNEL(square2x4);
 		CREATE_TRANSFORM_KERNEL(square4x2);
@@ -236,9 +241,8 @@ public:
 		std::ostringstream ss; ss << "Release ocl kernels." << std::endl;
 		pio::display(ss.str());
 #endif
-
-		_releaseKernel(_forward8); _releaseKernel(_backward8); _releaseKernel(_forward8_0);
-		_releaseKernel(_forward64_0); _releaseKernel(_forward512_0);
+		_releaseKernel(_forward8); _releaseKernel(_backward8); _releaseKernel(_forward8_0); _releaseKernel(_backward8_0);
+		_releaseKernel(_forward64_0); _releaseKernel(_forward512_0); _releaseKernel(_backward64_0); _releaseKernel(_backward512_0);
 		_releaseKernel(_square2x4); _releaseKernel(_square4x2); _releaseKernel(_square8);
 		_releaseKernel(_square16); _releaseKernel(_square32); _releaseKernel(_square64);
 		_releaseKernel(_square128); _releaseKernel(_square256); _releaseKernel(_square512);
@@ -269,36 +273,47 @@ public:
 
 ///////////////////////////////
 
+private:
+	void execute_kernel(cl_kernel & kernel, const size_t wg_size = 0)
+	{
+		_executeKernel(kernel, 3 * VSIZE / OCL_VSIZE * _n / 8, wg_size);
+	}
+
+	void execute_fb_kernel(cl_kernel & kernel, const int lm, const size_t s)
+	{
+		const int32 ilm = int32(lm); const uint32 is = uint32(s);
+		_setKernelArg(kernel, 2, sizeof(int32), &ilm);
+		_setKernelArg(kernel, 3, sizeof(uint32), &is);
+		execute_kernel(kernel);
+	}
+
+	void execute_mask_kernel(cl_kernel & kernel, const uint32_t mask)
+	{
+		const uint32 imask = uint32(mask);
+		_setKernelArg(kernel, 3, sizeof(uint32), &imask);
+		_executeKernel(kernel, 3 * VSIZE * _n / 8);
+	}
+
 public:
-	void forward8(const int lm, const size_t s)
-	{
-		const int32 ilm = int32(lm); const uint32 is = uint32(s);
-		_setKernelArg(_forward8, 2, sizeof(int32), &ilm);
-		_setKernelArg(_forward8, 3, sizeof(uint32), &is);
-		_executeKernel(_forward8, 3 * VSIZE / OCL_VSIZE * _n / 8);
-	}
+	void forward8(const int lm, const size_t s) { execute_fb_kernel(_forward8, lm, s); }
+	void backward8(const int lm, const size_t s) { execute_fb_kernel(_backward8, lm, s); }
 
-	void backward8(const int lm, const size_t s)
-	{
-		const int32 ilm = int32(lm); const uint32 is = uint32(s);
-		_setKernelArg(_backward8, 2, sizeof(int32), &ilm);
-		_setKernelArg(_backward8, 3, sizeof(uint32), &is);
-		_executeKernel(_backward8, 3 * VSIZE / OCL_VSIZE * _n / 8);
-	}
+	void forward8_0() { execute_kernel(_forward8_0); }
+	void backward8_0() { execute_kernel(_backward8_0); }
+	void forward64_0() { execute_kernel(_forward64_0, 64 / 8 * CHUNK64); }
+	void backward64_0() { execute_kernel(_backward64_0, 64 / 8 * CHUNK64); }
+	void forward512_0() { execute_kernel(_forward512_0, 512 / 8 * CHUNK512); }
+	void backward512_0() { execute_kernel(_backward512_0, 512 / 8 * CHUNK512); }
 
-	void forward8_0() { _executeKernel(_forward8_0, 3 * VSIZE / OCL_VSIZE * _n / 8); }
-	void forward64_0() { _executeKernel(_forward64_0, 3 * VSIZE / OCL_VSIZE * _n / 8, 64 / 8 * CHUNK64); }
-	void forward512_0() { _executeKernel(_forward512_0, 3 * VSIZE / OCL_VSIZE * _n / 8, 512 / 8 * CHUNK512); }
-
-	void square2x4() { _executeKernel(_square2x4, 3 * VSIZE / OCL_VSIZE * _n / 8); }
-	void square4x2() { _executeKernel(_square4x2, 3 * VSIZE / OCL_VSIZE * _n / 8); }
-	void square8() { _executeKernel(_square8, 3 * VSIZE / OCL_VSIZE * _n / 8); }
-	void square16() { _executeKernel(_square16, 3 * VSIZE / OCL_VSIZE * _n / 8, 16 / 8 * BLK16); }
-	void square32() { _executeKernel(_square32, 3 * VSIZE / OCL_VSIZE * _n / 8, 32 / 8 * BLK32); }
-	void square64() { _executeKernel(_square64, 3 * VSIZE / OCL_VSIZE * _n / 8, 64 / 8 * BLK64); }
-	void square128() { _executeKernel(_square128, 3 * VSIZE / OCL_VSIZE * _n / 8, 128 / 8 * BLK128); }
-	void square256() { _executeKernel(_square256, 3 * VSIZE / OCL_VSIZE * _n / 8, 256 / 8 * BLK256); }
-	void square512() { _executeKernel(_square512, 3 * VSIZE / OCL_VSIZE * _n / 8, 512 / 8 * BLK512); }
+	void square2x4() { execute_kernel(_square2x4); }
+	void square4x2() { execute_kernel(_square4x2); }
+	void square8() { execute_kernel(_square8); }
+	void square16() { execute_kernel(_square16, 16 / 8 * BLK16); }
+	void square32() { execute_kernel(_square32, 32 / 8 * BLK32); }
+	void square64() { execute_kernel(_square64, 64 / 8 * BLK64); }
+	void square128() { execute_kernel(_square128, 128 / 8 * BLK128); }
+	void square256() { execute_kernel(_square256, 256 / 8 * BLK256); }
+	void square512() { execute_kernel(_square512, 512 / 8 * BLK512); }
 
 	void forward8p(const int lm, const size_t s)
 	{
@@ -307,50 +322,32 @@ public:
 		set_transform_arg0(_forward8);
 	}
 
-	void forward8_0p()
-	{
-		set_transform_arg0(_forward8_0, false);
-		forward8_0();
-		set_transform_arg0(_forward8_0);
-	}
+	DEFINE_FORWARD_0P(8);
+	DEFINE_FORWARD_0P(64);
+	DEFINE_FORWARD_0P(512);
 
-	void fwd4x2() { _executeKernel(_fwd4x2, 3 * VSIZE / OCL_VSIZE * _n / 8); }
-	void fwd8() { _executeKernel(_fwd8, 3 * VSIZE / OCL_VSIZE * _n / 8); }
-	void fwd16() { _executeKernel(_fwd16, 3 * VSIZE / OCL_VSIZE * _n / 8); }
-	void fwd32() { _executeKernel(_fwd32, 3 * VSIZE / OCL_VSIZE * _n / 8, 32 / 8 * BLK32); }
-	void fwd64() { _executeKernel(_fwd64, 3 * VSIZE / OCL_VSIZE * _n / 8, 64 / 8 * BLK64); }
-	void fwd128() { _executeKernel(_fwd128, 3 * VSIZE / OCL_VSIZE * _n / 8, 128 / 8 * BLK128); }
-	void fwd256() { _executeKernel(_fwd256, 3 * VSIZE / OCL_VSIZE * _n / 8, 256 / 8 * BLK256); }
-	void fwd512() { _executeKernel(_fwd512, 3 * VSIZE / OCL_VSIZE * _n / 8, 512 / 8 * BLK512); }
+	void fwd4x2() { execute_kernel(_fwd4x2); }
+	void fwd8() { execute_kernel(_fwd8); }
+	void fwd16() { execute_kernel(_fwd16); }
+	void fwd32() { execute_kernel(_fwd32, 32 / 8 * BLK32); }
+	void fwd64() { execute_kernel(_fwd64, 64 / 8 * BLK64); }
+	void fwd128() { execute_kernel(_fwd128, 128 / 8 * BLK128); }
+	void fwd256() { execute_kernel(_fwd256, 256 / 8 * BLK256); }
+	void fwd512() { execute_kernel(_fwd512, 512 / 8 * BLK512); }
 
-	void mul2x4() { _executeKernel(_mul2x4, 3 * VSIZE / OCL_VSIZE * _n / 8); }
-	void mul4x2() { _executeKernel(_mul4x2, 3 * VSIZE / OCL_VSIZE * _n / 8); }
-	void mul8() { _executeKernel(_mul8, 3 * VSIZE / OCL_VSIZE * _n / 8); }
-	void mul16() { _executeKernel(_mul16, 3 * VSIZE / OCL_VSIZE * _n / 8, 16 / 8 * BLK16); }
-	void mul32() { _executeKernel(_mul32, 3 * VSIZE / OCL_VSIZE * _n / 8, 32 / 8 * BLK32); }
-	void mul64() { _executeKernel(_mul64, 3 * VSIZE / OCL_VSIZE * _n / 8, 64 / 8 * BLK64); }
-	void mul128() { _executeKernel(_mul128, 3 * VSIZE / OCL_VSIZE * _n / 8, 128 / 8 * BLK128); }
-	void mul256() { _executeKernel(_mul256, 3 * VSIZE / OCL_VSIZE * _n / 8, 256 / 8 * BLK256); }
-	void mul512() { _executeKernel(_mul512, 3 * VSIZE / OCL_VSIZE * _n / 8, 512 / 8 * BLK512); }
+	void mul2x4() { execute_kernel(_mul2x4); }
+	void mul4x2() { execute_kernel(_mul4x2); }
+	void mul8() { execute_kernel(_mul8); }
+	void mul16() { execute_kernel(_mul16, 16 / 8 * BLK16); }
+	void mul32() { execute_kernel(_mul32, 32 / 8 * BLK32); }
+	void mul64() { execute_kernel(_mul64, 64 / 8 * BLK64); }
+	void mul128() { execute_kernel(_mul128, 128 / 8 * BLK128); }
+	void mul256() { execute_kernel(_mul256, 256 / 8 * BLK256); }
+	void mul512() { execute_kernel(_mul512, 512 / 8 * BLK512); }
 
-	void mul2x4_mask(const uint32_t mask)
-	{
-		const uint32 imask = uint32(mask);
-		_setKernelArg(_mul2x4_mask, 3, sizeof(uint32), &imask);
-		_executeKernel(_mul2x4_mask, 3 * VSIZE * _n / 8);
-	}
-	void mul4x2_mask(const uint32_t mask)
-	{
-		const uint32 imask = uint32(mask);
-		_setKernelArg(_mul4x2_mask, 3, sizeof(uint32), &imask);
-		_executeKernel(_mul4x2_mask, 3 * VSIZE * _n / 8);
-	}
-	void mul8_mask(const uint32_t mask)
-	{
-		const uint32 imask = uint32(mask);
-		_setKernelArg(_mul8_mask, 3, sizeof(uint32), &imask);
-		_executeKernel(_mul8_mask, 3 * VSIZE * _n / 8);
-	}
+	void mul2x4_mask(const uint32_t mask) { execute_mask_kernel(_mul2x4_mask, mask); }
+	void mul4x2_mask(const uint32_t mask) { execute_mask_kernel(_mul4x2_mask, mask); }
+	void mul8_mask(const uint32_t mask) { execute_mask_kernel(_mul8_mask, mask); }
 
 	void carry(const uint32_t dup)
 	{
