@@ -13,7 +13,6 @@ Please give feedback to the authors if improvement is realized. It is distribute
 #include <immintrin.h>
 
 #include "transform.h"
-#include "alignment.h"
 #include "vcomplex.h"
 
 #ifndef finline
@@ -852,22 +851,26 @@ public:
 	UInt64_8 gethash64() const override { return _gethash64(); }
 	UInt32_8 gethash32() const override { return _gethash32(); }
 
+#ifdef QVALID
 	void cosmic_ray() override { const Complex_8 z = _z[N / 2].get(); Double_8 x = z.real(); x.cosmic_ray(); _z[N / 2].set(Complex_8(x, z.imag())); }
+#endif
 };
 
 inline transform * create_transformCPU(const UInt32_8 & b, const int n, const size_t num_regs)
 {
 	transform * ptransform = nullptr;
+#ifdef QVALID
 	if      (n == 10) ptransform = new transformCPU<(1 <<  9), 8>(b, n, num_regs);
 	else if (n == 11) ptransform = new transformCPU<(1 << 10), 8>(b, n, num_regs);
 	else if (n == 12) ptransform = new transformCPU<(1 << 11), 8>(b, n, num_regs);
-	else if (n == 13) ptransform = new transformCPU<(1 << 12), 8>(b, n, num_regs);
+#else
+	if      (n == 13) ptransform = new transformCPU<(1 << 12), 8>(b, n, num_regs);
 	else if (n == 14) ptransform = new transformCPU<(1 << 13), 8>(b, n, num_regs);
 	else if (n == 15) ptransform = new transformCPU<(1 << 14), 8>(b, n, num_regs);
 	else if (n == 16) ptransform = new transformCPU<(1 << 15), 8>(b, n, num_regs);
 	else if (n == 17) ptransform = new transformCPU<(1 << 16), 8>(b, n, num_regs);
 	else if (n == 18) ptransform = new transformCPU<(1 << 17), 8>(b, n, num_regs);
-
+#endif
 	if (ptransform == nullptr) throw std::runtime_error("exponent is not supported");
 	return ptransform;
 }

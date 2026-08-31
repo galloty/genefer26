@@ -64,20 +64,31 @@ private:
 
 	cl_mem _z = nullptr, _zp = nullptr, _w = nullptr, _c = nullptr, _bb_inv = nullptr, _bs = nullptr;
 
-	cl_kernel _forward8 = nullptr, _backward8 = nullptr, _forward8_0 = nullptr, _backward8_0 = nullptr;
+	cl_kernel _forward8 = nullptr, _backward8 = nullptr;	// _forward8_0 = nullptr, _backward8_0 = nullptr;
 	cl_kernel _forward64_0 = nullptr, _forward512_0 = nullptr, _backward64_0 = nullptr, _backward512_0 = nullptr;
-	cl_kernel _square2x4 = nullptr, _square4x2 = nullptr, _square8 = nullptr;
+	// cl_kernel _square2x4 = nullptr, _square4x2 = nullptr, _square8 = nullptr;
+#ifdef QVALID
 	cl_kernel _square16 = nullptr, _square32 = nullptr, _square64 = nullptr;
+#endif
 	cl_kernel _square128 = nullptr, _square256 = nullptr, _square512 = nullptr;
-	cl_kernel _fwd4x2 = nullptr, _fwd8 = nullptr;
+	// cl_kernel _fwd4x2 = nullptr, _fwd8 = nullptr;
+#ifdef QVALID
 	cl_kernel _fwd16 = nullptr, _fwd32 = nullptr, _fwd64 = nullptr;
+#else
 	cl_kernel _fwd128 = nullptr, _fwd256 = nullptr, _fwd512 = nullptr;
-	cl_kernel _mul2x4 = nullptr, _mul4x2 = nullptr, _mul8 = nullptr;
+#endif
+	// cl_kernel _mul2x4 = nullptr, _mul4x2 = nullptr, _mul8 = nullptr;
+#ifdef QVALID
 	cl_kernel _mul16 = nullptr, _mul32 = nullptr, _mul64 = nullptr;
+#else
 	cl_kernel _mul128 = nullptr, _mul256 = nullptr, _mul512 = nullptr;
+#endif
 	cl_kernel _mul2x4_mask = nullptr, _mul4x2_mask = nullptr, _mul8_mask = nullptr;
 	cl_kernel _carry1 = nullptr, _carry2 = nullptr;
-	cl_kernel _set = nullptr, _copy = nullptr, _copyp = nullptr, _copy_mask = nullptr, _cosmic_ray = nullptr;
+	cl_kernel _set = nullptr, _copy = nullptr, _copyp = nullptr, _copy_mask = nullptr;
+#ifdef QVALID
+	cl_kernel _cosmic_ray = nullptr;
+#endif
 
 	static constexpr int ilog2_32(const uint32_t n) { return (n == 0) ? -1 : (31 - __builtin_clz(n)); }
 
@@ -184,42 +195,50 @@ public:
 
 		CREATE_TRANSFORM_KERNEL(forward8);
 		CREATE_TRANSFORM_KERNEL(backward8);
-		CREATE_TRANSFORM_KERNEL(forward8_0);
-		CREATE_TRANSFORM_KERNEL(backward8_0);
+		// CREATE_TRANSFORM_KERNEL(forward8_0);
+		// CREATE_TRANSFORM_KERNEL(backward8_0);
 		CREATE_TRANSFORM_KERNEL(forward64_0);
 		CREATE_TRANSFORM_KERNEL(backward64_0);
 		CREATE_TRANSFORM_KERNEL(forward512_0);
 		CREATE_TRANSFORM_KERNEL(backward512_0);
 
-		CREATE_TRANSFORM_KERNEL(square2x4);
-		CREATE_TRANSFORM_KERNEL(square4x2);
-		CREATE_TRANSFORM_KERNEL(square8);
+		// CREATE_TRANSFORM_KERNEL(square2x4);
+		// CREATE_TRANSFORM_KERNEL(square4x2);
+		// CREATE_TRANSFORM_KERNEL(square8);
+#ifdef QVALID
 		CREATE_TRANSFORM_KERNEL(square16);
 		CREATE_TRANSFORM_KERNEL(square32);
 		CREATE_TRANSFORM_KERNEL(square64);
+#else
 		CREATE_TRANSFORM_KERNEL(square128);
 		CREATE_TRANSFORM_KERNEL(square256);
 		CREATE_TRANSFORM_KERNEL(square512);
+#endif
 
-		CREATE_TRANSFORM_KERNELP(fwd4x2);
-		CREATE_TRANSFORM_KERNELP(fwd8);
-		CREATE_TRANSFORM_KERNELP(fwd8);
+		// CREATE_TRANSFORM_KERNELP(fwd4x2);
+		// CREATE_TRANSFORM_KERNELP(fwd8);
+#ifdef QVALID
 		CREATE_TRANSFORM_KERNELP(fwd16);
 		CREATE_TRANSFORM_KERNELP(fwd32);
 		CREATE_TRANSFORM_KERNELP(fwd64);
+#else
 		CREATE_TRANSFORM_KERNELP(fwd128);
 		CREATE_TRANSFORM_KERNELP(fwd256);
 		CREATE_TRANSFORM_KERNELP(fwd512);
+#endif
 
-		CREATE_MUL_KERNEL(mul2x4);
-		CREATE_MUL_KERNEL(mul4x2);
-		CREATE_MUL_KERNEL(mul8);
+		// CREATE_MUL_KERNEL(mul2x4);
+		// CREATE_MUL_KERNEL(mul4x2);
+		// CREATE_MUL_KERNEL(mul8);
+#ifdef QVALID
 		CREATE_MUL_KERNEL(mul16);
 		CREATE_MUL_KERNEL(mul32);
 		CREATE_MUL_KERNEL(mul64);
+#else
 		CREATE_MUL_KERNEL(mul128);
 		CREATE_MUL_KERNEL(mul256);
 		CREATE_MUL_KERNEL(mul512);
+#endif
 
 		CREATE_MUL_KERNEL(mul2x4_mask);
 		CREATE_MUL_KERNEL(mul4x2_mask);
@@ -232,7 +251,9 @@ public:
 		CREATE_SETCOPY_KERNEL(copy);
 		CREATE_COPYP_KERNEL(copyp);
 		CREATE_SETCOPY_KERNEL(copy_mask);
+#ifdef QVALID
 		CREATE_SETCOPY_KERNEL(cosmic_ray);
+#endif
 	}
 
 	void release_kernels()
@@ -241,20 +262,32 @@ public:
 		std::ostringstream ss; ss << "Release ocl kernels." << std::endl;
 		pio::display(ss.str());
 #endif
-		_releaseKernel(_forward8); _releaseKernel(_backward8); _releaseKernel(_forward8_0); _releaseKernel(_backward8_0);
+		_releaseKernel(_forward8); _releaseKernel(_backward8);	// _releaseKernel(_forward8_0); _releaseKernel(_backward8_0);
 		_releaseKernel(_forward64_0); _releaseKernel(_forward512_0); _releaseKernel(_backward64_0); _releaseKernel(_backward512_0);
-		_releaseKernel(_square2x4); _releaseKernel(_square4x2); _releaseKernel(_square8);
+		// _releaseKernel(_square2x4); _releaseKernel(_square4x2); _releaseKernel(_square8);
+#ifdef QVALID
 		_releaseKernel(_square16); _releaseKernel(_square32); _releaseKernel(_square64);
+#else
 		_releaseKernel(_square128); _releaseKernel(_square256); _releaseKernel(_square512);
-		_releaseKernel(_fwd4x2); _releaseKernel(_fwd8);
+#endif
+		// _releaseKernel(_fwd4x2); _releaseKernel(_fwd8);
+#ifdef QVALID
 		_releaseKernel(_fwd16); _releaseKernel(_fwd32); _releaseKernel(_fwd64);
+#else
 		_releaseKernel(_fwd128); _releaseKernel(_fwd256); _releaseKernel(_fwd512);
-		_releaseKernel(_mul2x4); _releaseKernel(_mul4x2); _releaseKernel(_mul8);
+#endif
+		// _releaseKernel(_mul2x4); _releaseKernel(_mul4x2); _releaseKernel(_mul8);
+#ifdef QVALID
 		_releaseKernel(_mul16); _releaseKernel(_mul32); _releaseKernel(_mul64);
+#else
 		_releaseKernel(_mul128); _releaseKernel(_mul256); _releaseKernel(_mul512);
+#endif
 		_releaseKernel(_mul2x4_mask); _releaseKernel(_mul4x2_mask); _releaseKernel(_mul8_mask);
 		_releaseKernel(_carry1); _releaseKernel(_carry2);
-		_releaseKernel(_set); _releaseKernel(_copy); _releaseKernel(_copyp); _releaseKernel(_copy_mask); _releaseKernel(_cosmic_ray);
+		_releaseKernel(_set); _releaseKernel(_copy); _releaseKernel(_copyp); _releaseKernel(_copy_mask);
+#ifdef QVALID
+		_releaseKernel(_cosmic_ray);
+#endif
 	}
 
 ///////////////////////////////
@@ -298,22 +331,25 @@ public:
 	void forward8(const int lm, const size_t s) { execute_fb_kernel(_forward8, lm, s); }
 	void backward8(const int lm, const size_t s) { execute_fb_kernel(_backward8, lm, s); }
 
-	void forward8_0() { execute_kernel(_forward8_0); }
-	void backward8_0() { execute_kernel(_backward8_0); }
+	// void forward8_0() { execute_kernel(_forward8_0); }
+	// void backward8_0() { execute_kernel(_backward8_0); }
 	void forward64_0() { execute_kernel(_forward64_0, 64 / 8 * CHUNK64); }
 	void backward64_0() { execute_kernel(_backward64_0, 64 / 8 * CHUNK64); }
 	void forward512_0() { execute_kernel(_forward512_0, 512 / 8 * CHUNK512); }
 	void backward512_0() { execute_kernel(_backward512_0, 512 / 8 * CHUNK512); }
 
-	void square2x4() { execute_kernel(_square2x4); }
-	void square4x2() { execute_kernel(_square4x2); }
-	void square8() { execute_kernel(_square8); }
+	// void square2x4() { execute_kernel(_square2x4); }
+	// void square4x2() { execute_kernel(_square4x2); }
+	// void square8() { execute_kernel(_square8); }
+#ifdef QVALID
 	void square16() { execute_kernel(_square16, 16 / 8 * BLK16); }
 	void square32() { execute_kernel(_square32, 32 / 8 * BLK32); }
 	void square64() { execute_kernel(_square64, 64 / 8 * BLK64); }
+#else
 	void square128() { execute_kernel(_square128, 128 / 8 * BLK128); }
 	void square256() { execute_kernel(_square256, 256 / 8 * BLK256); }
 	void square512() { execute_kernel(_square512, 512 / 8 * BLK512); }
+#endif
 
 	void forward8p(const int lm, const size_t s)
 	{
@@ -322,28 +358,34 @@ public:
 		set_transform_arg0(_forward8);
 	}
 
-	DEFINE_FORWARD_0P(8);
+	// DEFINE_FORWARD_0P(8);
 	DEFINE_FORWARD_0P(64);
 	DEFINE_FORWARD_0P(512);
 
-	void fwd4x2() { execute_kernel(_fwd4x2); }
-	void fwd8() { execute_kernel(_fwd8); }
+	// void fwd4x2() { execute_kernel(_fwd4x2); }
+	// void fwd8() { execute_kernel(_fwd8); }
+#ifdef QVALID
 	void fwd16() { execute_kernel(_fwd16); }
 	void fwd32() { execute_kernel(_fwd32, 32 / 8 * BLK32); }
 	void fwd64() { execute_kernel(_fwd64, 64 / 8 * BLK64); }
+#else
 	void fwd128() { execute_kernel(_fwd128, 128 / 8 * BLK128); }
 	void fwd256() { execute_kernel(_fwd256, 256 / 8 * BLK256); }
 	void fwd512() { execute_kernel(_fwd512, 512 / 8 * BLK512); }
+#endif
 
-	void mul2x4() { execute_kernel(_mul2x4); }
-	void mul4x2() { execute_kernel(_mul4x2); }
-	void mul8() { execute_kernel(_mul8); }
+	// void mul2x4() { execute_kernel(_mul2x4); }
+	// void mul4x2() { execute_kernel(_mul4x2); }
+	// void mul8() { execute_kernel(_mul8); }
+#ifdef QVALID
 	void mul16() { execute_kernel(_mul16, 16 / 8 * BLK16); }
 	void mul32() { execute_kernel(_mul32, 32 / 8 * BLK32); }
 	void mul64() { execute_kernel(_mul64, 64 / 8 * BLK64); }
+#else
 	void mul128() { execute_kernel(_mul128, 128 / 8 * BLK128); }
 	void mul256() { execute_kernel(_mul256, 256 / 8 * BLK256); }
 	void mul512() { execute_kernel(_mul512, 512 / 8 * BLK512); }
+#endif
 
 	void mul2x4_mask(const uint32_t mask) { execute_mask_kernel(_mul2x4_mask, mask); }
 	void mul4x2_mask(const uint32_t mask) { execute_mask_kernel(_mul4x2_mask, mask); }
@@ -388,5 +430,7 @@ public:
 		_executeKernel(_copy_mask, 3 * VSIZE * _n);
 	}
 
+#ifdef QVALID
 	void cosmic_ray() { _executeKernel(_cosmic_ray, 3 * VSIZE * _n); }
+#endif
 };

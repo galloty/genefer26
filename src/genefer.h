@@ -615,7 +615,16 @@ private:
 		return PL(depth, proof_time, pkey);
 	}
 
-	static uint32_t rand32(const uint32_t rmin, const uint32_t rmax) { return (rmax + rmin) / 2; }	// { return (uint32_t(std::rand()) % (rmax - rmin)) + rmin; } // TODO
+	static uint32_t rand32(const uint32_t rmin, const uint32_t rmax)
+	{
+		const uint32_t r =
+#ifdef QVALID
+		(rmax + rmin) / 2;
+#else
+		(uint32_t(std::rand()) % (rmax - rmin)) + rmin;
+#endif
+		return r;
+	}
 
 	EReturn server(const mpzv & exponent, double & time, bool is_prp[8], UInt64_8 & pkey, UInt64_8 & ckey, UInt64_8 & res64)
 	{

@@ -76,6 +76,7 @@ static const char * const src_ocl_kernel = \
 "#define BLK512			1\n" \
 "#define CHUNK64			8\n" \
 "#define CHUNK512		1\n" \
+"// #define QVALID			1\n" \
 "#endif\n" \
 "\n" \
 "#define N_VSIZE		(N_SZ * VSIZE)\n" \
@@ -831,7 +832,7 @@ static const char * const src_ocl_kernel = \
 "	backward8g(pq, m, &z[k], w, s + ji);\n" \
 "}\n" \
 "\n" \
-"__kernel\n" \
+"/*__kernel\n" \
 "void forward8_0(__global VTYPE * restrict const zg, __global const uint_32 * restrict const wg)\n" \
 "{\n" \
 "	DECLARE_VAR_REG();\n" \
@@ -845,7 +846,7 @@ static const char * const src_ocl_kernel = \
 "	DECLARE_VAR_REG();\n" \
 "	const sz_t m = N_SZ / 8, k = 7 * (vid & ~(m - 1)) + vid;\n" \
 "	backward8_0g(pq, g_f0i[lid], m, &z[k], w);\n" \
-"}\n" \
+"}*/\n" \
 "\n" \
 "#define DECLARE_VAR_FB(N, CHUNK_N) \\\n" \
 "	__local VTYPE Z[N * CHUNK_N]; \\\n" \
@@ -919,7 +920,7 @@ static const char * const src_ocl_kernel = \
 "	backward8_0o(pq, g_f0i[lid], m0, &zt[k0], ml0, &Zt[kl0], w);\n" \
 "}\n" \
 "\n" \
-"__kernel\n" \
+"/*__kernel\n" \
 "void square2x4(__global VTYPE * restrict const zg, __global const uint_32 * restrict const wg)\n" \
 "{\n" \
 "	DECLARE_VAR_REG();\n" \
@@ -941,7 +942,7 @@ static const char * const src_ocl_kernel = \
 "	DECLARE_VAR_REG();\n" \
 "	const sz_t s = N_SZ / 8, j = id, ji = s - j - 1, k = 8 * vid;\n" \
 "	square8g(pq, &z[k], w, s + j, s + ji);\n" \
-"}\n" \
+"}*/\n" \
 "\n" \
 "#define DECLARE_VAR_SQRMUL(N, BLK_N) \\\n" \
 "	__local VTYPE Z[N * BLK_N]; \\\n" \
@@ -949,6 +950,8 @@ static const char * const src_ocl_kernel = \
 "	const sz_t block_id = (vid / (N / 8)) % BLK_N; \\\n" \
 "	__local VTYPE * const Zb = &Z[N * block_id]; \\\n" \
 "	const sz_t s = N_SZ / 8, j = id, ji = s - j - 1, k = 8 * vid;\n" \
+"\n" \
+"#ifdef QVALID\n" \
 "\n" \
 "__kernel __attribute__((reqd_work_group_size(16 / 8 * BLK16, 1, 1)))\n" \
 "void square16(__global VTYPE * restrict const zg, __global const uint_32 * restrict const wg)\n" \
@@ -982,6 +985,8 @@ static const char * const src_ocl_kernel = \
 "	square8l(pq, &Zb[k % 64], w, s + j, s + ji);\n" \
 "	backward8o(pq, 8, &z[k8], 8, &Zb[k8 % 64], w, (s + ji) / 8);\n" \
 "}\n" \
+"\n" \
+"#else\n" \
 "\n" \
 "__kernel __attribute__((reqd_work_group_size(128 / 8 * BLK128, 1, 1)))\n" \
 "void square128(__global VTYPE * restrict const zg, __global const uint_32 * restrict const wg)\n" \
@@ -1022,7 +1027,9 @@ static const char * const src_ocl_kernel = \
 "	backward8o(pq, 64, &z[k64], 64, &Zb[k64 % 512], w, (s + ji) / 64);\n" \
 "}\n" \
 "\n" \
-"__kernel\n" \
+"#endif\n" \
+"\n" \
+"/*__kernel\n" \
 "void fwd4x2(__global VTYPE * restrict const zg, __global const uint_32 * restrict const wg)\n" \
 "{\n" \
 "	DECLARE_VAR_REG();\n" \
@@ -1036,7 +1043,9 @@ static const char * const src_ocl_kernel = \
 "	DECLARE_VAR_REG();\n" \
 "	const sz_t n_8 = N_SZ / 8, j = id, k = 8 * vid;\n" \
 "	fwd8g(pq, &z[k], w, n_8 + j);\n" \
-"}\n" \
+"}*/\n" \
+"\n" \
+"#ifdef QVALID\n" \
 "\n" \
 "__kernel\n" \
 "void fwd16(__global VTYPE * restrict const zg, __global const uint_32 * restrict const wg)\n" \
@@ -1065,6 +1074,8 @@ static const char * const src_ocl_kernel = \
 "	forward8i(pq, 8, &Zb[k8 % 64], 8, &z[k8], w, (s + j) / 8);\n" \
 "	fwd8o(pq, &z[k], &Zb[k % 64], w, s + j);\n" \
 "}\n" \
+"\n" \
+"#else\n" \
 "\n" \
 "__kernel __attribute__((reqd_work_group_size(128 / 8 * BLK128, 1, 1)))\n" \
 "void fwd128(__global VTYPE * restrict const zg, __global const uint_32 * restrict const wg)\n" \
@@ -1098,7 +1109,9 @@ static const char * const src_ocl_kernel = \
 "	fwd8o(pq, &z[k], &Zb[k % 512], w, s + j);\n" \
 "}\n" \
 "\n" \
-"__kernel\n" \
+"#endif\n" \
+"\n" \
+"/*__kernel\n" \
 "void mul2x4(__global VTYPE * restrict const zg, const __global VTYPE * restrict const zpg, __global const uint_32 * restrict const wg)\n" \
 "{\n" \
 "	DECLARE_VAR_REG();\n" \
@@ -1125,7 +1138,9 @@ static const char * const src_ocl_kernel = \
 "	const sz_t n_8 = N_SZ / 8, j = id, k = 8 * vid;\n" \
 "	const sz_t ji = n_8 - j - 1;\n" \
 "	mul8g(pq, &z[k], &zp[k], w, n_8 + j, n_8 + ji);\n" \
-"}\n" \
+"}*/\n" \
+"\n" \
+"#ifdef QVALID\n" \
 "\n" \
 "__kernel __attribute__((reqd_work_group_size(16 / 8 * BLK16, 1, 1)))\n" \
 "void mul16(__global VTYPE * restrict const zg, const __global VTYPE * restrict const zpg, __global const uint_32 * restrict const wg)\n" \
@@ -1162,6 +1177,8 @@ static const char * const src_ocl_kernel = \
 "	mul8l(pq, &Zb[k % 64], &zp[k], w, s + j, s + ji);\n" \
 "	backward8o(pq, 8, &z[k8], 8, &Zb[k8 % 64], w, (s + ji) / 8);\n" \
 "}\n" \
+"\n" \
+"#else\n" \
 "\n" \
 "__kernel __attribute__((reqd_work_group_size(128 / 8 * BLK128, 1, 1)))\n" \
 "void mul128(__global VTYPE * restrict const zg, const __global VTYPE * restrict const zpg, __global const uint_32 * restrict const wg)\n" \
@@ -1204,6 +1221,8 @@ static const char * const src_ocl_kernel = \
 "	backward8l(pq, 8, &Zb[k8 % 512], w, (s + ji) / 8);\n" \
 "	backward8o(pq, 64, &z[k64], 64, &Zb[k64 % 512], w, (s + ji) / 64);\n" \
 "}\n" \
+"\n" \
+"#endif\n" \
 "\n" \
 "#define DECLARE_VAR_MUL_MASK() \\\n" \
 "	DECLARE_VAR_REG_1(); \\\n" \
@@ -1583,10 +1602,14 @@ static const char * const src_ocl_kernel = \
 "	if ((mask & (1u << i)) != 0) z[3 * N_VSIZE * dst + id] = z[3 * N_VSIZE * src + id];\n" \
 "}\n" \
 "\n" \
+"#ifdef QVALID\n" \
+"\n" \
 "__kernel\n" \
 "void cosmic_ray(__global uint_32 * restrict const z)\n" \
 "{\n" \
 "	const sz_t id = (sz_t)get_global_id(0);\n" \
 "	if (id == (N_SZ * OCL_VSIZE) / 2) z[id] = addmod(z[id], 1, P1);\n" \
 "}\n" \
+"\n" \
+"#endif\n" \
 "";

@@ -222,6 +222,9 @@ public:
 		src << "#define CHUNK64\t" << CHUNK64 << std::endl;
 		src << "#define CHUNK512\t" << CHUNK512 << std::endl;
 
+#ifdef QVALID
+		src << "#define QVALID\t1" << std::endl;
+#endif
 		std::cout << "N_SZ = " << n << ", VSIZE = " << VSIZE << ", OCL_VSIZE = " << OCL_VSIZE << ", OCL_CARRY_VSIZE = " << OCL_CARRY_VSIZE
 			<< ", CARRY_LENGTH = " << CARRY_LENGTH << ", CARRY_WG_SZ = " << _engine->get_carry_workgroup_size() << std::endl;
 		std::cout << "transform: " << 3 * VSIZE / OCL_VSIZE * n / 8
@@ -332,17 +335,18 @@ public:
 	{
 		if (LN <= 15) _engine->forward64_0();		// LN < 15
 		else _engine->forward512_0();
-
+#ifdef QVALID
 		if      (LN == 10) _engine->square16();
 		else if (LN == 11) _engine->square32();
 		else if (LN == 12) _engine->square64();
-		else if (LN == 13) _engine->square128();
+#else
+		if      (LN == 13) _engine->square128();
 		else if (LN == 14) _engine->square256();
 		else if (LN == 15) _engine->square512();	// square64
 		else if (LN == 16) _engine->square128();
 		else if (LN == 17) _engine->square256();
 		else if (LN == 18) _engine->square512();
-
+#endif
 		if (LN <= 15) _engine->backward64_0();		// LN < 15
 		else _engine->backward512_0();
 
@@ -355,34 +359,37 @@ public:
 
 		if (LN <= 15) _engine->forward64_0p();	// LN < 15
 		else _engine->forward512_0p();
-
+#ifdef QVALID
 		if      (LN == 10) _engine->fwd16();
 		else if (LN == 11) _engine->fwd32();
 		else if (LN == 12) _engine->fwd64();
-		else if (LN == 13) _engine->fwd128();
+#else
+		if      (LN == 13) _engine->fwd128();
 		else if (LN == 14) _engine->fwd256();
 		else if (LN == 15) _engine->fwd512();	// fwd64
 		else if (LN == 16) _engine->fwd128();
 		else if (LN == 17) _engine->fwd256();
 		else if (LN == 18) _engine->fwd512();
+#endif
 	}
 
 	void mul() override
 	{
-		if (LN <= 15) _engine->forward64_0();		// LN < 15
+		if (LN <= 15) _engine->forward64_0();	// LN < 15
 		else _engine->forward512_0();
-
+#ifdef QVALID
 		if      (LN == 10) _engine->mul16();
 		else if (LN == 11) _engine->mul32();
 		else if (LN == 12) _engine->mul64();
-		else if (LN == 13) _engine->mul128();
+#else
+		if      (LN == 13) _engine->mul128();
 		else if (LN == 14) _engine->mul256();
 		else if (LN == 15) _engine->mul512();	// mul64
 		else if (LN == 16) _engine->mul128();
 		else if (LN == 17) _engine->mul256();
 		else if (LN == 18) _engine->mul512();
-
-		if (LN <= 15) _engine->backward64_0();		// LN < 15
+#endif
+		if (LN <= 15) _engine->backward64_0();	// LN < 15
 		else _engine->backward512_0();
 
 		_engine->carry(0);
@@ -450,7 +457,9 @@ public:
 	UInt64_8 gethash64() const override { return _gethash64(); }
 	UInt32_8 gethash32() const override { return _gethash32(); }
 
+#ifdef QVALID
 	void cosmic_ray() override { _engine->cosmic_ray(); }
+#endif
 };
 
 template<size_t VSIZE, bool IS32>
@@ -458,16 +467,18 @@ inline transform * create_transformGPU(const UInt32_8 & b, const int m, const si
 						const bool is_boinc, const cl_platform_id boinc_platform_id, const cl_device_id boinc_device_id)
 {
 	transform * pTransform = nullptr;
+#ifdef QVALID
 	if      (m == 10) pTransform = new transformGPU<VSIZE, IS32, 10>(b, num_regs, device_id, is_boinc, boinc_platform_id, boinc_device_id);
 	else if (m == 11) pTransform = new transformGPU<VSIZE, IS32, 11>(b, num_regs, device_id, is_boinc, boinc_platform_id, boinc_device_id);
 	else if (m == 12) pTransform = new transformGPU<VSIZE, IS32, 12>(b, num_regs, device_id, is_boinc, boinc_platform_id, boinc_device_id);
-	else if (m == 13) pTransform = new transformGPU<VSIZE, IS32, 13>(b, num_regs, device_id, is_boinc, boinc_platform_id, boinc_device_id);
+#else
+	if      (m == 13) pTransform = new transformGPU<VSIZE, IS32, 13>(b, num_regs, device_id, is_boinc, boinc_platform_id, boinc_device_id);
 	else if (m == 14) pTransform = new transformGPU<VSIZE, IS32, 14>(b, num_regs, device_id, is_boinc, boinc_platform_id, boinc_device_id);
 	else if (m == 15) pTransform = new transformGPU<VSIZE, IS32, 15>(b, num_regs, device_id, is_boinc, boinc_platform_id, boinc_device_id);
 	else if (m == 16) pTransform = new transformGPU<VSIZE, IS32, 16>(b, num_regs, device_id, is_boinc, boinc_platform_id, boinc_device_id);
 	else if (m == 17) pTransform = new transformGPU<VSIZE, IS32, 17>(b, num_regs, device_id, is_boinc, boinc_platform_id, boinc_device_id);
 	else if (m == 18) pTransform = new transformGPU<VSIZE, IS32, 18>(b, num_regs, device_id, is_boinc, boinc_platform_id, boinc_device_id);
-
+#endif
 	if (pTransform == nullptr) throw std::runtime_error("exponent is not supported");
 	return pTransform;
 }

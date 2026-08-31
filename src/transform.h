@@ -61,7 +61,9 @@ public:
 	virtual UInt64_8 gethash64() const = 0;
 	virtual UInt32_8 gethash32() const = 0;
 
+#ifdef QVALID
 	virtual void cosmic_ray() = 0;
+#endif
 
 private:
 	static transform * create_ocl_avx512(const UInt32_8 & b, const int n, const size_t num_regs, const size_t device,

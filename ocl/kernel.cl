@@ -64,6 +64,7 @@ Please give feedback to the authors if improvement is realized. It is distribute
 #define BLK512			1
 #define CHUNK64			8
 #define CHUNK512		1
+// #define QVALID			1
 #endif
 
 #define N_VSIZE		(N_SZ * VSIZE)
@@ -819,7 +820,7 @@ void backward8(__global VTYPE * restrict const zg, __global const uint_32 * rest
 	backward8g(pq, m, &z[k], w, s + ji);
 }
 
-__kernel
+/*__kernel
 void forward8_0(__global VTYPE * restrict const zg, __global const uint_32 * restrict const wg)
 {
 	DECLARE_VAR_REG();
@@ -833,7 +834,7 @@ void backward8_0(__global VTYPE * restrict const zg, __global const uint_32 * re
 	DECLARE_VAR_REG();
 	const sz_t m = N_SZ / 8, k = 7 * (vid & ~(m - 1)) + vid;
 	backward8_0g(pq, g_f0i[lid], m, &z[k], w);
-}
+}*/
 
 #define DECLARE_VAR_FB(N, CHUNK_N) \
 	__local VTYPE Z[N * CHUNK_N]; \
@@ -907,7 +908,7 @@ void backward512_0(__global VTYPE * restrict const zg, __global const uint_32 * 
 	backward8_0o(pq, g_f0i[lid], m0, &zt[k0], ml0, &Zt[kl0], w);
 }
 
-__kernel
+/*__kernel
 void square2x4(__global VTYPE * restrict const zg, __global const uint_32 * restrict const wg)
 {
 	DECLARE_VAR_REG();
@@ -929,7 +930,7 @@ void square8(__global VTYPE * restrict const zg, __global const uint_32 * restri
 	DECLARE_VAR_REG();
 	const sz_t s = N_SZ / 8, j = id, ji = s - j - 1, k = 8 * vid;
 	square8g(pq, &z[k], w, s + j, s + ji);
-}
+}*/
 
 #define DECLARE_VAR_SQRMUL(N, BLK_N) \
 	__local VTYPE Z[N * BLK_N]; \
@@ -937,6 +938,8 @@ void square8(__global VTYPE * restrict const zg, __global const uint_32 * restri
 	const sz_t block_id = (vid / (N / 8)) % BLK_N; \
 	__local VTYPE * const Zb = &Z[N * block_id]; \
 	const sz_t s = N_SZ / 8, j = id, ji = s - j - 1, k = 8 * vid;
+
+#ifdef QVALID
 
 __kernel __attribute__((reqd_work_group_size(16 / 8 * BLK16, 1, 1)))
 void square16(__global VTYPE * restrict const zg, __global const uint_32 * restrict const wg)
@@ -970,6 +973,8 @@ void square64(__global VTYPE * restrict const zg, __global const uint_32 * restr
 	square8l(pq, &Zb[k % 64], w, s + j, s + ji);
 	backward8o(pq, 8, &z[k8], 8, &Zb[k8 % 64], w, (s + ji) / 8);
 }
+
+#else
 
 __kernel __attribute__((reqd_work_group_size(128 / 8 * BLK128, 1, 1)))
 void square128(__global VTYPE * restrict const zg, __global const uint_32 * restrict const wg)
@@ -1010,7 +1015,9 @@ void square512(__global VTYPE * restrict const zg, __global const uint_32 * rest
 	backward8o(pq, 64, &z[k64], 64, &Zb[k64 % 512], w, (s + ji) / 64);
 }
 
-__kernel
+#endif
+
+/*__kernel
 void fwd4x2(__global VTYPE * restrict const zg, __global const uint_32 * restrict const wg)
 {
 	DECLARE_VAR_REG();
@@ -1024,7 +1031,9 @@ void fwd8(__global VTYPE * restrict const zg, __global const uint_32 * restrict 
 	DECLARE_VAR_REG();
 	const sz_t n_8 = N_SZ / 8, j = id, k = 8 * vid;
 	fwd8g(pq, &z[k], w, n_8 + j);
-}
+}*/
+
+#ifdef QVALID
 
 __kernel
 void fwd16(__global VTYPE * restrict const zg, __global const uint_32 * restrict const wg)
@@ -1053,6 +1062,8 @@ void fwd64(__global VTYPE * restrict const zg, __global const uint_32 * restrict
 	forward8i(pq, 8, &Zb[k8 % 64], 8, &z[k8], w, (s + j) / 8);
 	fwd8o(pq, &z[k], &Zb[k % 64], w, s + j);
 }
+
+#else
 
 __kernel __attribute__((reqd_work_group_size(128 / 8 * BLK128, 1, 1)))
 void fwd128(__global VTYPE * restrict const zg, __global const uint_32 * restrict const wg)
@@ -1086,7 +1097,9 @@ void fwd512(__global VTYPE * restrict const zg, __global const uint_32 * restric
 	fwd8o(pq, &z[k], &Zb[k % 512], w, s + j);
 }
 
-__kernel
+#endif
+
+/*__kernel
 void mul2x4(__global VTYPE * restrict const zg, const __global VTYPE * restrict const zpg, __global const uint_32 * restrict const wg)
 {
 	DECLARE_VAR_REG();
@@ -1113,7 +1126,9 @@ void mul8(__global VTYPE * restrict const zg, const __global VTYPE * restrict co
 	const sz_t n_8 = N_SZ / 8, j = id, k = 8 * vid;
 	const sz_t ji = n_8 - j - 1;
 	mul8g(pq, &z[k], &zp[k], w, n_8 + j, n_8 + ji);
-}
+}*/
+
+#ifdef QVALID
 
 __kernel __attribute__((reqd_work_group_size(16 / 8 * BLK16, 1, 1)))
 void mul16(__global VTYPE * restrict const zg, const __global VTYPE * restrict const zpg, __global const uint_32 * restrict const wg)
@@ -1150,6 +1165,8 @@ void mul64(__global VTYPE * restrict const zg, const __global VTYPE * restrict c
 	mul8l(pq, &Zb[k % 64], &zp[k], w, s + j, s + ji);
 	backward8o(pq, 8, &z[k8], 8, &Zb[k8 % 64], w, (s + ji) / 8);
 }
+
+#else
 
 __kernel __attribute__((reqd_work_group_size(128 / 8 * BLK128, 1, 1)))
 void mul128(__global VTYPE * restrict const zg, const __global VTYPE * restrict const zpg, __global const uint_32 * restrict const wg)
@@ -1192,6 +1209,8 @@ void mul512(__global VTYPE * restrict const zg, const __global VTYPE * restrict 
 	backward8l(pq, 8, &Zb[k8 % 512], w, (s + ji) / 8);
 	backward8o(pq, 64, &z[k64], 64, &Zb[k64 % 512], w, (s + ji) / 64);
 }
+
+#endif
 
 #define DECLARE_VAR_MUL_MASK() \
 	DECLARE_VAR_REG_1(); \
@@ -1571,9 +1590,13 @@ void copy_mask(__global uint_32 * restrict const z, const sz_t dst, const sz_t s
 	if ((mask & (1u << i)) != 0) z[3 * N_VSIZE * dst + id] = z[3 * N_VSIZE * src + id];
 }
 
+#ifdef QVALID
+
 __kernel
 void cosmic_ray(__global uint_32 * restrict const z)
 {
 	const sz_t id = (sz_t)get_global_id(0);
 	if (id == (N_SZ * OCL_VSIZE) / 2) z[id] = addmod(z[id], 1, P1);
 }
+
+#endif

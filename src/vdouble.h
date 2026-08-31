@@ -204,7 +204,9 @@ public:
 		return y;
 	}
 
+#ifdef QVALID
 	finline void cosmic_ray() { _x[3] += 1; }
+#endif
 };
 
 finline Double_8 Int32_8_to_Double_8(const Int32_8 & rhs) { return Double_8(__builtin_convertvector(rhs.get(), Double_8::vtype)); }
