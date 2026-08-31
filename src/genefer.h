@@ -100,7 +100,7 @@ private:
 		if (!_transform->get_gpu_type().empty()) ss << "." << std::endl << "Running on " << _transform->get_gpu_type();
 		if (full)
 		{
-			ss << ", data size: " << std::setprecision(3) << _transform->get_data_size() / (1024 * 1024.0) << " MB";
+			ss << ", data size: " << std::lrint(_transform->get_data_size() / (1024 * 1024.0)) << " MB";
 			ss << ", cache size: " << std::setprecision(3) << _transform->get_cache_size() / (1024 * 1024.0) << " MB";
 		}
 		ss << "." << std::endl;
@@ -985,11 +985,10 @@ private:
 
 			const double error = _transform->get_error();
 			const double mul_time = chrono.get_elapsed_time() / i, estimated_time = mul_time * std::log2(b) * (size_t(1) << n);
-			ss << ": i = " << i << ", " << std::log2(b) * (size_t(1) << n) << " ";
 
 			ss << ": " << timer::format_time(estimated_time) << std::setprecision(3) << ", " << mul_time * 1e3 << " ms/bit, ";
 			if (error != 0) ss << "error = " << std::setprecision(4) << error << ", ";
-			ss << "data size: " << std::setprecision(3) << _transform->get_data_size() / (1024 * 1024.0) << " MB, ";
+			ss << "data size: " << std::lrint(_transform->get_data_size() / (1024 * 1024.0)) << " MB, ";
 			ss << "cache size: " << std::setprecision(3) << _transform->get_cache_size() / (1024 * 1024.0) << " MB." << std::endl;
 		}
 		pio::print(ss.str());

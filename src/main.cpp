@@ -102,7 +102,7 @@ private:
 #endif
 
 		std::ostringstream ss;
-		ss << "geneferv version 26.06.0 (" << sysver << ssc.str() << ")" << std::endl;
+		ss << "geneferv version 26.08.0 (" << sysver << ssc.str() << ")" << std::endl;
 		ss << "Copyright (c) 2026, Yves Gallot" << std::endl;
 		ss << "genefer is free source code, under the MIT license." << std::endl;
 		if (nl)
@@ -124,7 +124,7 @@ private:
 	{
 		std::ostringstream ss;
 		ss << "Usage: geneferv [options]  options may be specified in any order" << std::endl;
-		ss << "  -n <n>                   exponent of the GFN (5 <= n <= 17)" << std::endl;
+		ss << "  -n <n>                   exponent of the GFN (10 <= n <= 18)" << std::endl;
 		ss << "  -b <filename>            list of the 8 bases (6 <= b <= 2000000000, one per line)" << std::endl;
 		ss << "  -q                       quick test" << std::endl;
 		ss << "  -p                       full test: a proof is generated" << std::endl;
@@ -200,8 +200,8 @@ public:
 			{
 				const std::string nstr = ((arg == "-n") && (i + 1 < size)) ? args[++i] : arg.substr(2);
 				n = std::atoi(nstr.c_str());
-				if (n < 5) throw std::runtime_error("n < 5 is not supported");
-				if (n > 17) throw std::runtime_error("n > 17 is not supported");
+				if (n < 10) throw std::runtime_error("n < 10 is not supported");
+				if (n > 18) throw std::runtime_error("n > 18 is not supported");
 			}
 			if ((arg.substr(0, 2) == "-b") && (arg.substr(0, 3) != "-bo"))
 			{
@@ -278,7 +278,7 @@ public:
 			ss << "." << std::endl;
 			pio::print(ss.str());
 
-			for (int n = 7; n <= 9; ++n)
+			for (int n = 10; n <= 18; ++n)
 			{
 				if (g.check("", n, mode, device, isCPU) != genefer::EReturn::Success) return;
 			}
@@ -289,19 +289,15 @@ public:
 		{
 			// internal test
 			// const bool is_cpu = false;
-			// // if (g.check("b7m.txt", 7, genefer::EMode::Quick, device, is_cpu, 5) != genefer::EReturn::Success) return;
-			// // if (g.check("b8m.txt", 8, genefer::EMode::Quick, device, is_cpu, 5) != genefer::EReturn::Success) return;
-			// // if (g.check("b9m.txt", 9, genefer::EMode::Quick, device, is_cpu, 5) != genefer::EReturn::Success) return;
-
-			// if (g.check("b7m.txt", 7, genefer::EMode::Proof, device, is_cpu, 5) != genefer::EReturn::Success) return;
-			// if (g.check("b7m.txt", 7, genefer::EMode::Server, device, is_cpu, 5) != genefer::EReturn::Success) return;
-			// if (g.check("b7m.txt", 7, genefer::EMode::Check, device, is_cpu, 5) != genefer::EReturn::Success) return;
-			// if (g.check("b8m.txt", 8, genefer::EMode::Proof, device, is_cpu, 5) != genefer::EReturn::Success) return;
-			// if (g.check("b8m.txt", 8, genefer::EMode::Server, device, is_cpu, 5) != genefer::EReturn::Success) return;
-			// if (g.check("b8m.txt", 8, genefer::EMode::Check, device, is_cpu, 5) != genefer::EReturn::Success) return;
-			// if (g.check("b9m.txt", 9, genefer::EMode::Proof, device, is_cpu, 5) != genefer::EReturn::Success) return;
-			// if (g.check("b9m.txt", 9, genefer::EMode::Server, device, is_cpu, 5) != genefer::EReturn::Success) return;
-			// if (g.check("b9m.txt", 9, genefer::EMode::Check, device, is_cpu, 5) != genefer::EReturn::Success) return;
+			// if (g.check("b10m.txt", 10, genefer::EMode::Proof, device, is_cpu, 5) != genefer::EReturn::Success) return;
+			// if (g.check("b10m.txt", 10, genefer::EMode::Server, device, is_cpu, 5) != genefer::EReturn::Success) return;
+			// if (g.check("b10m.txt", 10, genefer::EMode::Check, device, is_cpu, 5) != genefer::EReturn::Success) return;
+			// if (g.check("b11m.txt", 11, genefer::EMode::Proof, device, is_cpu, 5) != genefer::EReturn::Success) return;
+			// if (g.check("b11m.txt", 11, genefer::EMode::Server, device, is_cpu, 5) != genefer::EReturn::Success) return;
+			// if (g.check("b11m.txt", 11, genefer::EMode::Check, device, is_cpu, 5) != genefer::EReturn::Success) return;
+			// if (g.check("b12m.txt", 12, genefer::EMode::Proof, device, is_cpu, 5) != genefer::EReturn::Success) return;
+			// if (g.check("b12m.txt", 12, genefer::EMode::Server, device, is_cpu, 5) != genefer::EReturn::Success) return;
+			// if (g.check("b12m.txt", 12, genefer::EMode::Check, device, is_cpu, 5) != genefer::EReturn::Success) return;
 			// return;
 
 			pio::print(usage());

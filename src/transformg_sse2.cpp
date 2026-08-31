@@ -49,11 +49,11 @@ transform * transform::create_ocl_sse2(const UInt32_8 & b, const int n, const si
 
 	if (b_max <= 1000000000)
 	{
-		ptransform = new arch_g_sse2_namespace::transformGPU<8, false>(b, n, num_regs, device, is_boinc, boinc_platform_id, boinc_device_id);
+		ptransform = arch_g_sse2_namespace::create_transformGPU<8, false>(b, n, num_regs, device, is_boinc, boinc_platform_id, boinc_device_id);
 	}
 	else
 	{
-		ptransform = new arch_g_sse2_namespace::transformGPU<8, true>(b, n, num_regs, device, is_boinc, boinc_platform_id, boinc_device_id);
+		ptransform = arch_g_sse2_namespace::create_transformGPU<8, true>(b, n, num_regs, device, is_boinc, boinc_platform_id, boinc_device_id);
 	}
 	ptransform->set_type("SSE2");
 	return ptransform;
