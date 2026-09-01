@@ -231,6 +231,13 @@ public:
 			<< ", carry1: " << VSIZE / OCL_CARRY_VSIZE * n / CARRY_LENGTH << " / " << _engine->get_carry_workgroup_size()
 			<< ", carry2: " << ((VSIZE * n / CARRY_LENGTH) >> _engine->get_carry_shift()) << std::endl;
 
+		const size_t gsize = 3 * VSIZE / OCL_VSIZE * n / 8;
+		std::cout << gsize;
+		if (LN == 15) std::cout << ", forward64_0 " << 64 / 8 * CHUNK64 << "/" << gsize / (64 / 8 * CHUNK64) << ", square512 " << 512 / 8 * BLK512 << "/" << gsize / (512 / 8 * BLK512);
+		if (LN == 16) std::cout << ", forward512_0 " << 512 / 8 * CHUNK512 << "x" << gsize / (512 / 8 * CHUNK512) << ", square128 " << 128 / 8 * BLK128 << "x" << gsize / (128 / 8 * BLK128);
+		if (LN == 17) std::cout << ", forward512_0 " << 512 / 8 * CHUNK512 << "x" << gsize / (512 / 8 * CHUNK512) << ", square256 " << 256 / 8 * BLK256 << "x" << gsize / (256 / 8 * BLK256);
+		std::cout << std::endl;
+
 		if (is_boinc || !_engine->readOpenCL("ocl/kernel.cl", "src/ocl/kernel.h", "src_ocl_kernel", src)) src << src_ocl_kernel;
 
 		_engine->loadProgram(src.str());
