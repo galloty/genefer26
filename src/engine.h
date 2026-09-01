@@ -31,8 +31,8 @@ public:
 
 // Necessary conditions are OCL_VSIZE >= OCL_CARRY_VSIZE and CARRY_LENGTH >= OCL_VSIZE.
 #define OCL_VSIZE		4u
-#define OCL_CARRY_VSIZE	2u
-#define CARRY_LENGTH	8u
+#define OCL_CARRY_VSIZE	1u
+#define CARRY_LENGTH	4u
 
 #define BLK16		32	// local size = BLK16 * 16 * sizeof(VTYPE), workgroup size = BLK16 * 16 / 8
 #define BLK32		16

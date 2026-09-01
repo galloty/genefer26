@@ -65,8 +65,8 @@ static const char * const src_ocl_kernel = \
 "#define NORM3		2013204481u\n" \
 "#define W_SZ		32768u\n" \
 "#define OCL_VSIZE		4\n" \
-"#define OCL_CARRY_VSIZE	2\n" \
-"#define CARRY_LENGTH	8\n" \
+"#define OCL_CARRY_VSIZE	1\n" \
+"#define CARRY_LENGTH	4\n" \
 "#define CARRY_WG_SZ		128u\n" \
 "#define BLK16			32\n" \
 "#define BLK32			16\n" \
@@ -1373,17 +1373,31 @@ static const char * const src_ocl_kernel = \
 "		int_64 f0 = f.s0, f1 = f.s1, f2 = f.s2, f3 = f.s3;\n" \
 "		for (size_t j = 0; j < CARRY_LENGTH - 1; ++j)\n" \
 "		{\n" \
-"			f0 += r[j].s0; f1 += r[j].s1; f2 += r[j].s2; f3 += r[j].s3;\n" \
-"			r[j].s0 = reduce64(&f0, bb_inv_i.s0, bb_inv_i.s1, bs_i.s0);\n" \
-"			r[j].s1 = reduce64(&f1, bb_inv_i.s2, bb_inv_i.s3, bs_i.s1);\n" \
-"			r[j].s2 = reduce64(&f2, bb_inv_i.s4, bb_inv_i.s5, bs_i.s2);\n" \
-"			r[j].s3 = reduce64(&f3, bb_inv_i.s6, bb_inv_i.s7, bs_i.s3);\n" \
-"			if ((f0 == 0) && (f1 == 0) && (f2 == 0) && (f3 == 0)) break;\n" \
+"			if (f0 != 0)\n" \
+"			{\n" \
+"				f0 += r[j].s0;\n" \
+"				r[j].s0 = reduce64(&f0, bb_inv_i.s0, bb_inv_i.s1, bs_i.s0);\n" \
+"			}\n" \
+"			if (f1 != 0)\n" \
+"			{\n" \
+"				f1 += r[j].s1;\n" \
+"				r[j].s1 = reduce64(&f1, bb_inv_i.s2, bb_inv_i.s3, bs_i.s1);\n" \
+"			}\n" \
+"			if (f2 != 0)\n" \
+"			{\n" \
+"				f2 += r[j].s2;\n" \
+"				r[j].s2 = reduce64(&f2, bb_inv_i.s4, bb_inv_i.s5, bs_i.s2);\n" \
+"			}\n" \
+"			if (f3 != 0)\n" \
+"			{\n" \
+"				f3 += r[j].s3;\n" \
+"				r[j].s3 = reduce64(&f3, bb_inv_i.s6, bb_inv_i.s7, bs_i.s3);\n" \
+"			}\n" \
 "		}\n" \
-"		r[CARRY_LENGTH - 1].s0 = (int_32)(f0 + r[CARRY_LENGTH - 1].s0);\n" \
-"		r[CARRY_LENGTH - 1].s1 = (int_32)(f1 + r[CARRY_LENGTH - 1].s1);\n" \
-"		r[CARRY_LENGTH - 1].s2 = (int_32)(f2 + r[CARRY_LENGTH - 1].s2);\n" \
-"		r[CARRY_LENGTH - 1].s3 = (int_32)(f3 + r[CARRY_LENGTH - 1].s3);\n" \
+"		if (f0 != 0) r[CARRY_LENGTH - 1].s0 = (int_32)(f0 + r[CARRY_LENGTH - 1].s0);\n" \
+"		if (f1 != 0) r[CARRY_LENGTH - 1].s1 = (int_32)(f1 + r[CARRY_LENGTH - 1].s1);\n" \
+"		if (f2 != 0) r[CARRY_LENGTH - 1].s2 = (int_32)(f2 + r[CARRY_LENGTH - 1].s2);\n" \
+"		if (f3 != 0) r[CARRY_LENGTH - 1].s3 = (int_32)(f3 + r[CARRY_LENGTH - 1].s3);\n" \
 "	}\n" \
 "\n" \
 "	for (size_t j = 0; j < CARRY_LENGTH; ++j)\n" \
@@ -1450,13 +1464,19 @@ static const char * const src_ocl_kernel = \
 "		int_64 f0 = f.s0, f1 = f.s1;\n" \
 "		for (size_t j = 0; j < CARRY_LENGTH - 1; ++j)\n" \
 "		{\n" \
-"			f0 += r[j].s0; f1 += r[j].s1;\n" \
-"			r[j].s0 = reduce64(&f0, bb_inv_i.s0, bb_inv_i.s1, bs_i.s0);\n" \
-"			r[j].s1 = reduce64(&f1, bb_inv_i.s2, bb_inv_i.s3, bs_i.s1);\n" \
-"			if ((f0 == 0) && (f1 == 0)) break;\n" \
+"			if (f0 != 0)\n" \
+"			{\n" \
+"				f0 += r[j].s0;\n" \
+"				r[j].s0 = reduce64(&f0, bb_inv_i.s0, bb_inv_i.s1, bs_i.s0);\n" \
+"			}\n" \
+"			if (f1 != 0)\n" \
+"			{\n" \
+"				f1 += r[j].s1;\n" \
+"				r[j].s1 = reduce64(&f1, bb_inv_i.s2, bb_inv_i.s3, bs_i.s1);\n" \
+"			}\n" \
 "		}\n" \
-"		r[CARRY_LENGTH - 1].s0 = (int_32)(f0 + r[CARRY_LENGTH - 1].s0);\n" \
-"		r[CARRY_LENGTH - 1].s1 = (int_32)(f1 + r[CARRY_LENGTH - 1].s1);\n" \
+"		if (f0 != 0) r[CARRY_LENGTH - 1].s0 = (int_32)(f0 + r[CARRY_LENGTH - 1].s0);\n" \
+"		if (f1 != 0) r[CARRY_LENGTH - 1].s1 = (int_32)(f1 + r[CARRY_LENGTH - 1].s1);\n" \
 "	}\n" \
 "\n" \
 "	for (size_t j = 0; j < CARRY_LENGTH; ++j)\n" \
@@ -1520,11 +1540,13 @@ static const char * const src_ocl_kernel = \
 "		int_64 f = cl[lid - CARRY_VSIZE];\n" \
 "		for (size_t j = 0; j < CARRY_LENGTH - 1; ++j)\n" \
 "		{\n" \
-"			f += r[j];\n" \
-"			r[j] = reduce64(&f, bb_inv_i.s0, bb_inv_i.s1, bs_i);\n" \
-"			if (f == 0) break;\n" \
+"			if (f != 0)\n" \
+"			{\n" \
+"				f += r[j];\n" \
+"				r[j] = reduce64(&f, bb_inv_i.s0, bb_inv_i.s1, bs_i);\n" \
+"			}\n" \
 "		}\n" \
-"		r[CARRY_LENGTH - 1] = (int_32)(f + r[CARRY_LENGTH - 1]);\n" \
+"		if (f != 0) r[CARRY_LENGTH - 1] = (int_32)(f + r[CARRY_LENGTH - 1]);\n" \
 "	}\n" \
 "\n" \
 "	for (size_t j = 0; j < CARRY_LENGTH; ++j) write_rns(&zk[j * CARRY_VSIZE], r[j]);\n" \
@@ -1559,17 +1581,21 @@ static const char * const src_ocl_kernel = \
 "	const uint2_32 bb_inv_i = bb_inv[i]; const int_32 bs_i = bs[i];\n" \
 "\n" \
 "	int_64 f = c[gid];\n" \
-"	for (size_t j = 0; j < CARRY_LENGTH - 1; ++j)\n" \
+"	for (size_t j = 0; j < 3; ++j)\n" \
 "	{\n" \
-"		f += get_int(z[k + j * OCL_VSIZE], P1);\n" \
-"		const int_32 r = reduce64(&f, bb_inv_i.s0, bb_inv_i.s1, bs_i);\n" \
-"		write_rns(&z[k + j * OCL_VSIZE], r);\n" \
-"		if (f == 0) return;\n" \
+"		if (f != 0)\n" \
+"		{\n" \
+"			f += get_int(z[k + j * OCL_VSIZE], P1);\n" \
+"			const int_32 r = reduce64(&f, bb_inv_i.s0, bb_inv_i.s1, bs_i);\n" \
+"			write_rns(&z[k + j * OCL_VSIZE], r);\n" \
+"		}\n" \
 "	}\n" \
 "\n" \
-"	f += get_int(z[k + (CARRY_LENGTH - 1) * OCL_VSIZE], P1);\n" \
-"	const int_32 r = (int_32)(f);\n" \
-"	write_rns(&z[k + (CARRY_LENGTH - 1) * OCL_VSIZE], r);\n" \
+"	if (f != 0)\n" \
+"	{\n" \
+"		f += get_int(z[k + 3 * OCL_VSIZE], P1);\n" \
+"		write_rns(&z[k + 3 * OCL_VSIZE], (int_32)(f));\n" \
+"	}\n" \
 "}\n" \
 "\n" \
 "// --- misc ---\n" \

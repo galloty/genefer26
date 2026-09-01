@@ -53,8 +53,8 @@ Please give feedback to the authors if improvement is realized. It is distribute
 #define NORM3		2013204481u
 #define W_SZ		32768u
 #define OCL_VSIZE		4
-#define OCL_CARRY_VSIZE	2
-#define CARRY_LENGTH	8
+#define OCL_CARRY_VSIZE	1
+#define CARRY_LENGTH	4
 #define CARRY_WG_SZ		128u
 #define BLK16			32
 #define BLK32			16
@@ -1361,17 +1361,31 @@ INLINE void carry_2x4(__global uint4_32 * restrict const zk, const __local int4_
 		int_64 f0 = f.s0, f1 = f.s1, f2 = f.s2, f3 = f.s3;
 		for (size_t j = 0; j < CARRY_LENGTH - 1; ++j)
 		{
-			f0 += r[j].s0; f1 += r[j].s1; f2 += r[j].s2; f3 += r[j].s3;
-			r[j].s0 = reduce64(&f0, bb_inv_i.s0, bb_inv_i.s1, bs_i.s0);
-			r[j].s1 = reduce64(&f1, bb_inv_i.s2, bb_inv_i.s3, bs_i.s1);
-			r[j].s2 = reduce64(&f2, bb_inv_i.s4, bb_inv_i.s5, bs_i.s2);
-			r[j].s3 = reduce64(&f3, bb_inv_i.s6, bb_inv_i.s7, bs_i.s3);
-			if ((f0 == 0) && (f1 == 0) && (f2 == 0) && (f3 == 0)) break;
+			if (f0 != 0)
+			{
+				f0 += r[j].s0;
+				r[j].s0 = reduce64(&f0, bb_inv_i.s0, bb_inv_i.s1, bs_i.s0);
+			}
+			if (f1 != 0)
+			{
+				f1 += r[j].s1;
+				r[j].s1 = reduce64(&f1, bb_inv_i.s2, bb_inv_i.s3, bs_i.s1);
+			}
+			if (f2 != 0)
+			{
+				f2 += r[j].s2;
+				r[j].s2 = reduce64(&f2, bb_inv_i.s4, bb_inv_i.s5, bs_i.s2);
+			}
+			if (f3 != 0)
+			{
+				f3 += r[j].s3;
+				r[j].s3 = reduce64(&f3, bb_inv_i.s6, bb_inv_i.s7, bs_i.s3);
+			}
 		}
-		r[CARRY_LENGTH - 1].s0 = (int_32)(f0 + r[CARRY_LENGTH - 1].s0);
-		r[CARRY_LENGTH - 1].s1 = (int_32)(f1 + r[CARRY_LENGTH - 1].s1);
-		r[CARRY_LENGTH - 1].s2 = (int_32)(f2 + r[CARRY_LENGTH - 1].s2);
-		r[CARRY_LENGTH - 1].s3 = (int_32)(f3 + r[CARRY_LENGTH - 1].s3);
+		if (f0 != 0) r[CARRY_LENGTH - 1].s0 = (int_32)(f0 + r[CARRY_LENGTH - 1].s0);
+		if (f1 != 0) r[CARRY_LENGTH - 1].s1 = (int_32)(f1 + r[CARRY_LENGTH - 1].s1);
+		if (f2 != 0) r[CARRY_LENGTH - 1].s2 = (int_32)(f2 + r[CARRY_LENGTH - 1].s2);
+		if (f3 != 0) r[CARRY_LENGTH - 1].s3 = (int_32)(f3 + r[CARRY_LENGTH - 1].s3);
 	}
 
 	for (size_t j = 0; j < CARRY_LENGTH; ++j)
@@ -1438,13 +1452,19 @@ INLINE void carry_2x2(__global uint2_32 * restrict const zk, const __local int2_
 		int_64 f0 = f.s0, f1 = f.s1;
 		for (size_t j = 0; j < CARRY_LENGTH - 1; ++j)
 		{
-			f0 += r[j].s0; f1 += r[j].s1;
-			r[j].s0 = reduce64(&f0, bb_inv_i.s0, bb_inv_i.s1, bs_i.s0);
-			r[j].s1 = reduce64(&f1, bb_inv_i.s2, bb_inv_i.s3, bs_i.s1);
-			if ((f0 == 0) && (f1 == 0)) break;
+			if (f0 != 0)
+			{
+				f0 += r[j].s0;
+				r[j].s0 = reduce64(&f0, bb_inv_i.s0, bb_inv_i.s1, bs_i.s0);
+			}
+			if (f1 != 0)
+			{
+				f1 += r[j].s1;
+				r[j].s1 = reduce64(&f1, bb_inv_i.s2, bb_inv_i.s3, bs_i.s1);
+			}
 		}
-		r[CARRY_LENGTH - 1].s0 = (int_32)(f0 + r[CARRY_LENGTH - 1].s0);
-		r[CARRY_LENGTH - 1].s1 = (int_32)(f1 + r[CARRY_LENGTH - 1].s1);
+		if (f0 != 0) r[CARRY_LENGTH - 1].s0 = (int_32)(f0 + r[CARRY_LENGTH - 1].s0);
+		if (f1 != 0) r[CARRY_LENGTH - 1].s1 = (int_32)(f1 + r[CARRY_LENGTH - 1].s1);
 	}
 
 	for (size_t j = 0; j < CARRY_LENGTH; ++j)
@@ -1508,11 +1528,13 @@ INLINE void carry_2x1(__global uint_32 * restrict const zk, const __local int_64
 		int_64 f = cl[lid - CARRY_VSIZE];
 		for (size_t j = 0; j < CARRY_LENGTH - 1; ++j)
 		{
-			f += r[j];
-			r[j] = reduce64(&f, bb_inv_i.s0, bb_inv_i.s1, bs_i);
-			if (f == 0) break;
+			if (f != 0)
+			{
+				f += r[j];
+				r[j] = reduce64(&f, bb_inv_i.s0, bb_inv_i.s1, bs_i);
+			}
 		}
-		r[CARRY_LENGTH - 1] = (int_32)(f + r[CARRY_LENGTH - 1]);
+		if (f != 0) r[CARRY_LENGTH - 1] = (int_32)(f + r[CARRY_LENGTH - 1]);
 	}
 
 	for (size_t j = 0; j < CARRY_LENGTH; ++j) write_rns(&zk[j * CARRY_VSIZE], r[j]);
@@ -1547,17 +1569,21 @@ void carry2(const __global uint2_32 * restrict const bb_inv, const __global int_
 	const uint2_32 bb_inv_i = bb_inv[i]; const int_32 bs_i = bs[i];
 
 	int_64 f = c[gid];
-	for (size_t j = 0; j < CARRY_LENGTH - 1; ++j)
+	for (size_t j = 0; j < 3; ++j)
 	{
-		f += get_int(z[k + j * OCL_VSIZE], P1);
-		const int_32 r = reduce64(&f, bb_inv_i.s0, bb_inv_i.s1, bs_i);
-		write_rns(&z[k + j * OCL_VSIZE], r);
-		if (f == 0) return;
+		if (f != 0)
+		{
+			f += get_int(z[k + j * OCL_VSIZE], P1);
+			const int_32 r = reduce64(&f, bb_inv_i.s0, bb_inv_i.s1, bs_i);
+			write_rns(&z[k + j * OCL_VSIZE], r);
+		}
 	}
 
-	f += get_int(z[k + (CARRY_LENGTH - 1) * OCL_VSIZE], P1);
-	const int_32 r = (int_32)(f);
-	write_rns(&z[k + (CARRY_LENGTH - 1) * OCL_VSIZE], r);
+	if (f != 0)
+	{
+		f += get_int(z[k + 3 * OCL_VSIZE], P1);
+		write_rns(&z[k + 3 * OCL_VSIZE], (int_32)(f));
+	}
 }
 
 // --- misc ---
