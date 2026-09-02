@@ -233,9 +233,14 @@ public:
 
 		const size_t gsize = 3 * VSIZE / OCL_VSIZE * n / 8;
 		std::cout << gsize;
-		if (LN == 15) std::cout << ", forward64_0 " << 64 / 8 * CHUNK64 << "/" << gsize / (64 / 8 * CHUNK64) << ", square512 " << 512 / 8 * BLK512 << "/" << gsize / (512 / 8 * BLK512);
-		if (LN == 16) std::cout << ", forward512_0 " << 512 / 8 * CHUNK512 << "x" << gsize / (512 / 8 * CHUNK512) << ", square128 " << 128 / 8 * BLK128 << "x" << gsize / (128 / 8 * BLK128);
-		if (LN == 17) std::cout << ", forward512_0 " << 512 / 8 * CHUNK512 << "x" << gsize / (512 / 8 * CHUNK512) << ", square256 " << 256 / 8 * BLK256 << "x" << gsize / (256 / 8 * BLK256);
+		if (LN <= 15) std::cout << ", forward64_0 " << 64 / 8 * CHUNK64 << "x" << gsize / (64 / 8 * CHUNK64);
+		else std::cout << ", forward512_0 " << 512 / 8 * CHUNK512 << "x" << gsize / (512 / 8 * CHUNK512);
+		if      (LN == 10) std::cout << ", square16 " << 16 / 8 * BLK16 << "x" << gsize / (16 / 8 * BLK16);
+		else if (LN == 11) std::cout << ", square32 " << 32 / 8 * BLK32 << "x" << gsize / (32 / 8 * BLK32);
+		else if (LN == 12) std::cout << ", square64 " << 64 / 8 * BLK64 << "x" << gsize / (64 / 8 * BLK64);
+		else if (LN % 3 == 1) std::cout << ", square128 " << 128 / 8 * BLK128 << "x" << gsize / (128 / 8 * BLK128);
+		else if (LN % 3 == 2) std::cout << ", square256 " << 256 / 8 * BLK256 << "x" << gsize / (256 / 8 * BLK256);
+		else if (LN % 3 == 0) std::cout << ", square512 " << 512 / 8 * BLK512 << "x" << gsize / (512 / 8 * BLK512);
 		std::cout << std::endl;
 
 		if (is_boinc || !_engine->readOpenCL("ocl/kernel.cl", "src/ocl/kernel.h", "src_ocl_kernel", src)) src << src_ocl_kernel;
@@ -404,18 +409,21 @@ public:
 
 	void mul_mask(const uint32_t mask) override
 	{
-		_engine->forward512_0();
+		if (LN <= 11) _engine->forward64_0();
+		else _engine->forward512_0();
 
-		int lm = LN - 9; size_t s = 512;
+		const int ls0 = (LN <= 11) ? 6 : 9; size_t s0 = size_t(1) << ls0;
+		int lm = LN - ls0; size_t s = s0;
 		for (; lm > 3; lm -= 3, s *= 8) _engine->forward8(lm - 3, s);
 
-		if (lm == 3) _engine->mul8_mask(mask);
+		if (lm == 1)      _engine->mul2x4_mask(mask);
 		else if (lm == 2) _engine->mul4x2_mask(mask);
-		else if (lm == 1) _engine->mul2x4_mask(mask);
+		else if (lm == 3) _engine->mul8_mask(mask);
 
-		for (s /= 8; s >= 512; lm += 3, s /= 8) _engine->backward8(lm, s);
+		for (s /= 8; s >= s0; lm += 3, s /= 8) _engine->backward8(lm, s);
 
-		_engine->backward512_0();
+		if (LN <= 11) _engine->backward64_0();
+		else _engine->backward512_0();
 
 		_engine->carry(0);
 	}

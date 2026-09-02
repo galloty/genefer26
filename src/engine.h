@@ -8,6 +8,7 @@ Please give feedback to the authors if improvement is realized. It is distribute
 #pragma once
 
 #include <cstdint>
+#include <vector>
 
 #include "ocl.h"
 
@@ -34,14 +35,14 @@ public:
 #define OCL_CARRY_VSIZE	1u
 #define CARRY_LENGTH	4u
 
-#define BLK16		32	// local size = BLK16 * 16 * sizeof(VTYPE), workgroup size = BLK16 * 16 / 8
-#define BLK32		16
-#define BLK64		 8
-#define BLK128		 4
-#define BLK256		 2
-#define BLK512		 1
-#define CHUNK64		 4	// local size = CHUNK64 * 64 * sizeof(VTYPE), workgroup size = CHUNK64 * 64 / 8
-#define CHUNK512	 2
+#define BLK16		16	// local size = BLK16 * 16 * sizeof(VTYPE) = 4KB, workgroup size = BLK16 * 16 / 8 = 32
+#define BLK32		 8
+#define BLK64		 4
+#define BLK128		 2
+#define BLK256		 1
+#define BLK512		 1	// local size = BLK512 * 512 * sizeof(VTYPE) = 8KB, workgroup size = BLK512 * 512 / 8 = 64
+#define CHUNK64		 4	// local size = CHUNK64 * 64 * sizeof(VTYPE) = 4KB, workgroup size = CHUNK64 * 64 / 8 = 32
+#define CHUNK512	 4	// local size = CHUNK512 * 512 * sizeof(SVTYPE) = 32KB, workgroup size = CHUNK512 * 512 / 8 = 256
 
 #define CREATE_TRANSFORM_KERNEL(name) _##name = create_transform_kernel(#name);
 #define CREATE_TRANSFORM_KERNELP(name) _##name = create_transform_kernel(#name, false);
@@ -65,7 +66,7 @@ private:
 	cl_mem _z = nullptr, _zp = nullptr, _w = nullptr, _c = nullptr, _bb_inv = nullptr, _bs = nullptr;
 
 	cl_kernel _forward8 = nullptr, _backward8 = nullptr;	// _forward8_0 = nullptr, _backward8_0 = nullptr;
-	cl_kernel _forward64_0 = nullptr, _forward512_0 = nullptr, _backward64_0 = nullptr, _backward512_0 = nullptr;
+	cl_kernel _forward64_0 = nullptr, _backward64_0 = nullptr, _forward512_0 = nullptr, _backward512_0 = nullptr;
 	// cl_kernel _square2x4 = nullptr, _square4x2 = nullptr, _square8 = nullptr;
 #ifdef QVALID
 	cl_kernel _square16 = nullptr, _square32 = nullptr, _square64 = nullptr;
@@ -89,6 +90,8 @@ private:
 #ifdef QVALID
 	cl_kernel _cosmic_ray = nullptr;
 #endif
+
+	std::vector<cl_kernel> _kernels;
 
 	static constexpr int ilog2_32(const uint32_t n) { return (n == 0) ? -1 : (31 - __builtin_clz(n)); }
 
@@ -148,6 +151,7 @@ private:
 		cl_kernel kernel = _createKernel(kernel_name);
 		set_transform_arg0(kernel, is_multiplier);
 		_setKernelArg(kernel, 1, sizeof(cl_mem), &_w);
+		_kernels.push_back(kernel);
 		return kernel;
 	}
 
@@ -157,6 +161,7 @@ private:
 		_setKernelArg(kernel, 0, sizeof(cl_mem), &_z);
 		_setKernelArg(kernel, 1, sizeof(cl_mem), &_zp);
 		_setKernelArg(kernel, 2, sizeof(cl_mem), &_w);
+		_kernels.push_back(kernel);
 		return kernel;
 	}
 
@@ -167,6 +172,7 @@ private:
 		_setKernelArg(kernel, 1, sizeof(cl_mem), &_bs);
 		_setKernelArg(kernel, 2, sizeof(cl_mem), &_z);
 		_setKernelArg(kernel, 3, sizeof(cl_mem), &_c);
+		_kernels.push_back(kernel);
 		return kernel;
 	}
 
@@ -174,6 +180,7 @@ private:
 	{
 		cl_kernel kernel = _createKernel(kernel_name);
 		_setKernelArg(kernel, 0, sizeof(cl_mem), &_z);
+		_kernels.push_back(kernel);
 		return kernel;
 	}
 
@@ -182,6 +189,7 @@ private:
 		cl_kernel kernel = _createKernel(kernel_name);
 		_setKernelArg(kernel, 0, sizeof(cl_mem), &_zp);
 		_setKernelArg(kernel, 1, sizeof(cl_mem), &_z);
+		_kernels.push_back(kernel);
 		return kernel;
 	}
 
@@ -197,9 +205,15 @@ public:
 		CREATE_TRANSFORM_KERNEL(backward8);
 		// CREATE_TRANSFORM_KERNEL(forward8_0);
 		// CREATE_TRANSFORM_KERNEL(backward8_0);
-		CREATE_TRANSFORM_KERNEL(forward64_0);
-		CREATE_TRANSFORM_KERNEL(backward64_0);
+		if (_ln <= 15)
+		{
+			CREATE_TRANSFORM_KERNEL(forward64_0);
+			CREATE_TRANSFORM_KERNEL(backward64_0);
+		}
+
 		CREATE_TRANSFORM_KERNEL(forward512_0);
+		_setKernelArg(_forward512_0, 2, 512 * CHUNK512 * OCL_VSIZE * sizeof(ZP), nullptr);	// dynamic local memory
+
 		CREATE_TRANSFORM_KERNEL(backward512_0);
 
 		// CREATE_TRANSFORM_KERNEL(square2x4);
@@ -210,9 +224,9 @@ public:
 		CREATE_TRANSFORM_KERNEL(square32);
 		CREATE_TRANSFORM_KERNEL(square64);
 #else
-		CREATE_TRANSFORM_KERNEL(square128);
-		CREATE_TRANSFORM_KERNEL(square256);
-		CREATE_TRANSFORM_KERNEL(square512);
+		if      (_ln % 3 == 1) { CREATE_TRANSFORM_KERNEL(square128); }
+		else if (_ln % 3 == 2) { CREATE_TRANSFORM_KERNEL(square256); }
+		else                   { CREATE_TRANSFORM_KERNEL(square512); }
 #endif
 
 		// CREATE_TRANSFORM_KERNELP(fwd4x2);
@@ -222,9 +236,9 @@ public:
 		CREATE_TRANSFORM_KERNELP(fwd32);
 		CREATE_TRANSFORM_KERNELP(fwd64);
 #else
-		CREATE_TRANSFORM_KERNELP(fwd128);
-		CREATE_TRANSFORM_KERNELP(fwd256);
-		CREATE_TRANSFORM_KERNELP(fwd512);
+		if      (_ln % 3 == 1) { CREATE_TRANSFORM_KERNELP(fwd128); }
+		else if (_ln % 3 == 2) { CREATE_TRANSFORM_KERNELP(fwd256); }
+		else                   { CREATE_TRANSFORM_KERNELP(fwd512); }
 #endif
 
 		// CREATE_MUL_KERNEL(mul2x4);
@@ -235,14 +249,14 @@ public:
 		CREATE_MUL_KERNEL(mul32);
 		CREATE_MUL_KERNEL(mul64);
 #else
-		CREATE_MUL_KERNEL(mul128);
-		CREATE_MUL_KERNEL(mul256);
-		CREATE_MUL_KERNEL(mul512);
+		if      (_ln % 3 == 1) { CREATE_MUL_KERNEL(mul128); }
+		else if (_ln % 3 == 2) { CREATE_MUL_KERNEL(mul256); }
+		else                   { CREATE_MUL_KERNEL(mul512); }
 #endif
 
-		CREATE_MUL_KERNEL(mul2x4_mask);
-		CREATE_MUL_KERNEL(mul4x2_mask);
-		CREATE_MUL_KERNEL(mul8_mask);
+		if      (_ln % 3 == 1) { CREATE_MUL_KERNEL(mul2x4_mask); }
+		else if (_ln % 3 == 2) { CREATE_MUL_KERNEL(mul4x2_mask); }
+		else                   { CREATE_MUL_KERNEL(mul8_mask); }
 
 		CREATE_CARRY_KERNEL(carry1);
 		CREATE_CARRY_KERNEL(carry2);
@@ -262,32 +276,8 @@ public:
 		std::ostringstream ss; ss << "Release ocl kernels." << std::endl;
 		pio::display(ss.str());
 #endif
-		_releaseKernel(_forward8); _releaseKernel(_backward8);	// _releaseKernel(_forward8_0); _releaseKernel(_backward8_0);
-		_releaseKernel(_forward64_0); _releaseKernel(_forward512_0); _releaseKernel(_backward64_0); _releaseKernel(_backward512_0);
-		// _releaseKernel(_square2x4); _releaseKernel(_square4x2); _releaseKernel(_square8);
-#ifdef QVALID
-		_releaseKernel(_square16); _releaseKernel(_square32); _releaseKernel(_square64);
-#else
-		_releaseKernel(_square128); _releaseKernel(_square256); _releaseKernel(_square512);
-#endif
-		// _releaseKernel(_fwd4x2); _releaseKernel(_fwd8);
-#ifdef QVALID
-		_releaseKernel(_fwd16); _releaseKernel(_fwd32); _releaseKernel(_fwd64);
-#else
-		_releaseKernel(_fwd128); _releaseKernel(_fwd256); _releaseKernel(_fwd512);
-#endif
-		// _releaseKernel(_mul2x4); _releaseKernel(_mul4x2); _releaseKernel(_mul8);
-#ifdef QVALID
-		_releaseKernel(_mul16); _releaseKernel(_mul32); _releaseKernel(_mul64);
-#else
-		_releaseKernel(_mul128); _releaseKernel(_mul256); _releaseKernel(_mul512);
-#endif
-		_releaseKernel(_mul2x4_mask); _releaseKernel(_mul4x2_mask); _releaseKernel(_mul8_mask);
-		_releaseKernel(_carry1); _releaseKernel(_carry2);
-		_releaseKernel(_set); _releaseKernel(_copy); _releaseKernel(_copyp); _releaseKernel(_copy_mask);
-#ifdef QVALID
-		_releaseKernel(_cosmic_ray);
-#endif
+		for (cl_kernel & kernel : _kernels) _releaseKernel(kernel);
+		_kernels.clear();
 	}
 
 ///////////////////////////////
