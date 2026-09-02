@@ -46,7 +46,12 @@ public:
 
 #define CREATE_TRANSFORM_KERNEL(name) _##name = create_transform_kernel(#name);
 #define CREATE_TRANSFORM_KERNELP(name) _##name = create_transform_kernel(#name, false);
+#define CREATE_TRANSFORM_KERNEL_DYN(name, dyn_mem_size) _##name = create_transform_kernel_dyn(#name, dyn_mem_size);
+#define CREATE_TRANSFORM_KERNELP_DYN(name, dyn_mem_size) _##name = create_transform_kernel_dyn(#name, dyn_mem_size, false);
+
 #define CREATE_MUL_KERNEL(name) _##name = create_mul_kernel(#name);
+#define CREATE_MUL_KERNEL_DYN(name, dyn_mem_size) _##name = create_mul_kernel_dyn(#name, dyn_mem_size);
+
 #define CREATE_CARRY_KERNEL(name) _##name = create_carry_kernel(#name);
 #define CREATE_SETCOPY_KERNEL(name) _##name = create_set_copy_kernel(#name);
 #define CREATE_COPYP_KERNEL(name) _##name = create_copyp_kernel(#name);
@@ -155,6 +160,14 @@ private:
 		return kernel;
 	}
 
+	// dynamic local memory
+	cl_kernel create_transform_kernel_dyn(const char * const kernel_name, const size_t dyn_mem_size, const bool is_multiplier = true)
+	{
+		cl_kernel kernel = create_transform_kernel(kernel_name, is_multiplier);
+		_setKernelArg(kernel, 2, dyn_mem_size * OCL_VSIZE * sizeof(ZP), nullptr);
+		return kernel;
+	}
+
 	cl_kernel create_mul_kernel(const char * const kernel_name)
 	{
 		cl_kernel kernel = _createKernel(kernel_name);
@@ -162,6 +175,13 @@ private:
 		_setKernelArg(kernel, 1, sizeof(cl_mem), &_zp);
 		_setKernelArg(kernel, 2, sizeof(cl_mem), &_w);
 		_kernels.push_back(kernel);
+		return kernel;
+	}
+
+	cl_kernel create_mul_kernel_dyn(const char * const kernel_name, const size_t dyn_mem_size)
+	{
+		cl_kernel kernel = create_mul_kernel(kernel_name);
+		_setKernelArg(kernel, 3, dyn_mem_size * OCL_VSIZE * sizeof(ZP), nullptr);
 		return kernel;
 	}
 
@@ -207,51 +227,49 @@ public:
 		// CREATE_TRANSFORM_KERNEL(backward8_0);
 		if (_ln <= 15)
 		{
-			CREATE_TRANSFORM_KERNEL(forward64_0);
-			CREATE_TRANSFORM_KERNEL(backward64_0);
+			CREATE_TRANSFORM_KERNEL_DYN(forward64_0, 64 * CHUNK64);
+			CREATE_TRANSFORM_KERNEL_DYN(backward64_0, 64 * CHUNK64);
 		}
 
-		CREATE_TRANSFORM_KERNEL(forward512_0);
-		_setKernelArg(_forward512_0, 2, 512 * CHUNK512 * OCL_VSIZE * sizeof(ZP), nullptr);	// dynamic local memory
-
-		CREATE_TRANSFORM_KERNEL(backward512_0);
+		CREATE_TRANSFORM_KERNEL_DYN(forward512_0, 512 * CHUNK512);
+		CREATE_TRANSFORM_KERNEL_DYN(backward512_0, 512 * CHUNK512);
 
 		// CREATE_TRANSFORM_KERNEL(square2x4);
 		// CREATE_TRANSFORM_KERNEL(square4x2);
 		// CREATE_TRANSFORM_KERNEL(square8);
 #ifdef QVALID
-		CREATE_TRANSFORM_KERNEL(square16);
-		CREATE_TRANSFORM_KERNEL(square32);
-		CREATE_TRANSFORM_KERNEL(square64);
+		CREATE_TRANSFORM_KERNEL_DYN(square16, 16 * BLK16);
+		CREATE_TRANSFORM_KERNEL_DYN(square32, 32 * BLK32);
+		CREATE_TRANSFORM_KERNEL_DYN(square64, 64 * BLK64);
 #else
-		if      (_ln % 3 == 1) { CREATE_TRANSFORM_KERNEL(square128); }
-		else if (_ln % 3 == 2) { CREATE_TRANSFORM_KERNEL(square256); }
-		else                   { CREATE_TRANSFORM_KERNEL(square512); }
+		if      (_ln % 3 == 1) { CREATE_TRANSFORM_KERNEL_DYN(square128, 128 * BLK128); }
+		else if (_ln % 3 == 2) { CREATE_TRANSFORM_KERNEL_DYN(square256, 256 * BLK256); }
+		else                   { CREATE_TRANSFORM_KERNEL_DYN(square512, 512 * BLK512); }
 #endif
 
 		// CREATE_TRANSFORM_KERNELP(fwd4x2);
 		// CREATE_TRANSFORM_KERNELP(fwd8);
 #ifdef QVALID
 		CREATE_TRANSFORM_KERNELP(fwd16);
-		CREATE_TRANSFORM_KERNELP(fwd32);
-		CREATE_TRANSFORM_KERNELP(fwd64);
+		CREATE_TRANSFORM_KERNELP_DYN(fwd32, 32 * BLK32);
+		CREATE_TRANSFORM_KERNELP_DYN(fwd64, 64 * BLK64);
 #else
-		if      (_ln % 3 == 1) { CREATE_TRANSFORM_KERNELP(fwd128); }
-		else if (_ln % 3 == 2) { CREATE_TRANSFORM_KERNELP(fwd256); }
-		else                   { CREATE_TRANSFORM_KERNELP(fwd512); }
+		if      (_ln % 3 == 1) { CREATE_TRANSFORM_KERNELP_DYN(fwd128, 128 * BLK128); }
+		else if (_ln % 3 == 2) { CREATE_TRANSFORM_KERNELP_DYN(fwd256, 256 * BLK256); }
+		else                   { CREATE_TRANSFORM_KERNELP_DYN(fwd512, 512 * BLK512); }
 #endif
 
 		// CREATE_MUL_KERNEL(mul2x4);
 		// CREATE_MUL_KERNEL(mul4x2);
 		// CREATE_MUL_KERNEL(mul8);
 #ifdef QVALID
-		CREATE_MUL_KERNEL(mul16);
-		CREATE_MUL_KERNEL(mul32);
-		CREATE_MUL_KERNEL(mul64);
+		CREATE_MUL_KERNEL_DYN(mul16, 16 * BLK16);
+		CREATE_MUL_KERNEL_DYN(mul32, 32 * BLK32);
+		CREATE_MUL_KERNEL_DYN(mul64, 64 * BLK64);
 #else
-		if      (_ln % 3 == 1) { CREATE_MUL_KERNEL(mul128); }
-		else if (_ln % 3 == 2) { CREATE_MUL_KERNEL(mul256); }
-		else                   { CREATE_MUL_KERNEL(mul512); }
+		if      (_ln % 3 == 1) { CREATE_MUL_KERNEL_DYN(mul128, 128 * BLK128); }
+		else if (_ln % 3 == 2) { CREATE_MUL_KERNEL_DYN(mul256, 256 * BLK256); }
+		else                   { CREATE_MUL_KERNEL_DYN(mul512, 512 * BLK512); }
 #endif
 
 		if      (_ln % 3 == 1) { CREATE_MUL_KERNEL(mul2x4_mask); }
@@ -259,6 +277,7 @@ public:
 		else                   { CREATE_MUL_KERNEL(mul8_mask); }
 
 		CREATE_CARRY_KERNEL(carry1);
+		_setKernelArg(_carry1, 4, get_carry_workgroup_size() * OCL_CARRY_VSIZE * sizeof(int64), nullptr);
 		CREATE_CARRY_KERNEL(carry2);
 
 		CREATE_SETCOPY_KERNEL(set);
@@ -384,7 +403,7 @@ public:
 	void carry(const uint32_t dup)
 	{
 		const uint32 idup = uint32(dup);
-		_setKernelArg(_carry1, 4, sizeof(uint32), &idup);
+		_setKernelArg(_carry1, 5, sizeof(uint32), &idup);
 		_executeKernel(_carry1, VSIZE / OCL_CARRY_VSIZE * _n / CARRY_LENGTH, get_carry_workgroup_size());
 		_executeKernel(_carry2, (VSIZE * _n / CARRY_LENGTH) >> _carry_shift);
 	}

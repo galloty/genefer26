@@ -845,9 +845,8 @@ void backward8_0(__global VTYPE * restrict const zg, __global const uint_32 * re
 	const sz_t kl8 = local_id * 8, k8 = kl8 * (N_SZ / 64), ml8 = 1, m8 = ml8 * (N_SZ / 64);
 
 __kernel __attribute__((reqd_work_group_size(64 / 8 * CHUNK64, 1, 1)))
-void forward64_0(__global VTYPE * restrict const zg, __global const uint_32 * restrict const wg)
+void forward64_0(__global VTYPE * restrict const zg, __global const uint_32 * restrict const wg, __local VTYPE * const Z)
 {
-	__local VTYPE Z[64 * CHUNK64];
 	DECLARE_VAR_FB(64, CHUNK64);
 	DECLARE_VAR_FB64();
 
@@ -858,9 +857,8 @@ void forward64_0(__global VTYPE * restrict const zg, __global const uint_32 * re
 }
 
 __kernel __attribute__((reqd_work_group_size(64 / 8 * CHUNK64, 1, 1)))
-void backward64_0(__global VTYPE * restrict const zg, __global const uint_32 * restrict const wg)
+void backward64_0(__global VTYPE * restrict const zg, __global const uint_32 * restrict const wg, __local VTYPE * const Z)
 {
-	__local VTYPE Z[64 * CHUNK64];
 	DECLARE_VAR_FB(64, CHUNK64);
 	DECLARE_VAR_FB64();
 
@@ -880,7 +878,6 @@ void backward64_0(__global VTYPE * restrict const zg, __global const uint_32 * r
 __kernel __attribute__((reqd_work_group_size(512 / 8 * CHUNK512, 1, 1)))
 void forward512_0(__global VTYPE * restrict const zg, __global const uint_32 * restrict const wg, __local VTYPE * const Z)
 {
-	// __local VTYPE Z[512 * CHUNK512];
 	DECLARE_VAR_FB(512, CHUNK512);
 	DECLARE_VAR_FB512();
 
@@ -894,9 +891,8 @@ void forward512_0(__global VTYPE * restrict const zg, __global const uint_32 * r
 }
 
 __kernel __attribute__((reqd_work_group_size(512 / 8 * CHUNK512, 1, 1)))
-void backward512_0(__global VTYPE * restrict const zg, __global const uint_32 * restrict const wg)
+void backward512_0(__global VTYPE * restrict const zg, __global const uint_32 * restrict const wg, __local VTYPE * const Z)
 {
-	__local VTYPE Z[512 * CHUNK512];
 	DECLARE_VAR_FB(512, CHUNK512);
 	DECLARE_VAR_FB512();
 
@@ -934,7 +930,6 @@ void square8(__global VTYPE * restrict const zg, __global const uint_32 * restri
 }*/
 
 #define DECLARE_VAR_SQRMUL(N, BLK_N) \
-	__local VTYPE Z[N * BLK_N]; \
 	DECLARE_VAR_REG(); \
 	const sz_t block_id = (vid / (N / 8)) % BLK_N; \
 	__local VTYPE * const Zb = &Z[N * block_id]; \
@@ -943,7 +938,7 @@ void square8(__global VTYPE * restrict const zg, __global const uint_32 * restri
 #ifdef QVALID
 
 __kernel __attribute__((reqd_work_group_size(16 / 8 * BLK16, 1, 1)))
-void square16(__global VTYPE * restrict const zg, __global const uint_32 * restrict const wg)
+void square16(__global VTYPE * restrict const zg, __global const uint_32 * restrict const wg, __local VTYPE * const Z)
 {
 	DECLARE_VAR_SQRMUL(16, BLK16);
 	const sz_t k2 = 7 * (vid & ~(2 - 1)) + vid;
@@ -954,7 +949,7 @@ void square16(__global VTYPE * restrict const zg, __global const uint_32 * restr
 }
 
 __kernel __attribute__((reqd_work_group_size(32 / 8 * BLK32, 1, 1)))
-void square32(__global VTYPE * restrict const zg, __global const uint_32 * restrict const wg)
+void square32(__global VTYPE * restrict const zg, __global const uint_32 * restrict const wg, __local VTYPE * const Z)
 {
 	DECLARE_VAR_SQRMUL(32, BLK32);
 	const sz_t k4 = 7 * (vid & ~(4 - 1)) + vid;
@@ -965,7 +960,7 @@ void square32(__global VTYPE * restrict const zg, __global const uint_32 * restr
 }
 
 __kernel __attribute__((reqd_work_group_size(64 / 8 * BLK64, 1, 1)))
-void square64(__global VTYPE * restrict const zg, __global const uint_32 * restrict const wg)
+void square64(__global VTYPE * restrict const zg, __global const uint_32 * restrict const wg, __local VTYPE * const Z)
 {
 	DECLARE_VAR_SQRMUL(64, BLK64);
 	const sz_t k8 = 7 * (vid & ~(8 - 1)) + vid;
@@ -980,7 +975,7 @@ void square64(__global VTYPE * restrict const zg, __global const uint_32 * restr
 #if (LN_SZ % 3 == 1)
 
 __kernel __attribute__((reqd_work_group_size(128 / 8 * BLK128, 1, 1)))
-void square128(__global VTYPE * restrict const zg, __global const uint_32 * restrict const wg)
+void square128(__global VTYPE * restrict const zg, __global const uint_32 * restrict const wg, __local VTYPE * const Z)
 {
 	DECLARE_VAR_SQRMUL(128, BLK128);
 	const sz_t k2 = 7 * (vid & ~(2 - 1)) + vid, k16 = 7 * (vid & ~(16 - 1)) + vid;
@@ -995,7 +990,7 @@ void square128(__global VTYPE * restrict const zg, __global const uint_32 * rest
 #elif (LN_SZ % 3 == 2)
 
 __kernel __attribute__((reqd_work_group_size(256 / 8 * BLK256, 1, 1)))
-void square256(__global VTYPE * restrict const zg, __global const uint_32 * restrict const wg)
+void square256(__global VTYPE * restrict const zg, __global const uint_32 * restrict const wg, __local VTYPE * const Z)
 {
 	DECLARE_VAR_SQRMUL(256, BLK256);
 	const sz_t k4 = 7 * (vid & ~(4 - 1)) + vid, k32 = 7 * (vid & ~(32 - 1)) + vid;
@@ -1010,7 +1005,7 @@ void square256(__global VTYPE * restrict const zg, __global const uint_32 * rest
 #else
 
 __kernel __attribute__((reqd_work_group_size(512 / 8 * BLK512, 1, 1)))
-void square512(__global VTYPE * restrict const zg, __global const uint_32 * restrict const wg)
+void square512(__global VTYPE * restrict const zg, __global const uint_32 * restrict const wg, __local VTYPE * const Z)
 {
 	DECLARE_VAR_SQRMUL(512, BLK512);
 	const sz_t k8 = 7 * (vid & ~(8 - 1)) + vid, k64 = 7 * (vid & ~(64 - 1)) + vid;
@@ -1052,7 +1047,7 @@ void fwd16(__global VTYPE * restrict const zg, __global const uint_32 * restrict
 }
 
 __kernel __attribute__((reqd_work_group_size(32 / 8 * BLK32, 1, 1)))
-void fwd32(__global VTYPE * restrict const zg, __global const uint_32 * restrict const wg)
+void fwd32(__global VTYPE * restrict const zg, __global const uint_32 * restrict const wg, __local VTYPE * const Z)
 {
 	DECLARE_VAR_SQRMUL(32, BLK32);
 	const sz_t k4 = 7 * (vid & ~(4 - 1)) + vid;
@@ -1062,7 +1057,7 @@ void fwd32(__global VTYPE * restrict const zg, __global const uint_32 * restrict
 }
 
 __kernel __attribute__((reqd_work_group_size(64 / 8 * BLK64, 1, 1)))
-void fwd64(__global VTYPE * restrict const zg, __global const uint_32 * restrict const wg)
+void fwd64(__global VTYPE * restrict const zg, __global const uint_32 * restrict const wg, __local VTYPE * const Z)
 {
 	DECLARE_VAR_SQRMUL(64, BLK64);
 	const sz_t k8 = 7 * (vid & ~(8 - 1)) + vid;
@@ -1076,7 +1071,7 @@ void fwd64(__global VTYPE * restrict const zg, __global const uint_32 * restrict
 #if (LN_SZ % 3 == 1)
 
 __kernel __attribute__((reqd_work_group_size(128 / 8 * BLK128, 1, 1)))
-void fwd128(__global VTYPE * restrict const zg, __global const uint_32 * restrict const wg)
+void fwd128(__global VTYPE * restrict const zg, __global const uint_32 * restrict const wg, __local VTYPE * const Z)
 {
 	DECLARE_VAR_SQRMUL(128, BLK128);
 	const sz_t k2 = 7 * (vid & ~(2 - 1)) + vid, k16 = 7 * (vid & ~(16 - 1)) + vid;
@@ -1088,7 +1083,7 @@ void fwd128(__global VTYPE * restrict const zg, __global const uint_32 * restric
 #elif (LN_SZ % 3 == 2)
 
 __kernel __attribute__((reqd_work_group_size(256 / 8 * BLK256, 1, 1)))
-void fwd256(__global VTYPE * restrict const zg, __global const uint_32 * restrict const wg)
+void fwd256(__global VTYPE * restrict const zg, __global const uint_32 * restrict const wg, __local VTYPE * const Z)
 {
 	DECLARE_VAR_SQRMUL(256, BLK256);
 	const sz_t k4 = 7 * (vid & ~(4 - 1)) + vid, k32 = 7 * (vid & ~(32 - 1)) + vid;
@@ -1101,7 +1096,7 @@ void fwd256(__global VTYPE * restrict const zg, __global const uint_32 * restric
 #else
 
 __kernel __attribute__((reqd_work_group_size(512 / 8 * BLK512, 1, 1)))
-void fwd512(__global VTYPE * restrict const zg, __global const uint_32 * restrict const wg)
+void fwd512(__global VTYPE * restrict const zg, __global const uint_32 * restrict const wg, __local VTYPE * const Z)
 {
 	DECLARE_VAR_SQRMUL(512, BLK512);
 	const sz_t k8 = 7 * (vid & ~(8 - 1)) + vid, k64 = 7 * (vid & ~(64 - 1)) + vid;
@@ -1146,7 +1141,8 @@ void mul8(__global VTYPE * restrict const zg, const __global VTYPE * restrict co
 #ifdef QVALID
 
 __kernel __attribute__((reqd_work_group_size(16 / 8 * BLK16, 1, 1)))
-void mul16(__global VTYPE * restrict const zg, const __global VTYPE * restrict const zpg, __global const uint_32 * restrict const wg)
+void mul16(__global VTYPE * restrict const zg, const __global VTYPE * restrict const zpg,
+	__global const uint_32 * restrict const wg, __local VTYPE * const Z)
 {
 	DECLARE_VAR_SQRMUL(16, BLK16);
 	DECLARE_VARP_REG();
@@ -1158,7 +1154,8 @@ void mul16(__global VTYPE * restrict const zg, const __global VTYPE * restrict c
 }
 
 __kernel __attribute__((reqd_work_group_size(32 / 8 * BLK32, 1, 1)))
-void mul32(__global VTYPE * restrict const zg, const __global VTYPE * restrict const zpg, __global const uint_32 * restrict const wg)
+void mul32(__global VTYPE * restrict const zg, const __global VTYPE * restrict const zpg,
+	__global const uint_32 * restrict const wg, __local VTYPE * const Z)
 {
 	DECLARE_VAR_SQRMUL(32, BLK32);
 	DECLARE_VARP_REG();
@@ -1170,7 +1167,8 @@ void mul32(__global VTYPE * restrict const zg, const __global VTYPE * restrict c
 }
 
 __kernel __attribute__((reqd_work_group_size(64 / 8 * BLK64, 1, 1)))
-void mul64(__global VTYPE * restrict const zg, const __global VTYPE * restrict const zpg, __global const uint_32 * restrict const wg)
+void mul64(__global VTYPE * restrict const zg, const __global VTYPE * restrict const zpg,
+	__global const uint_32 * restrict const wg, __local VTYPE * const Z)
 {
 	DECLARE_VAR_SQRMUL(64, BLK64);
 	DECLARE_VARP_REG();
@@ -1186,7 +1184,8 @@ void mul64(__global VTYPE * restrict const zg, const __global VTYPE * restrict c
 #if (LN_SZ % 3 == 1)
 
 __kernel __attribute__((reqd_work_group_size(128 / 8 * BLK128, 1, 1)))
-void mul128(__global VTYPE * restrict const zg, const __global VTYPE * restrict const zpg, __global const uint_32 * restrict const wg)
+void mul128(__global VTYPE * restrict const zg, const __global VTYPE * restrict const zpg,
+	__global const uint_32 * restrict const wg, __local VTYPE * const Z)
 {
 	DECLARE_VAR_SQRMUL(128, BLK128);
 	DECLARE_VARP_REG();
@@ -1202,7 +1201,8 @@ void mul128(__global VTYPE * restrict const zg, const __global VTYPE * restrict 
 #elif (LN_SZ % 3 == 2)
 
 __kernel __attribute__((reqd_work_group_size(256 / 8 * BLK256, 1, 1)))
-void mul256(__global VTYPE * restrict const zg, const __global VTYPE * restrict const zpg, __global const uint_32 * restrict const wg)
+void mul256(__global VTYPE * restrict const zg, const __global VTYPE * restrict const zpg,
+	__global const uint_32 * restrict const wg, __local VTYPE * const Z)
 {
 	DECLARE_VAR_SQRMUL(256, BLK256);
 	DECLARE_VARP_REG();
@@ -1218,7 +1218,8 @@ void mul256(__global VTYPE * restrict const zg, const __global VTYPE * restrict 
 #else
 
 __kernel __attribute__((reqd_work_group_size(512 / 8 * BLK512, 1, 1)))
-void mul512(__global VTYPE * restrict const zg, const __global VTYPE * restrict const zpg, __global const uint_32 * restrict const wg)
+void mul512(__global VTYPE * restrict const zg, const __global VTYPE * restrict const zpg,
+	__global const uint_32 * restrict const wg, __local VTYPE * const Z)
 {
 	DECLARE_VAR_SQRMUL(512, BLK512);
 	DECLARE_VARP_REG();
@@ -1420,10 +1421,8 @@ INLINE void carry_2x4(__global uint4_32 * restrict const zk, const __local int4_
 
 __kernel __attribute__((reqd_work_group_size(CARRY_WG_SZ, 1, 1)))
 void carry1(const __global uint8_32 * restrict const bb_inv, const __global int4_32 * restrict const bs,
-	__global uint4_32 * restrict const z, __global int4_64 * restrict const c, const uint_32 dup)
+	__global uint4_32 * restrict const z, __global int4_64 * restrict const c, __local int4_64 * cl, const uint_32 dup)
 {
-	__local int4_64 cl[CARRY_WG_SZ];
-
 	const sz_t id = (sz_t)get_global_id(0), i = (id % CARRY_VSIZE) + ((id / (N_SZ / CARRY_LENGTH)) & ~(CARRY_VSIZE - 1));
 	const sz_t k = (CARRY_LENGTH - 1) * (id & ~(CARRY_VSIZE - 1)) + id;
 	const uint8_32 bb_inv_i = bb_inv[i]; const int4_32 bs_i = bs[i];
@@ -1499,10 +1498,8 @@ INLINE void carry_2x2(__global uint2_32 * restrict const zk, const __local int2_
 
 __kernel __attribute__((reqd_work_group_size(CARRY_WG_SZ, 1, 1)))
 void carry1(const __global uint4_32 * restrict const bb_inv, const __global int2_32 * restrict const bs,
-	__global uint2_32 * restrict const z, __global int2_64 * restrict const c, const uint_32 dup)
+	__global uint2_32 * restrict const z, __global int2_64 * restrict const c, __local int2_64 * cl, const uint_32 dup)
 {
-	__local int2_64 cl[CARRY_WG_SZ];
-
 	const sz_t id = (sz_t)get_global_id(0), i = (id % CARRY_VSIZE) + ((id / (N_SZ / CARRY_LENGTH)) & ~(CARRY_VSIZE - 1));
 	const sz_t k = (CARRY_LENGTH - 1) * (id & ~(CARRY_VSIZE - 1)) + id;
 	const uint4_32 bb_inv_i = bb_inv[i]; const int2_32 bs_i = bs[i];
@@ -1564,10 +1561,8 @@ INLINE void carry_2x1(__global uint_32 * restrict const zk, const __local int_64
 
 __kernel __attribute__((reqd_work_group_size(CARRY_WG_SZ, 1, 1)))
 void carry1(const __global uint2_32 * restrict const bb_inv, const __global int_32 * restrict const bs,
-	__global uint_32 * restrict const z, __global int_64 * restrict const c, const uint_32 dup)
+	__global uint_32 * restrict const z, __global int_64 * restrict const c, __local int_64 * cl, const uint_32 dup)
 {
-	__local int_64 cl[CARRY_WG_SZ];
-
 	const sz_t id = (sz_t)get_global_id(0), i = (id % CARRY_VSIZE) + ((id / (N_SZ / CARRY_LENGTH)) & ~(CARRY_VSIZE - 1));
 	const sz_t k = (CARRY_LENGTH - 1) * (id & ~(CARRY_VSIZE - 1)) + id;
 	const uint2_32 bb_inv_i = bb_inv[i]; const int_32 bs_i = bs[i];
