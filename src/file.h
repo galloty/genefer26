@@ -107,10 +107,9 @@ public:
 		return false;
 	}
 
-	template<size_t VSIZE>
-	bool read(mpz_vec<VSIZE> & z)
+	bool read(mpz_vec & z)
 	{
-		for (size_t i = 0; i < VSIZE; ++i)
+		for (size_t i = 0, size = z.get_size(); i < size; ++i)
 		{
 			const size_t ret = mpz_inp_raw(z[i], _cfile);
 			_crc32 = _crc32 ^ uint32_t(mpz_fdiv_ui(z[i], 0xfedcba98));	// fake crc32
@@ -119,10 +118,9 @@ public:
 		return true;
 	}
 
-	template<size_t VSIZE>
-	bool write(const mpz_vec<VSIZE> & z)
+	bool write(const mpz_vec & z)
 	{
-		for (size_t i = 0; i < VSIZE; ++i)
+		for (size_t i = 0, size = z.get_size(); i < size; ++i)
 		{
 			const size_t ret = mpz_out_raw(_cfile, z[i]);
 			_crc32 = _crc32 ^ uint32_t(mpz_fdiv_ui(z[i], 0xfedcba98));	// fake crc32

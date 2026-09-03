@@ -125,7 +125,8 @@ private:
 		std::ostringstream ss;
 		ss << "Usage: geneferv [options]  options may be specified in any order" << std::endl;
 		ss << "  -n <n>                   exponent of the GFN (13 <= n <= 18)" << std::endl;
-		ss << "  -b <filename>            list of the 8 bases (6 <= b <= 2000000000, one per line)" << std::endl;
+		ss << "  -b <filename>            list of the 8/16/32 bases (10,000 <= b <= 2,000,000,000, one per line)" << std::endl;
+		ss << "  -l <8> or <16> or <32>   length of the b-vector (default 8)" << std::endl;
 		ss << "  -q                       quick test" << std::endl;
 		ss << "  -p                       full test: a proof is generated" << std::endl;
 		ss << "  -s                       server job: convert the proof into a certificate and a 64-bit key" << std::endl;
@@ -181,7 +182,7 @@ public:
 
 		pio::print(header(args, true));
 
-		int n = 0;
+		int n = 0, l = 8;
 		std::string b_filename;
 		genefer::EMode mode = genefer::EMode::None;
 		size_t device = 0;
@@ -207,29 +208,35 @@ public:
 			{
 				b_filename = ((arg == "-b") && (i + 1 < size)) ? args[++i] : arg.substr(2);
 			}
+			if (arg.substr(0, 2) == "-l")
+			{
+				const std::string lstr = ((arg == "-l") && (i + 1 < size)) ? args[++i] : arg.substr(2);
+				l = std::atoi(lstr.c_str());
+				if ((l != 8) && (l != 16) && (l != 32)) throw std::runtime_error("l != 8, 16 or 32 is not supported");
+			}
 			if (arg.substr(0, 2) == "-q")
 			{
-				if (mode != genefer::EMode::None) throw std::runtime_error("-q used with an incompatible option (-p, -s, -c, -e, -h)");
+				if (mode != genefer::EMode::None) throw std::runtime_error("-q used with an incompatible option (-p, -s, -c, -h)");
 				mode = genefer::EMode::Quick;
 			}
 			if (arg.substr(0, 2) == "-p")
 			{
-				if (mode != genefer::EMode::None) throw std::runtime_error("-p used with an incompatible option (-q, -s, -c, -e, -h)");
+				if (mode != genefer::EMode::None) throw std::runtime_error("-p used with an incompatible option (-q, -s, -c, -h)");
 				mode = genefer::EMode::Proof;
 			}
 			if (arg.substr(0, 2) == "-s")
 			{
-				if (mode != genefer::EMode::None) throw std::runtime_error("-s used with an incompatible option (-q, -p, -c, -e, -h)");
+				if (mode != genefer::EMode::None) throw std::runtime_error("-s used with an incompatible option (-q, -p, -c, -h)");
 				mode = genefer::EMode::Server;
 			}
 			if ((arg.substr(0, 2) == "-c")  && (arg.substr(0, 3) != "-cp"))
 			{
-				if (mode != genefer::EMode::None) throw std::runtime_error("-c used with an incompatible option (-q, -p, -s, -e, -h)");
+				if (mode != genefer::EMode::None) throw std::runtime_error("-c used with an incompatible option (-q, -p, -s, -h)");
 				mode = genefer::EMode::Check;
 			}
 			if (arg.substr(0, 2) == "-h")
 			{
-				if (mode != genefer::EMode::None) throw std::runtime_error("-h used with an incompatible option (-q, -p, -s, -e, -c)");
+				if (mode != genefer::EMode::None) throw std::runtime_error("-h used with an incompatible option (-q, -p, -s, -c)");
 				mode = genefer::EMode::Bench;
 			}
 			if (arg.substr(0, 2) == "-d")
@@ -280,7 +287,7 @@ public:
 
 			for (int n = 13; n <= 18; ++n)
 			{
-				if (g.check("", n, mode, device, isCPU) != genefer::EReturn::Success) return;
+				if (g.check("", n, size_t(l), mode, device, isCPU) != genefer::EReturn::Success) return;
 			}
 			return;
 		}
@@ -290,15 +297,15 @@ public:
 			// internal test
 #ifdef QVALID
 			const bool is_cpu = false;
-			if (g.check("b10m.txt", 10, genefer::EMode::Proof, device, is_cpu, 5) != genefer::EReturn::Success) return;
-			if (g.check("b10m.txt", 10, genefer::EMode::Server, device, is_cpu, 5) != genefer::EReturn::Success) return;
-			if (g.check("b10m.txt", 10, genefer::EMode::Check, device, is_cpu, 5) != genefer::EReturn::Success) return;
-			if (g.check("b11m.txt", 11, genefer::EMode::Proof, device, is_cpu, 5) != genefer::EReturn::Success) return;
-			if (g.check("b11m.txt", 11, genefer::EMode::Server, device, is_cpu, 5) != genefer::EReturn::Success) return;
-			if (g.check("b11m.txt", 11, genefer::EMode::Check, device, is_cpu, 5) != genefer::EReturn::Success) return;
-			if (g.check("b12m.txt", 12, genefer::EMode::Proof, device, is_cpu, 5) != genefer::EReturn::Success) return;
-			if (g.check("b12m.txt", 12, genefer::EMode::Server, device, is_cpu, 5) != genefer::EReturn::Success) return;
-			if (g.check("b12m.txt", 12, genefer::EMode::Check, device, is_cpu, 5) != genefer::EReturn::Success) return;
+			if (g.check("b10m.txt", 10, 8, genefer::EMode::Proof, device, is_cpu, 5) != genefer::EReturn::Success) return;
+			if (g.check("b10m.txt", 10, 8, genefer::EMode::Server, device, is_cpu, 5) != genefer::EReturn::Success) return;
+			if (g.check("b10m.txt", 10, 8, genefer::EMode::Check, device, is_cpu, 5) != genefer::EReturn::Success) return;
+			if (g.check("b11m.txt", 11, 8, genefer::EMode::Proof, device, is_cpu, 5) != genefer::EReturn::Success) return;
+			if (g.check("b11m.txt", 11, 8, genefer::EMode::Server, device, is_cpu, 5) != genefer::EReturn::Success) return;
+			if (g.check("b11m.txt", 11, 8, genefer::EMode::Check, device, is_cpu, 5) != genefer::EReturn::Success) return;
+			if (g.check("b12m.txt", 12, 8, genefer::EMode::Proof, device, is_cpu, 5) != genefer::EReturn::Success) return;
+			if (g.check("b12m.txt", 12, 8, genefer::EMode::Server, device, is_cpu, 5) != genefer::EReturn::Success) return;
+			if (g.check("b12m.txt", 12, 8, genefer::EMode::Check, device, is_cpu, 5) != genefer::EReturn::Success) return;
 			return;
 #endif
 			pio::print(usage());
@@ -306,7 +313,7 @@ public:
 			return;
 		}
 
-		const genefer::EReturn ret = g.check(b_filename, n, mode, device, isCPU);
+		const genefer::EReturn ret = g.check(b_filename, n, size_t(l), mode, device, isCPU);
 		if (b_boinc)
 		{
 			if (ret == genefer::EReturn::Success) boinc_finish(BOINC_SUCCESS);

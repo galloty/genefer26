@@ -31,8 +31,8 @@ private:
 	double_2 _z;
 
 public:
-	TwiddleFactor() {}
-	TwiddleFactor(const size_t a, const size_t b)
+	explicit TwiddleFactor() {}
+	explicit TwiddleFactor(const size_t a, const size_t b)
 	{
 		const long double alpha = 6.2831853071795864769252867665590057684L * ((long double)(a) / (long double)(b));
 		const double cs = double(cosl(alpha)), sn = double(sinl(alpha));

@@ -12,6 +12,7 @@ Please give feedback to the authors if improvement is realized. It is distribute
 #include <sstream>
 
 #include "vint.h"
+#include "b_vec.h"
 #include "file.h"
 #include "alignment.h"
 
@@ -225,7 +226,7 @@ protected:
 	}
 
 public:
-	static transform * create_gpu(const UInt32_8 & b, const int n, const size_t num_regs, const size_t device,
+	static transform * create_gpu(const b_vec & b, const int n, const size_t num_regs, const size_t device,
 								  const bool isBoinc, const bool get_boinc_ids, int _boinc_argc, char ** _boinc_argv)
 
 	{
@@ -234,18 +235,18 @@ public:
 		__builtin_cpu_init();
 		if (__builtin_cpu_supports("avx512f") != 0)
 		{
-			ptransform =  transform::create_ocl_avx512(b, n, num_regs, device, isBoinc, get_boinc_ids, _boinc_argc, _boinc_argv);
+			ptransform =  transform::create_ocl_avx512(b[0], n, num_regs, device, isBoinc, get_boinc_ids, _boinc_argc, _boinc_argv);	// TODO
 		}
 		else if (__builtin_cpu_supports("avx2") != 0)
 		{
-			ptransform = transform::create_ocl_avx2(b, n, num_regs, device, isBoinc, get_boinc_ids, _boinc_argc, _boinc_argv);
+			ptransform = transform::create_ocl_avx2(b[0], n, num_regs, device, isBoinc, get_boinc_ids, _boinc_argc, _boinc_argv);
 		}
-		else ptransform = transform::create_ocl_sse2(b, n, num_regs, device, isBoinc, get_boinc_ids, _boinc_argc, _boinc_argv);	// SSE2 is mandatory for x64 
+		else ptransform = transform::create_ocl_sse2(b[0], n, num_regs, device, isBoinc, get_boinc_ids, _boinc_argc, _boinc_argv);	// SSE2 is mandatory for x64 
 
 		return ptransform;
 	}
 
-	static transform * create_cpu(const UInt32_8 & b, const int n, const size_t num_regs)
+	static transform * create_cpu(const b_vec & b, const int n, const size_t num_regs)
 	{
 		transform * ptransform = nullptr;
 
@@ -254,25 +255,25 @@ public:
 #if (defined(__GNUC__) && (__GNUC__ >= 15)) || (defined(__clang__) && (__clang_major__ >= 22))
 		if (__builtin_cpu_supports("avx10.2") != 0)
 		{
-			ptransform = transform::create_avx10(b, n, num_regs);
+			ptransform = transform::create_avx10(b[0], n, num_regs);	// TODO
 		}
 		else
 #endif
 		if (__builtin_cpu_supports("avx512f") != 0)
 		{
-			ptransform = transform::create_avx512(b, n, num_regs);
+			ptransform = transform::create_avx512(b[0], n, num_regs);
 		}
 		else if ((__builtin_cpu_supports("fma") != 0) && (__builtin_cpu_supports("avx2") != 0))
 		{
-			ptransform = transform::create_fma(b, n, num_regs);
+			ptransform = transform::create_fma(b[0], n, num_regs);
 		}
 		else if (__builtin_cpu_supports("avx") != 0)
 		{
-			ptransform = transform::create_avx(b, n, num_regs);
+			ptransform = transform::create_avx(b[0], n, num_regs);
 		}
 		else if (__builtin_cpu_supports("sse4.1") != 0)
 		{
-			ptransform = transform::create_sse4(b, n, num_regs);
+			ptransform = transform::create_sse4(b[0], n, num_regs);
 		}
 
 		if (ptransform == nullptr) throw std::runtime_error("processor must support SSE4.1");

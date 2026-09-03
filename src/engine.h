@@ -42,7 +42,7 @@ public:
 #define BLK256		 1
 #define BLK512		 1	// local size = BLK512 * 512 * sizeof(VTYPE) = 8KB, workgroup size = BLK512 * 512 / 8 = 64
 #define CHUNK64		 4	// local size = CHUNK64 * 64 * sizeof(VTYPE) = 4KB, workgroup size = CHUNK64 * 64 / 8 = 32
-#define CHUNK512	 4	// local size = CHUNK512 * 512 * sizeof(SVTYPE) = 32KB, workgroup size = CHUNK512 * 512 / 8 = 256
+#define CHUNK512	 4	// local size = CHUNK512 * 512 * sizeof(VTYPE) = 32KB, workgroup size = CHUNK512 * 512 / 8 = 256
 
 #define CREATE_TRANSFORM_KERNEL(name) _##name = create_transform_kernel(#name);
 #define CREATE_TRANSFORM_KERNELP(name) _##name = create_transform_kernel(#name, false);
