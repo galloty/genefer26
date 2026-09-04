@@ -11,9 +11,21 @@ Please give feedback to the authors if improvement is realized. It is distribute
 
 #include "transformCPU.h"
 
-transform * transform::create_fma(const UInt32_8 & b, const int n, const size_t num_regs)
-{
-	transform * ptransform = arch_fma_namespace::create_transformCPU(b, n, num_regs);
-	ptransform->set_type("AVX2+FMA");
-	return ptransform;
+#define _create_fma(SIZE) \
+template<> \
+transform<SIZE> * transform<SIZE>::create_fma(const b_vec & b, const int n, const size_t num_regs) \
+{ \
+	transform<SIZE> * ptransform = arch_fma_namespace::create_transformCPU<SIZE>(b, n, num_regs); \
+	ptransform->set_type("AVX2+FMA"); \
+	return ptransform; \
 }
+
+template<size_t VSIZE>
+transform<VSIZE> * transform<VSIZE>::create_fma(const b_vec & b, const int n, const size_t num_regs)
+{
+	return nullptr;
+}
+
+_create_fma(8)
+_create_fma(16)
+_create_fma(32)

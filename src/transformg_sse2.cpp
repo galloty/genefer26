@@ -12,7 +12,7 @@ Please give feedback to the authors if improvement is realized. It is distribute
 #include "transformGPU.h"
 
 // OpenCL headers are required
-size_t transform::display_devices() { platform pfm; return pfm.displayDevices(); }
+size_t itransform::display_devices() { platform pfm; return pfm.displayDevices(); }
 
 #if defined(BOINC)
 
@@ -29,32 +29,44 @@ void get_opencl_ids(int argc, char * argv[], cl_device_id & boinc_device_id, cl_
 		boinc_device_id = 0; boinc_platform_id = 0;
 	}
 }
-#endif
 
-transform * transform::create_ocl_sse2(const UInt32_8 & b, const int n, const size_t num_regs, const size_t device,
-								  const bool is_boinc, const bool get_boinc_ids, int _boinc_argc, char ** _boinc_argv)
-{
-	cl_platform_id boinc_platform_id = 0;
-	cl_device_id boinc_device_id = 0;
-#if defined(BOINC)
-	if (get_boinc_ids) get_opencl_ids(_boinc_argc, _boinc_argv, boinc_device_id, boinc_platform_id);
 #else
-	(void)get_boinc_ids;
-	(void)_boinc_argc;
-	(void)_boinc_argv;
+
+void get_opencl_ids(int argc, char * argv[], cl_device_id & boinc_device_id, cl_platform_id & boinc_platform_id) {}
+
 #endif
 
-	transform * ptransform = nullptr;
-	const uint32_t b_max = b.max();
-
-	if (b_max <= 1000000000)
-	{
-		ptransform = arch_g_sse2_namespace::create_transformGPU<8, false>(b, n, num_regs, device, is_boinc, boinc_platform_id, boinc_device_id);
-	}
-	else
-	{
-		ptransform = arch_g_sse2_namespace::create_transformGPU<8, true>(b, n, num_regs, device, is_boinc, boinc_platform_id, boinc_device_id);
-	}
-	ptransform->set_type("SSE2");
-	return ptransform;
+#define _create_ocl_sse2(SIZE) \
+template<> \
+transform<SIZE> * transform<SIZE>::create_ocl_sse2(const b_vec & b, const int n, const size_t num_regs, const size_t device, \
+											const bool is_boinc, const bool get_boinc_ids, int _boinc_argc, char ** _boinc_argv) \
+{ \
+	cl_platform_id boinc_platform_id = 0; \
+	cl_device_id boinc_device_id = 0; \
+	if (get_boinc_ids) get_opencl_ids(_boinc_argc, _boinc_argv, boinc_device_id, boinc_platform_id); \
+ \
+	transform<SIZE> * ptransform = nullptr; \
+	const uint32_t b_max = b.max(); \
+ \
+	if (b_max <= 1000000000) \
+	{ \
+		ptransform = arch_g_sse2_namespace::create_transformGPU<SIZE, false>(b, n, num_regs, device, is_boinc, boinc_platform_id, boinc_device_id); \
+	} \
+	else \
+	{ \
+		ptransform = arch_g_sse2_namespace::create_transformGPU<SIZE, true>(b, n, num_regs, device, is_boinc, boinc_platform_id, boinc_device_id); \
+	} \
+	ptransform->set_type("SSE2"); \
+	return ptransform; \
 }
+
+template<size_t VSIZE>
+transform<VSIZE> * transform<VSIZE>::create_ocl_sse2(const b_vec & b, const int n, const size_t num_regs, const size_t device,
+											const bool is_boinc, const bool get_boinc_ids, int _boinc_argc, char ** _boinc_argv)
+{
+	return nullptr;
+}
+
+_create_ocl_sse2(8)
+_create_ocl_sse2(16)
+_create_ocl_sse2(32)

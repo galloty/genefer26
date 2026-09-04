@@ -22,6 +22,8 @@ public:
 	explicit b_vec(const size_t size) : _size(size) {}
 	virtual ~b_vec() {}
 
+	size_t get_size() const { return _size; }
+
 	const UInt32_8 & operator[](const size_t i) const { return _b[i]; }
 	UInt32_8 & operator[](const size_t i) { return _b[i]; }
 
@@ -69,7 +71,7 @@ public:
 		file.close();
 	}
 
-	uint32_t get_min() const
+	uint32_t min() const
 	{
 		const UInt32_8 * const b = _b;
 		uint32_t b_min = b[0].min();
@@ -77,11 +79,19 @@ public:
 		return b_min;
 	}
 
-	uint32_t get_max() const
+	uint32_t max() const
 	{
 		const UInt32_8 * const b = _b;
 		uint32_t b_max = b[0].max();
 		for (size_t j = 1, size = _size; j < size; ++j) b_max = std::max(b_max, b[j].max());
 		return b_max;
+	}
+
+	uint32_t get_bit_mask(const int i) const
+	{
+		const UInt32_8 * const b = _b;
+		uint32_t mask = 0;
+		for (size_t j = 0, size = _size; j < size; ++j) mask |= uint32_t(b[j].get_bit_mask(i)) << (8 * j);
+		return mask;
 	}
 };

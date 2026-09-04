@@ -11,9 +11,21 @@ Please give feedback to the authors if improvement is realized. It is distribute
 
 #include "transformCPU.h"
 
-transform * transform::create_sse4(const UInt32_8 & b, const int n, const size_t num_regs)
-{
-	transform * ptransform = arch_sse4_namespace::create_transformCPU(b, n, num_regs);
-	ptransform->set_type("SSE4.1");
-	return ptransform;
+#define _create_sse4(SIZE) \
+template<> \
+transform<SIZE> * transform<SIZE>::create_sse4(const b_vec & b, const int n, const size_t num_regs) \
+{ \
+	transform<SIZE> * ptransform = arch_sse4_namespace::create_transformCPU<SIZE>(b, n, num_regs); \
+	ptransform->set_type("SSE4.1"); \
+	return ptransform; \
 }
+
+template<size_t VSIZE>
+transform<VSIZE> * transform<VSIZE>::create_sse4(const b_vec & b, const int n, const size_t num_regs)
+{
+	return nullptr;
+}
+
+_create_sse4(8)
+_create_sse4(16)
+_create_sse4(32)

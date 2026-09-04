@@ -33,7 +33,7 @@ private:
 private:
 	static void quit(int)
 	{
-		genefer::get_instance().quit();
+		get_instance()._g->quit();
 	}
 
 private:
@@ -44,6 +44,9 @@ private:
 		return TRUE;
 	}
 #endif
+
+private:
+	igenefer * _g = nullptr;
 
 public:
 	application()
@@ -56,7 +59,7 @@ public:
 #endif
 	}
 
-	virtual ~application() {}
+	virtual ~application() { if (_g != nullptr) delete _g; }
 
 	static application & get_instance()
 	{
@@ -184,7 +187,7 @@ public:
 
 		int n = 0, l = 8;
 		std::string b_filename;
-		genefer::EMode mode = genefer::EMode::None;
+		igenefer::EMode mode = igenefer::EMode::None;
 		size_t device = 0;
 		bool isCPU = false;
 #if defined(BOINC)
@@ -216,28 +219,28 @@ public:
 			}
 			if (arg.substr(0, 2) == "-q")
 			{
-				if (mode != genefer::EMode::None) throw std::runtime_error("-q used with an incompatible option (-p, -s, -c, -h)");
-				mode = genefer::EMode::Quick;
+				if (mode != igenefer::EMode::None) throw std::runtime_error("-q used with an incompatible option (-p, -s, -c, -h)");
+				mode = igenefer::EMode::Quick;
 			}
 			if (arg.substr(0, 2) == "-p")
 			{
-				if (mode != genefer::EMode::None) throw std::runtime_error("-p used with an incompatible option (-q, -s, -c, -h)");
-				mode = genefer::EMode::Proof;
+				if (mode != igenefer::EMode::None) throw std::runtime_error("-p used with an incompatible option (-q, -s, -c, -h)");
+				mode = igenefer::EMode::Proof;
 			}
 			if (arg.substr(0, 2) == "-s")
 			{
-				if (mode != genefer::EMode::None) throw std::runtime_error("-s used with an incompatible option (-q, -p, -c, -h)");
-				mode = genefer::EMode::Server;
+				if (mode != igenefer::EMode::None) throw std::runtime_error("-s used with an incompatible option (-q, -p, -c, -h)");
+				mode = igenefer::EMode::Server;
 			}
 			if ((arg.substr(0, 2) == "-c")  && (arg.substr(0, 3) != "-cp"))
 			{
-				if (mode != genefer::EMode::None) throw std::runtime_error("-c used with an incompatible option (-q, -p, -s, -h)");
-				mode = genefer::EMode::Check;
+				if (mode != igenefer::EMode::None) throw std::runtime_error("-c used with an incompatible option (-q, -p, -s, -h)");
+				mode = igenefer::EMode::Check;
 			}
 			if (arg.substr(0, 2) == "-h")
 			{
-				if (mode != genefer::EMode::None) throw std::runtime_error("-h used with an incompatible option (-q, -p, -s, -c)");
-				mode = genefer::EMode::Bench;
+				if (mode != igenefer::EMode::None) throw std::runtime_error("-h used with an incompatible option (-q, -p, -s, -c)");
+				mode = igenefer::EMode::Bench;
 			}
 			if (arg.substr(0, 2) == "-d")
 			{
@@ -265,14 +268,20 @@ public:
 			}
 		}
 
-		genefer & g = genefer::get_instance();
-		g.set_boinc(b_boinc);
+		if      (l ==  8) _g = new genefer<8>();
+		else if (l == 16) _g = new genefer<16>();
+		else if (l == 32) _g = new genefer<32>();
+		else std::runtime_error("b-vector size must be 8, 16 or 32");
+
+		igenefer * const g = _g;
+
+		g->set_boinc(b_boinc);
 #if defined(BOINC)
 		g.set_boinc_param(b_boinc && !boinc_is_standalone() && !ext_device, argc, argv);
 #endif
-		g.set_filename(main_filename);
+		g->set_filename(main_filename);
 
-		if (mode == genefer::EMode::Bench)
+		if (mode == igenefer::EMode::Bench)
 		{
 			const bool success = 
 #if defined(_WIN64)
@@ -287,40 +296,40 @@ public:
 
 			for (int n = 13; n <= 18; ++n)
 			{
-				if (g.check("", n, size_t(l), mode, device, isCPU) != genefer::EReturn::Success) return;
+				if (g->check("", n, size_t(l), mode, device, isCPU) != igenefer::EReturn::Success) return;
 			}
 			return;
 		}
 
-		if ((mode == genefer::EMode::None) || (b_filename.empty()) || (n == 0))
+		if ((mode == igenefer::EMode::None) || (b_filename.empty()) || (n == 0))
 		{
 			// internal test
 #ifdef QVALID
 			const bool is_cpu = false;
-			if (g.check("b10m.txt", 10, 8, genefer::EMode::Proof, device, is_cpu, 5) != genefer::EReturn::Success) return;
-			if (g.check("b10m.txt", 10, 8, genefer::EMode::Server, device, is_cpu, 5) != genefer::EReturn::Success) return;
-			if (g.check("b10m.txt", 10, 8, genefer::EMode::Check, device, is_cpu, 5) != genefer::EReturn::Success) return;
-			if (g.check("b11m.txt", 11, 8, genefer::EMode::Proof, device, is_cpu, 5) != genefer::EReturn::Success) return;
-			if (g.check("b11m.txt", 11, 8, genefer::EMode::Server, device, is_cpu, 5) != genefer::EReturn::Success) return;
-			if (g.check("b11m.txt", 11, 8, genefer::EMode::Check, device, is_cpu, 5) != genefer::EReturn::Success) return;
-			if (g.check("b12m.txt", 12, 8, genefer::EMode::Proof, device, is_cpu, 5) != genefer::EReturn::Success) return;
-			if (g.check("b12m.txt", 12, 8, genefer::EMode::Server, device, is_cpu, 5) != genefer::EReturn::Success) return;
-			if (g.check("b12m.txt", 12, 8, genefer::EMode::Check, device, is_cpu, 5) != genefer::EReturn::Success) return;
+			if (g->check("b10m.txt", 10, 8, igenefer::EMode::Proof, device, is_cpu, 5) != igenefer::EReturn::Success) return;
+			if (g->check("b10m.txt", 10, 8, igenefer::EMode::Server, device, is_cpu, 5) != igenefer::EReturn::Success) return;
+			if (g->check("b10m.txt", 10, 8, igenefer::EMode::Check, device, is_cpu, 5) != igenefer::EReturn::Success) return;
+			if (g->check("b11m.txt", 11, 8, igenefer::EMode::Proof, device, is_cpu, 5) != igenefer::EReturn::Success) return;
+			if (g->check("b11m.txt", 11, 8, igenefer::EMode::Server, device, is_cpu, 5) != igenefer::EReturn::Success) return;
+			if (g->check("b11m.txt", 11, 8, igenefer::EMode::Check, device, is_cpu, 5) != igenefer::EReturn::Success) return;
+			if (g->check("b12m.txt", 12, 8, igenefer::EMode::Proof, device, is_cpu, 5) != igenefer::EReturn::Success) return;
+			if (g->check("b12m.txt", 12, 8, igenefer::EMode::Server, device, is_cpu, 5) != igenefer::EReturn::Success) return;
+			if (g->check("b12m.txt", 12, 8, igenefer::EMode::Check, device, is_cpu, 5) != igenefer::EReturn::Success) return;
 			return;
 #endif
 			pio::print(usage());
-			if (genefer::display_devices() == 0) throw std::runtime_error("No OpenCL device");
+			if (igenefer::display_devices() == 0) throw std::runtime_error("No OpenCL device");
 			return;
 		}
 
-		const genefer::EReturn ret = g.check(b_filename, n, size_t(l), mode, device, isCPU);
+		const igenefer::EReturn ret = g->check(b_filename, n, size_t(l), mode, device, isCPU);
 		if (b_boinc)
 		{
-			if (ret == genefer::EReturn::Success) boinc_finish(BOINC_SUCCESS);
-			if (ret == genefer::EReturn::Failed) boinc_finish(EXIT_CHILD_FAILED);
+			if (ret == igenefer::EReturn::Success) boinc_finish(BOINC_SUCCESS);
+			if (ret == igenefer::EReturn::Failed) boinc_finish(EXIT_CHILD_FAILED);
 		}
 
-		if (ret == genefer::EReturn::Aborted)
+		if (ret == igenefer::EReturn::Aborted)
 		{
 			std::ostringstream ss; ss << std::endl;
 			pio::print(ss.str());

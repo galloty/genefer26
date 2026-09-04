@@ -98,7 +98,7 @@ namespace arch_g_namespace
 
 
 template<size_t VSIZE, bool IS32, int LN>
-class transformGPU : public transform
+class transformGPU : public transform<VSIZE>
 {
 	template<uint32 P, uint32 Q, uint32 R, uint32 H>
 	class ZPT : public ZP
@@ -148,16 +148,18 @@ private:
 	ZP * const _z;
 	xengine * _engine = nullptr;
 
+	using parent = transform<VSIZE>;
+
 public:
-	transformGPU(const UInt32_8 & b, const size_t num_regs, const size_t device_id,
+	transformGPU(const b_vec & b, const size_t num_regs, const size_t device_id,
 				 const bool is_boinc, const cl_platform_id boinc_platform_id, const cl_device_id boinc_device_id)
-				: transform(b, LN, EKind::GPU), _num_regs(num_regs), _z(new ZP[3 * VSIZE * num_regs << LN])
+				: transform<VSIZE>(b, LN, parent::EKind::GPU), _num_regs(num_regs), _z(new ZP[3 * VSIZE * num_regs << LN])
 	{
 		const bool is_boinc_platform = is_boinc && (boinc_device_id != 0) && (boinc_platform_id != 0);
 		const platform eng_platform = is_boinc_platform ? platform(boinc_platform_id, boinc_device_id) : platform();
 
 		_engine = new xengine(eng_platform, is_boinc_platform ? 0 : device_id, LN, is_boinc, num_regs);
-		set_gpu_type(_engine->getType());
+		this->set_gpu_type(_engine->getType());
 
 		const size_t n = size_t(1) << LN;
 
@@ -264,7 +266,7 @@ public:
 			const size_t s = size_t(1) << ls;
 			for (size_t j = 0; j < s; ++j)
 			{
-				const size_t jr = bitrev(j, s);
+				const size_t jr = parent::bitrev(j, s);
 				w1[s + jr] = r_s1; w2[s + jr] = r_s2; w3[s + jr] = r_s3;
 				r_s1 *= r_s1sq; r_s2 *= r_s2sq; r_s3 *= r_s3sq;
 			}
@@ -276,7 +278,7 @@ public:
 		uint32_t bu[VSIZE], b_inv[VSIZE]; int b_s[VSIZE];
 		for (size_t i = 0; i < VSIZE; ++i)
 		{
-			const uint32_t bi = b[i];
+			const uint32_t bi = b[0][i];	// TODO
 			const int s = 31 - __builtin_clz(bi) - 1;
 			bu[i] = bi;
 			b_inv[i] = uint32_t((uint64_t(1) << (s + 32)) / bi);
@@ -436,19 +438,20 @@ public:
 	void copy_mask(const size_t dst, const size_t src, const uint32_t mask) const override
 	{
 		if (mask == 0) return;
-		if (mask == (uint32_t(1) << VSIZE) - 1) { copy(dst, src); return; }
+		if (VSIZE == 32) { if (mask == uint32_t(-1)) { copy(dst, src); return; } }
+		else { if (mask == (uint32_t(1) << VSIZE) - 1) { copy(dst, src); return; } }
 
 		_engine->copy_mask(dst, src, mask);
 	}
 
-	void power(const size_t src, const uint32_t e) override { _power(src, e); }
-	void power_vec(const size_t src, const UInt32_8 & e) override { _power_vec(src, e); }
+	void power(const size_t src, const uint32_t e) override { parent::_power(src, e); }
+	void power_vec(const size_t src, const b_vec & e) override { parent::_power_vec(src, e); }
 
 	bool read_checkpoint(file & cFile) override
 	{
 		int kind = 0;
 		if (!cFile.read(reinterpret_cast<char *>(&kind), sizeof(kind))) return false;
-		if (kind != int(get_kind())) return false;
+		if (kind != int(parent::get_kind())) return false;
 		if (!cFile.read(reinterpret_cast<char *>(_z), (3 * VSIZE * _num_regs * sizeof(ZP)) << LN)) return false;
 
 		_engine->write_memory_z(_z, _num_regs);
@@ -459,7 +462,7 @@ public:
 	{
 		_engine->read_memory_z(_z, _num_regs);
 
-		const int kind = int(get_kind());
+		const int kind = int(parent::get_kind());
 		if (!cFile.write(reinterpret_cast<const char *>(&kind), sizeof(kind))) return;
 		if (!cFile.write(reinterpret_cast<const char *>(_z), (3 * VSIZE * _num_regs * sizeof(ZP)) << LN)) return;
 	}
@@ -468,9 +471,9 @@ public:
 	size_t get_cache_size() const override { const size_t n = size_t(1) << LN; return (3 * (VSIZE * n + n / 2)) * sizeof(ZP); }
 	double get_error() const override { return 0; }
 
-	void is_one(bool b[8], UInt64_8 & res64) const override { _is_one(b, res64); }
-	UInt64_8 gethash64() const override { return _gethash64(); }
-	UInt32_8 gethash32() const override { return _gethash32(); }
+	void is_one(bool b[32], UInt64_8 res64[4]) const override { parent::_is_one(b, res64); }
+	void gethash64(UInt64_8 h[4]) const override { parent::_gethash64(h); }
+	b_vec gethash32() const override { return parent::_gethash32(); }
 
 #ifdef QVALID
 	void cosmic_ray() override { _engine->cosmic_ray(); }
@@ -478,10 +481,10 @@ public:
 };
 
 template<size_t VSIZE, bool IS32>
-inline transform * create_transformGPU(const UInt32_8 & b, const int m, const size_t num_regs, const size_t device_id,
+inline transform<VSIZE> * create_transformGPU(const b_vec & b, const int m, const size_t num_regs, const size_t device_id,
 						const bool is_boinc, const cl_platform_id boinc_platform_id, const cl_device_id boinc_device_id)
 {
-	transform * pTransform = nullptr;
+	transform<VSIZE> * pTransform = nullptr;
 #ifdef QVALID
 	if      (m == 10) pTransform = new transformGPU<VSIZE, IS32, 10>(b, num_regs, device_id, is_boinc, boinc_platform_id, boinc_device_id);
 	else if (m == 11) pTransform = new transformGPU<VSIZE, IS32, 11>(b, num_regs, device_id, is_boinc, boinc_platform_id, boinc_device_id);

@@ -28,12 +28,27 @@ Please give feedback to the authors if improvement is realized. It is distribute
 #include "file.h"
 #include "timer.h"
 
-class genefer
+class igenefer
 {
 public:
 	enum class EReturn { Success, Failed, Aborted };
 	enum class EMode { None, Quick, Proof, Server, Check, Bench };
 
+	static size_t display_devices() { return itransform::display_devices(); }
+
+public:
+	igenefer() {}
+	virtual ~igenefer() {}
+
+	virtual void quit() = 0;
+	virtual void set_boinc(const bool is_boinc) = 0;
+	virtual void set_filename(const std::string & main_filename) = 0;
+	virtual EReturn check(const std::string & b_filename, const int n, const size_t bsize, const EMode mode, const size_t device, const bool isCPU, const int depth = 7) = 0;
+};
+
+template<size_t VSIZE>
+class genefer : public igenefer
+{
 private:
 	struct deleter { void operator()(const genefer * const p) { delete p; } };
 
@@ -41,19 +56,13 @@ public:
 	genefer() {}
 	virtual ~genefer() {}
 
-	static genefer & get_instance()
-	{
-		static std::unique_ptr<genefer, deleter> pInstance(new genefer());
-		return *pInstance;
-	}
-
 private:
 	std::atomic_bool _quit = false;
 	bool _is_boinc = false;
 	bool _get_boinc_ids = false;
 	int _boinc_argc = 0;
 	char ** _boinc_argv = nullptr;
-	transform * _transform = nullptr;
+	transform<VSIZE> * _transform = nullptr;
 	std::string _main_filename;
 	int _print_range = 0, _print_i = 0;
 	bool _print_sr = true;
@@ -69,13 +78,13 @@ protected:
 	}
 
 public:
-	void quit()
+	void quit() override
 	{
 		std::atomic_thread_fence(std::memory_order_release);
 		_quit.store(true, std::memory_order_relaxed);
 	}
 
-	void set_boinc(const bool is_boinc) { _is_boinc = is_boinc; }
+	void set_boinc(const bool is_boinc) override { _is_boinc = is_boinc; }
 	void set_boinc_param(const bool get_boinc_ids, int argc, char * argv[])
 	{
 		_get_boinc_ids = get_boinc_ids;
@@ -88,9 +97,7 @@ public:
 		}
 	}
 
-	void set_filename(const std::string & main_filename) { _main_filename = main_filename; }
-
-	static size_t display_devices() { return transform::display_devices(); }
+	void set_filename(const std::string & main_filename) override { _main_filename = main_filename; }
 
 private:
 	void display_info(const bool full) const
@@ -110,7 +117,7 @@ private:
 							const bool verbose = true, const bool full = true)
 	{
 		delete_transform();
-		_transform = transform::create_gpu(b, n, num_regs, device, _is_boinc, _get_boinc_ids, _boinc_argc, _boinc_argv);
+		_transform = transform<VSIZE>::create_gpu(b, n, num_regs, device, _is_boinc, _get_boinc_ids, _boinc_argc, _boinc_argv);
 		if (verbose) display_info(full);
 	}
 
@@ -118,7 +125,7 @@ private:
 							const bool verbose = true, const bool full = true)
 	{
 		delete_transform();
-		_transform = transform::create_cpu(b, n, num_regs);
+		_transform = transform<VSIZE>::create_cpu(b, n, num_regs);
 		if (verbose) display_info(full);
 	}
 
@@ -147,13 +154,40 @@ private:
 		return ss.str();
 	}
 
-	static std::string gfn_status(const bool isPrp, const uint64_t pkey, const uint64_t ckey, const uint64_t res64)
+	static std::string gfn_status(const bool is_prp, const uint64_t pkey, const uint64_t ckey, const uint64_t res64)
 	{
 		std::ostringstream ss; ss << " is ";
-		if (isPrp) ss << "a probable prime"; else ss << "composite, res64 = " << uint64toString(res64);
+		if (is_prp) ss << "a probable prime"; else ss << "composite, res64 = " << uint64toString(res64);
 		if (pkey != 0) ss << ", pkey = " << uint64toString(pkey);
 		if (ckey != 0) ss << ", ckey = " << uint64toString(ckey);
 		ss << ".";
+		return ss.str();
+	}
+
+	static std::string gfn_vector_status(const b_vec & b, const int n, const bool is_prp[32],
+										 const UInt64_8 pkey[4], const UInt64_8 ckey[4], const UInt64_8 res64[4])
+	{
+		std::ostringstream ss;
+		for (size_t j = 0, size = b.get_size(); j < size; ++j)
+		{
+			for (size_t i = 0; i < 8; ++i)
+			{
+				ss << gfn(b[j][i], n) << gfn_status(is_prp[8 * j + i], pkey[j][i], ckey[j][i], res64[j][i]) << std::endl;
+			}
+		}
+		return ss.str();
+	}
+
+	static std::string gfn_vector_keys(const b_vec & b, const int n, const UInt64_8 ckey[4])
+	{
+		std::ostringstream ss;
+		for (size_t j = 0, size = b.get_size(); j < size; ++j)
+		{
+			for (size_t i = 0; i < 8; ++i)
+			{
+				ss << gfn(b[j][i], n) << ", ckey = " << uint64toString(ckey[j][i]) << std::endl;
+			}
+		}
 		return ss.str();
 	}
 
@@ -328,7 +362,7 @@ private:
 
 	void power_zvec(const size_t reg, const mpz_vec & e) const
 	{
-		transform * const ptransform = _transform;
+		transform<VSIZE> * const ptransform = _transform;
 		ptransform->init_multiplicand(reg);
 		ptransform->set(1);
 		for (int i = int(e.get_max_size()) - 1; i >= 0; --i)
@@ -356,7 +390,7 @@ private:
 	// out: reg_0 is 2^exponent and reg_1 is d(t)
 	EReturn prp(const mpz_vec & exponent, const int B_GL, const int B_PL, double & test_time)
 	{
-		transform * const ptransform = _transform;
+		transform<VSIZE> * const ptransform = _transform;
 
 		int ri = 0; double restored_time = 0;
 		const bool found = read_checkpoint(0, ri, restored_time);
@@ -427,7 +461,7 @@ private:
 	// out: return valid/invalid
 	EReturn GL(const mpz_vec & exponent, const int B_GL, double & valid_time)
 	{
-		transform * const ptransform = _transform;
+		transform<VSIZE> * const ptransform = _transform;
 
 		clearline(); pio::display("Validating...\r");
 
@@ -463,12 +497,12 @@ private:
 
 		// d(t)^{2^B} * 2^res ?= d(t + 1)
 		ptransform->to_int();
-		const UInt64_8 h1 = ptransform->gethash64();
+		UInt64_8 h1[4]; ptransform->gethash64(h1);
 		ptransform->copy(0, 2);
 		ptransform->to_int();
-		const UInt64_8 h2 = ptransform->gethash64();
+		UInt64_8 h2[4]; ptransform->gethash64(h2);
 
-		const bool success = h1.is_equal(h2);
+		const bool success = h1[0].is_equal(h2[0]);	// TODO
 
 		valid_time = chrono.get_elapsed_time();
 		return success ? EReturn::Success : EReturn::Failed;
@@ -477,9 +511,9 @@ private:
 	// (Pietrzak-Li proof generation
 	// in: ckpt[i]
 	// out: proof file, proof key
-	EReturn PL(const mpz_vec & exponent, const int depth, double & proof_time, UInt64_8 & pkey)
+	EReturn PL(const mpz_vec & exponent, const int depth, double & proof_time, UInt64_8 pkey[4])
 	{
-		transform * const ptransform = _transform;
+		transform<VSIZE> * const ptransform = _transform;
 
 		clearline(); pio::display("Generating proof...\r");
 
@@ -496,14 +530,13 @@ private:
 		ptransform->write(proof_file);
 
 		// v1 = mu[0]^w[0]
-		const UInt32_8 q = ptransform->gethash32();
+		const b_vec q = ptransform->gethash32();
 		ptransform->power_vec(0, q);
 		ptransform->copy(2, 0);
 
 		const size_t L = size_t(1) << depth;
 		std::vector<mpz_vec> w(L / 2, mpz_vec(exponent.get_size()));
-		b_vec qv(exponent.get_size() / 8); qv[0] = q;	// TODO
-		w[0].set_ui(qv);
+		w[0].set_ui(q);
 
 // size_t s = 0;	// complexity
 
@@ -532,7 +565,7 @@ private:
 // std::cout << k << ": " << s << ", " << 32 * k * (1 << (k - 1))<< std::endl;
 			ptransform->to_int();
 			ptransform->write(proof_file);
-			const UInt32_8 q = ptransform->gethash32();
+			const b_vec q = ptransform->gethash32();
 			// v1 = v1 * mu[k]^w[k]
 			ptransform->power_vec(0, q);
 			ptransform->mul(2);
@@ -540,8 +573,7 @@ private:
 
 			if (i > 1)
 			{
-				b_vec qv(exponent.get_size() / 8); qv[0] = q;	// TODO
-				for (size_t j = 0; j < L / 2; j += i) w[i / 2 + j].mul_ui(w[j], qv);
+				for (size_t j = 0; j < L / 2; j += i) w[i / 2 + j].mul_ui(w[j], q);
 			}
 		}
 
@@ -550,13 +582,13 @@ private:
 		// pkey = hash64(v1);
 		ptransform->copy(0, 2);
 		ptransform->to_int();
-		pkey = ptransform->gethash64();
+		ptransform->gethash64(pkey);
 
 		proof_time = chrono.get_elapsed_time();
 		return EReturn::Success;
 	}
 
-	EReturn quick(const mpz_vec & exponent, double & test_time, double & valid_time, bool is_prp[8], UInt64_8 & res64)
+	EReturn quick(const mpz_vec & exponent, double & test_time, double & valid_time, bool is_prp[32], UInt64_8 res64[4])
 	{
 		const int B_GL = B_GerbiczLi(exponent.get_max_size());
 
@@ -570,7 +602,7 @@ private:
 	}
 
 	EReturn proof(const mpz_vec & exponent, const int depth, double & test_time, double & valid_time, double & proof_time,
-				  bool is_prp[8], UInt64_8 & pkey, UInt64_8 & res64)
+				  bool is_prp[32], UInt64_8 pkey[4], UInt64_8 res64[4])
 	{
 		const size_t esize = exponent.get_max_size();
 		const int B_GL = B_GerbiczLi(esize), B_PL = B_PietrzakLi(esize, depth);
@@ -597,9 +629,9 @@ private:
 		return r;
 	}
 
-	EReturn server(const mpz_vec & exponent, double & time, bool is_prp[8], UInt64_8 & pkey, UInt64_8 & ckey, UInt64_8 & res64)
+	EReturn server(const mpz_vec & exponent, double & time, bool is_prp[32], UInt64_8 pkey[4], UInt64_8 ckey[4], UInt64_8 res64[4])
 	{
-		transform * const ptransform = _transform;
+		transform<VSIZE> * const ptransform = _transform;
 
 		watch chrono;
 
@@ -617,9 +649,8 @@ private:
 		ptransform->read(proof_file);
 		ptransform->from_int();
 		ptransform->is_one(is_prp, res64);
-		const UInt32_8 q = ptransform->gethash32();
-		b_vec qv(exponent.get_size() / 8); qv[0] = q;	// TODO
-		w[0].set_ui(qv);
+		const b_vec q = ptransform->gethash32();
+		w[0].set_ui(q);
 		ptransform->power_vec(0, q);
 		ptransform->copy(1, 0);
 
@@ -632,7 +663,7 @@ private:
 			// mu[k]: reg = 3
 			ptransform->read(proof_file);
 			ptransform->from_int();
-			const UInt32_8 q = ptransform->gethash32();
+			const b_vec q = ptransform->gethash32();
 			ptransform->copy(3, 0);
 
 			// v1 = v1 * mu[k]^w[k]
@@ -646,8 +677,7 @@ private:
 			ptransform->copy(2, 0);
 
 			const size_t i = size_t(1) << (depth - k);
-			b_vec qv(exponent.get_size() / 8); qv[0] = q;	// TODO
-			for (size_t j = 0; j < L; j += 2 * i) w[i + j].mul_ui(w[j], qv);
+			for (size_t j = 0; j < L; j += 2 * i) w[i + j].mul_ui(w[j], q);
 
 			if (quitting()) return EReturn::Aborted;
 		}
@@ -657,7 +687,7 @@ private:
 		// pkey = hash64(v1);
 		ptransform->copy(0, 1);
 		ptransform->to_int();
-		pkey = ptransform->gethash64();
+		ptransform->gethash64(pkey);
 
 		mpz_vec p2(exponent.get_size()); p2.set_PL_residue(exponent, B_PL, w.data(), L);
 
@@ -680,7 +710,7 @@ private:
 		ptransform->power(0, rnd3);
 		ptransform->mul(1);
 		ptransform->to_int();
-		ckey = ptransform->gethash64();
+		ptransform->gethash64(ckey);
 
 		ptransform->power(2, rnd2);
 		p2.mul_ui(rnd2);
@@ -701,9 +731,9 @@ private:
 		return EReturn::Success;
 	}
 
-	EReturn check(const size_t bsize, double & time, UInt64_8 & ckey)
+	EReturn check(const size_t bsize, double & time, UInt64_8 ckey[4])
 	{
-		transform * const ptransform = _transform;
+		transform<VSIZE> * const ptransform = _transform;
 
 		int ri = 0; double restored_time = 0;
 		const bool found = read_checkpoint(1, ri, restored_time);
@@ -809,12 +839,12 @@ private:
 
 			// u(0) * d(t)^{2^L} ?= d(t + 1)
 			ptransform->to_int();
-			const UInt64_8 h1 = ptransform->gethash64();
+			UInt64_8 h1[4]; ptransform->gethash64(h1);
 			ptransform->copy(0, 3);
 			ptransform->to_int();
-			const UInt64_8 h2 = ptransform->gethash64();
+			UInt64_8 h2[4]; ptransform->gethash64(h2);
 
-			if (!h1.is_equal(h2)) return EReturn::Failed;
+			if (!h1[0].is_equal(h2[0])) return EReturn::Failed;	// TODO
 		}
 
 		// 2^p2
@@ -860,7 +890,7 @@ private:
 
 		// ckey = hash64(v1')
 		ptransform->to_int();
-		ckey = ptransform->gethash64();
+		ptransform->gethash64(ckey);
 
 		// d(t + 1) = d(t) * result
 		ptransform->copy(0, 3);
@@ -893,12 +923,12 @@ private:
 
 		// d(t)^{2^GL} * 2^res ?= d(t + 1)
 		ptransform->to_int();
-		const UInt64_8 h1 = ptransform->gethash64();
+		UInt64_8 h1[4]; ptransform->gethash64(h1);
 		ptransform->copy(0, 2);
 		ptransform->to_int();
-		const UInt64_8 h2 = ptransform->gethash64();
+		UInt64_8 h2[4]; ptransform->gethash64(h2);
 
-		if (!h1.is_equal(h2)) return EReturn::Failed;
+		if (!h1[0].is_equal(h2[0])) return EReturn::Failed;	// TODO
 
 		time = chrono.get_elapsed_time();
 		return EReturn::Success;
@@ -913,16 +943,16 @@ private:
 		if (isCPU) create_transform_CPU(b, n, num_regs, n == 7, false);
 		else create_transform_GPU(b, n, num_regs, device, n == 7, false);
 
-		transform * const pTransform = _transform;
+		transform<VSIZE> * const pTransform = _transform;
 
-		b_vec e(bsize / 8); e.init(1000, 2, 2);
+		b_vec e(bsize / 8); e.init(isCPU ? 1000 : 100000, 2, 2);
 		mpz_vec exponent(bsize); exponent.set_exponent(e, 6);
 
-		double testTime = 0, validTime = 0; bool is_prp[8]; UInt64_8 res64;
-		const EReturn qret = quick(exponent, testTime, validTime, is_prp, res64);
+		double test_time = 0, valid_time = 0; bool is_prp[32]; UInt64_8 res64[4];
+		const EReturn qret = quick(exponent, test_time, valid_time, is_prp, res64);
 		clear_checkpoint();
 
-		std::ostringstream ssg; ssg << "[" << b.get_min() << "-" << b.get_max() << "]^{2^" << n << "} + 1";
+		std::ostringstream ssg; ssg << "[" << b.min() << "-" << b.max() << "]^{2^" << n << "} + 1";
 		pio::print(ssg.str());
 
 		std::ostringstream ss;
@@ -975,7 +1005,7 @@ private:
 	}
 
 public:
-	EReturn check(const std::string & b_filename, const int n, const size_t bsize, const EMode mode, const size_t device, const bool isCPU, const int depth = 7)
+	EReturn check(const std::string & b_filename, const int n, const size_t bsize, const EMode mode, const size_t device, const bool isCPU, const int depth = 7) override
 	{
 		if (mode == EMode::Bench)
 		{
@@ -988,7 +1018,7 @@ public:
 		const bool empty_main_filename = _main_filename.empty();
 		if (empty_main_filename)
 		{
-			std::ostringstream ss; ss << "g" << n << "_" << b.get_min() << "_" << b.get_max();
+			std::ostringstream ss; ss << "g" << n << "_" << b.min() << "_" << b.max();
 			_main_filename = ss.str();
 		}
 
@@ -1007,7 +1037,7 @@ public:
 
 		if (mode == EMode::Check)
 		{
-			double time = 0; UInt64_8 ckey;
+			double time = 0; UInt64_8 ckey[4];
 			success = check(bsize, time, ckey);
 			const double error = _transform->get_error();
 			clearline();
@@ -1023,9 +1053,8 @@ public:
 			ss << std::endl; pio::print(ss.str());
 			if (success == EReturn::Success)
 			{
-				std::ostringstream ssr;
-				for (size_t j = 0; j < 8; ++j) ssr << gfn(b[0][j], n) << ", ckey = " << uint64toString(ckey[j]) << std::endl;
-				pio::result(ssr.str());
+				const std::string sk = gfn_vector_keys(b, n, ckey);
+				pio::result(sk);
 				if (!_is_boinc) clear_checkpoint();
 			}
 		}
@@ -1035,7 +1064,7 @@ public:
 
 			if (mode == EMode::Quick)
 			{
-				double test_time = 0, valid_time = 0; bool is_prp[8]; UInt64_8 res64;
+				double test_time = 0, valid_time = 0; bool is_prp[32]; UInt64_8 res64[4];
 				success = quick(exponent, test_time, valid_time, is_prp, res64);
 				const double error = _transform->get_error();
 				clearline();
@@ -1047,7 +1076,8 @@ public:
 					ss << "Test succeeded";
 					if (error != 0) ss << ", error = " << std::setprecision(4) << error;
 					ss << ", time = " << timer::format_time(test_time + valid_time) << "." << std::endl;
-					for (size_t j = 0; j < 8; ++j) ss << gfn(b[0][j], n) << gfn_status(is_prp[j], 0, 0, res64[j]) << std::endl;	// TODO
+					UInt64_8 zkey[4]; for (size_t i = 0; i < 4; ++i) zkey[i] = UInt64_8(0ull);
+					ss << gfn_vector_status(b, n, is_prp, zkey, zkey, res64) << std::endl;
 				}
 				pio::print(ss.str());
 				if ((success == EReturn::Success) || (!_is_boinc && (success == EReturn::Failed))) pio::result(ss.str());
@@ -1055,7 +1085,7 @@ public:
 			}
 			else if (mode == EMode::Proof)
 			{
-				double test_time = 0, valid_time = 0, proof_time = 0; bool is_prp[8]; UInt64_8 pkey, res64;
+				double test_time = 0, valid_time = 0, proof_time = 0; bool is_prp[32]; UInt64_8 pkey[4], res64[4];
 				success = proof(exponent, depth, test_time, valid_time, proof_time, is_prp, pkey, res64);
 				const double error = _transform->get_error();
 				const double time = test_time + valid_time + proof_time;
@@ -1072,15 +1102,15 @@ public:
 				ss << std::endl; pio::print(ss.str());
 				if (success == EReturn::Success)
 				{
-					std::ostringstream ssr;
-					for (size_t j = 0; j < 8; ++j) ssr << gfn(b[0][j], n) << gfn_status(is_prp[j], pkey[j], 0, res64[j]) << std::endl;	// TODO
-					pio::result(ssr.str());
+					UInt64_8 zkey[4]; for (size_t i = 0; i < 4; ++i) zkey[i] = UInt64_8(0ull);
+					const std::string st = gfn_vector_status(b, n, is_prp, pkey, zkey, res64);
+					pio::result(st);
 					if (!_is_boinc) clear_checkpoint();
 				}
 			}
 			else if (mode == EMode::Server)
 			{
-				double time = 0; bool is_prp[8]; UInt64_8 pkey, ckey, res64;
+				double time = 0; bool is_prp[32]; UInt64_8 pkey[4], ckey[4], res64[4];
 				success = server(exponent, time, is_prp, pkey, ckey, res64);
 				const double error = _transform->get_error();
 				std::ostringstream ss;
@@ -1095,10 +1125,9 @@ public:
 				ss << std::endl; pio::print(ss.str());
 				if (success == EReturn::Success)
 				{
-					std::ostringstream ssr;
-					for (size_t j = 0; j < 8; ++j) ssr << gfn(b[0][j], n) << gfn_status(is_prp[j], pkey[j], ckey[j], res64[j]) << std::endl;	// TODO
-					pio::print(ssr.str());
-					if (success == EReturn::Success) pio::result(ssr.str());
+					const std::string st = gfn_vector_status(b, n, is_prp, pkey, ckey, res64);
+					pio::print(st);
+					if (success == EReturn::Success) pio::result(st);
 				}
 			}
 		}

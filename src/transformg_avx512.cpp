@@ -11,35 +11,40 @@ Please give feedback to the authors if improvement is realized. It is distribute
 
 #include "transformGPU.h"
 
-#if defined(BOINC)
 // Defined in transformg_sse2
 extern void get_opencl_ids(int argc, char * argv[], cl_device_id & boinc_device_id, cl_platform_id & boinc_platform_id);
-#endif
 
-transform * transform::create_ocl_avx512(const UInt32_8 & b, const int n, const size_t num_regs, const size_t device,
-								  const bool is_boinc, const bool get_boinc_ids, int _boinc_argc, char ** _boinc_argv)
-{
-	cl_platform_id boinc_platform_id = 0;
-	cl_device_id boinc_device_id = 0;
-#if defined(BOINC)
-	if (get_boinc_ids) get_opencl_ids(_boinc_argc, _boinc_argv, boinc_device_id, boinc_platform_id);
-#else
-	(void)get_boinc_ids;
-	(void)_boinc_argc;
-	(void)_boinc_argv;
-#endif
-
-	transform * ptransform = nullptr;
-	const uint32_t b_max = b.max();
-
-	if (b_max <= 1000000000)
-	{
-		ptransform = arch_g_avx512_namespace::create_transformGPU<8, false>(b, n, num_regs, device, is_boinc, boinc_platform_id, boinc_device_id);
-	}
-	else
-	{
-		ptransform = arch_g_avx512_namespace::create_transformGPU<8, true>(b, n, num_regs, device, is_boinc, boinc_platform_id, boinc_device_id);
-	}
-	ptransform->set_type("AVX-512");
-	return ptransform;
+#define _create_ocl_avx512(SIZE) \
+template<> \
+transform<SIZE> * transform<SIZE>::create_ocl_avx512(const b_vec & b, const int n, const size_t num_regs, const size_t device, \
+											const bool is_boinc, const bool get_boinc_ids, int _boinc_argc, char ** _boinc_argv) \
+{ \
+	cl_platform_id boinc_platform_id = 0; \
+	cl_device_id boinc_device_id = 0; \
+	if (get_boinc_ids) get_opencl_ids(_boinc_argc, _boinc_argv, boinc_device_id, boinc_platform_id); \
+ \
+	transform<SIZE> * ptransform = nullptr; \
+	const uint32_t b_max = b.max(); \
+ \
+	if (b_max <= 1000000000) \
+	{ \
+		ptransform = arch_g_avx512_namespace::create_transformGPU<SIZE, false>(b, n, num_regs, device, is_boinc, boinc_platform_id, boinc_device_id); \
+	} \
+	else \
+	{ \
+		ptransform = arch_g_avx512_namespace::create_transformGPU<SIZE, true>(b, n, num_regs, device, is_boinc, boinc_platform_id, boinc_device_id); \
+	} \
+	ptransform->set_type("AVX-512"); \
+	return ptransform; \
 }
+
+template<size_t VSIZE>
+transform<VSIZE> * transform<VSIZE>::create_ocl_avx512(const b_vec & b, const int n, const size_t num_regs, const size_t device,
+											const bool is_boinc, const bool get_boinc_ids, int _boinc_argc, char ** _boinc_argv)
+{
+	return nullptr;
+}
+
+_create_ocl_avx512(8)
+_create_ocl_avx512(16)
+_create_ocl_avx512(32)

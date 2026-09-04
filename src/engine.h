@@ -308,7 +308,7 @@ public:
 	void write_memory_b(const uint32_t * const b, const uint32_t * const b_inv, const int * const b_s)
 	{
 		uint32_2 bb_inv[VSIZE]; for (size_t i = 0; i < VSIZE; ++i) { bb_inv[i].s[0] = b[i]; bb_inv[i].s[1] = b_inv[i]; }
-		int32 bs[8]; for (size_t i = 0; i < VSIZE; ++i) bs[i] = int32(b_s[i]);
+		int32 bs[VSIZE]; for (size_t i = 0; i < VSIZE; ++i) bs[i] = int32(b_s[i]);
 		_writeBuffer(_bb_inv, bb_inv, VSIZE * sizeof(uint32_2));
 		_writeBuffer(_bs, bs, VSIZE * sizeof(int32));
 	}
