@@ -12,17 +12,15 @@ Please give feedback to the authors if improvement is realized. It is distribute
 #include "vint.h"
 #include "pio.h"
 
+template<size_t SIZE>
 class b_vec
 {
 private:
-	const size_t _size;
-	UInt32_8 _b[4];
+	UInt32_8 _b[SIZE];
 
 public:
-	explicit b_vec(const size_t size) : _size(size) {}
+	explicit b_vec() {}
 	virtual ~b_vec() {}
-
-	size_t get_size() const { return _size; }
 
 	const UInt32_8 & operator[](const size_t i) const { return _b[i]; }
 	UInt32_8 & operator[](const size_t i) { return _b[i]; }
@@ -30,7 +28,7 @@ public:
 	void init(const uint32_t b_max, const uint32_t step_min, const uint32_t step_max)
 	{
 		uint32_t b = b_max;
-		for (size_t j = 0, size = _size; j < size; ++j)
+		for (size_t j = 0; j < SIZE; ++j)
 		{
 			uint32_t nb[8];
 			for (size_t i = 0; i < 8; ++i)
@@ -49,7 +47,7 @@ public:
 		std::ifstream file(b_filename);
 		if (!file.is_open()) pio::error("cannot open input file", true);
 
-		for (size_t j = 0, size = _size; j < size; ++j)
+		for (size_t j = 0; j < SIZE; ++j)
 		{
 			size_t i = 0;
 			std::string line;
@@ -75,7 +73,7 @@ public:
 	{
 		const UInt32_8 * const b = _b;
 		uint32_t b_min = b[0].min();
-		for (size_t j = 1, size = _size; j < size; ++j) b_min = std::min(b_min, b[j].min());
+		for (size_t j = 1; j < SIZE; ++j) b_min = std::min(b_min, b[j].min());
 		return b_min;
 	}
 
@@ -83,7 +81,7 @@ public:
 	{
 		const UInt32_8 * const b = _b;
 		uint32_t b_max = b[0].max();
-		for (size_t j = 1, size = _size; j < size; ++j) b_max = std::max(b_max, b[j].max());
+		for (size_t j = 1; j < SIZE; ++j) b_max = std::max(b_max, b[j].max());
 		return b_max;
 	}
 
@@ -91,7 +89,7 @@ public:
 	{
 		const UInt32_8 * const b = _b;
 		uint32_t mask = 0;
-		for (size_t j = 0, size = _size; j < size; ++j) mask |= uint32_t(b[j].get_bit_mask(i)) << (8 * j);
+		for (size_t j = 0; j < SIZE; ++j) mask |= uint32_t(b[j].get_bit_mask(i)) << (8 * j);
 		return mask;
 	}
 };

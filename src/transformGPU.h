@@ -100,6 +100,11 @@ namespace arch_g_namespace
 template<size_t VSIZE, bool IS32, int LN>
 class transformGPU : public transform<VSIZE>
 {
+	using parent = transform<VSIZE>;
+	using xengine = engine<VSIZE, IS32>;
+
+	using bvec = b_vec<VSIZE / 8>;
+
 	template<uint32 P, uint32 Q, uint32 R, uint32 H>
 	class ZPT : public ZP
 	{
@@ -142,16 +147,12 @@ class transformGPU : public transform<VSIZE>
 	using ZP3 = ZPT<IS32 ? P3U : P3S, IS32 ? Q3U : Q3S, IS32 ? R3U : R3S, IS32 ? H3U : H3S>;
 
 private:
-	using xengine = engine<VSIZE, IS32>;
-
 	const size_t _num_regs;
 	ZP * const _z;
 	xengine * _engine = nullptr;
 
-	using parent = transform<VSIZE>;
-
 public:
-	transformGPU(const b_vec & b, const size_t num_regs, const size_t device_id,
+	transformGPU(const bvec & b, const size_t num_regs, const size_t device_id,
 				 const bool is_boinc, const cl_platform_id boinc_platform_id, const cl_device_id boinc_device_id)
 				: transform<VSIZE>(b, LN, parent::EKind::GPU), _num_regs(num_regs), _z(new ZP[3 * VSIZE * num_regs << LN])
 	{
@@ -445,7 +446,7 @@ public:
 	}
 
 	void power(const size_t src, const uint32_t e) override { parent::_power(src, e); }
-	void power_vec(const size_t src, const b_vec & e) override { parent::_power_vec(src, e); }
+	void power_vec(const size_t src, const bvec & e) override { parent::_power_vec(src, e); }
 
 	bool read_checkpoint(file & cFile) override
 	{
@@ -473,7 +474,7 @@ public:
 
 	void is_one(bool b[32], UInt64_8 res64[4]) const override { parent::_is_one(b, res64); }
 	void gethash64(UInt64_8 h[4]) const override { parent::_gethash64(h); }
-	b_vec gethash32() const override { return parent::_gethash32(); }
+	bvec gethash32() const override { return parent::_gethash32(); }
 
 #ifdef QVALID
 	void cosmic_ray() override { _engine->cosmic_ray(); }
@@ -481,7 +482,7 @@ public:
 };
 
 template<size_t VSIZE, bool IS32>
-inline transform<VSIZE> * create_transformGPU(const b_vec & b, const int m, const size_t num_regs, const size_t device_id,
+inline transform<VSIZE> * create_transformGPU(const b_vec<VSIZE / 8> & b, const int m, const size_t num_regs, const size_t device_id,
 						const bool is_boinc, const cl_platform_id boinc_platform_id, const cl_device_id boinc_device_id)
 {
 	transform<VSIZE> * pTransform = nullptr;

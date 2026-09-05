@@ -409,6 +409,9 @@ public:
 template<size_t VSIZE, size_t N>
 class transformCPU : public transform<VSIZE>
 {
+	using bvec = b_vec<VSIZE / 8>;
+	using parent = transform<VSIZE>;
+
 private:
 	const size_t _num_regs;
 	const Double_8 _base, _base_inv;
@@ -417,10 +420,9 @@ private:
 	TwiddleFactor * const _w;
 	double _error;
 
-	using parent = transform<VSIZE>;
 
 public:
-	transformCPU(const b_vec & b, const int n, const size_t num_regs) : transform<VSIZE>(b, n, parent::EKind::CPU),
+	transformCPU(const bvec & b, const int n, const size_t num_regs) : transform<VSIZE>(b, n, parent::EKind::CPU),
 		_num_regs(num_regs), _base(UInt32_8_to_Double_8(b[0])), _base_inv(_base.inverse()),	// TODO
 		_z(static_cast<Complex_8_pair *>(align_new(num_regs * N * sizeof(Complex_8_pair), 2 * 1024 * 1024))),
 		_zp(static_cast<Complex_8_pair *>(align_new(N * sizeof(Complex_8_pair), sizeof(Complex_8_pair)))),
@@ -827,7 +829,7 @@ public:
 	}
 
 	void power(const size_t src, const uint32_t e) override { parent::_power(src, e); }
-	void power_vec(const size_t src, const b_vec & e) override { parent::_power_vec(src, e); }
+	void power_vec(const size_t src, const bvec & e) override { parent::_power_vec(src, e); }
 
 	bool read_checkpoint(file & cFile) override
 	{
@@ -851,7 +853,7 @@ public:
 
 	void is_one(bool b[32], UInt64_8 res64[4]) const override { parent::_is_one(b, res64); }
 	void gethash64(UInt64_8 h[4]) const override { parent::_gethash64(h); }
-	b_vec gethash32() const override { return parent::_gethash32(); }
+	bvec gethash32() const override { return parent::_gethash32(); }
 
 #ifdef QVALID
 	void cosmic_ray() override { const Complex_8 z = _z[N / 2].get(); Double_8 x = z.real(); x.cosmic_ray(); _z[N / 2].set(Complex_8(x, z.imag())); }
@@ -859,13 +861,13 @@ public:
 };
 
 template<size_t VSIZE>
-inline transform<VSIZE> * create_transformCPU(const b_vec & b, const int n, const size_t num_regs)
+inline transform<VSIZE> * create_transformCPU(const b_vec<VSIZE / 8> & b, const int n, const size_t num_regs)
 {
 	transform<VSIZE> * ptransform = nullptr;
 #ifdef QVALID
 	if      (n == 10) ptransform = new transformCPU<VSIZE, (1 <<  9)>(b, n, num_regs);
-	else if (n == 11) ptransform = new transformCPU<VSIZE, (1 << 10)>(b, n, num_regs);
-	else if (n == 12) ptransform = new transformCPU<VSIZE, (1 << 11)>(b, n, num_regs);
+	// else if (n == 11) ptransform = new transformCPU<VSIZE, (1 << 10)>(b, n, num_regs);
+	// else if (n == 12) ptransform = new transformCPU<VSIZE, (1 << 11)>(b, n, num_regs);
 #else
 	if      (n == 13) ptransform = new transformCPU<VSIZE, (1 << 12)>(b, n, num_regs);
 	else if (n == 14) ptransform = new transformCPU<VSIZE, (1 << 13)>(b, n, num_regs);

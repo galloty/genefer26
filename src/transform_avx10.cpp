@@ -13,7 +13,7 @@ Please give feedback to the authors if improvement is realized. It is distribute
 
 #define _create_avx10(SIZE) \
 template<> \
-transform<SIZE> * transform<SIZE>::create_avx10(const b_vec & b, const int n, const size_t num_regs) \
+transform<SIZE> * transform<SIZE>::create_avx10(const b_vec<SIZE / 8> & b, const int n, const size_t num_regs) \
 { \
 	transform<SIZE> * ptransform = arch_avx10_namespace::create_transformCPU<SIZE>(b, n, num_regs); \
 	ptransform->set_type("AVX10.2"); \
@@ -21,11 +21,17 @@ transform<SIZE> * transform<SIZE>::create_avx10(const b_vec & b, const int n, co
 }
 
 template<size_t VSIZE>
-transform<VSIZE> * transform<VSIZE>::create_avx10(const b_vec & b, const int n, const size_t num_regs)
+transform<VSIZE> * transform<VSIZE>::create_avx10(const b_vec<VSIZE / 8> & b, const int n, const size_t num_regs)
 {
 	return nullptr;
 }
 
+#ifndef NO8
 _create_avx10(8)
+#endif
+#ifndef NO16
 _create_avx10(16)
+#endif
+#ifndef NO32
 _create_avx10(32)
+#endif

@@ -32,13 +32,16 @@ void get_opencl_ids(int argc, char * argv[], cl_device_id & boinc_device_id, cl_
 
 #else
 
-void get_opencl_ids(int argc, char * argv[], cl_device_id & boinc_device_id, cl_platform_id & boinc_platform_id) {}
+void get_opencl_ids(int argc, char * argv[], cl_device_id & boinc_device_id, cl_platform_id & boinc_platform_id)
+{
+	(void)argc; (void)argv; (void)boinc_device_id; (void)boinc_platform_id;
+}
 
 #endif
 
 #define _create_ocl_sse2(SIZE) \
 template<> \
-transform<SIZE> * transform<SIZE>::create_ocl_sse2(const b_vec & b, const int n, const size_t num_regs, const size_t device, \
+transform<SIZE> * transform<SIZE>::create_ocl_sse2(const b_vec<SIZE / 8> & b, const int n, const size_t num_regs, const size_t device, \
 											const bool is_boinc, const bool get_boinc_ids, int _boinc_argc, char ** _boinc_argv) \
 { \
 	cl_platform_id boinc_platform_id = 0; \
@@ -61,12 +64,18 @@ transform<SIZE> * transform<SIZE>::create_ocl_sse2(const b_vec & b, const int n,
 }
 
 template<size_t VSIZE>
-transform<VSIZE> * transform<VSIZE>::create_ocl_sse2(const b_vec & b, const int n, const size_t num_regs, const size_t device,
+transform<VSIZE> * transform<VSIZE>::create_ocl_sse2(const b_vec<VSIZE / 8> & b, const int n, const size_t num_regs, const size_t device,
 											const bool is_boinc, const bool get_boinc_ids, int _boinc_argc, char ** _boinc_argv)
 {
 	return nullptr;
 }
 
+#ifndef NO8
 _create_ocl_sse2(8)
+#endif
+#ifndef NO16
 _create_ocl_sse2(16)
+#endif
+#ifndef NO32
 _create_ocl_sse2(32)
+#endif

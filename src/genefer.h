@@ -43,12 +43,15 @@ public:
 	virtual void quit() = 0;
 	virtual void set_boinc(const bool is_boinc) = 0;
 	virtual void set_filename(const std::string & main_filename) = 0;
-	virtual EReturn check(const std::string & b_filename, const int n, const size_t bsize, const EMode mode, const size_t device, const bool isCPU, const int depth = 7) = 0;
+	virtual EReturn check(const std::string & b_filename, const int n, const EMode mode, const size_t device, const bool isCPU, const int depth) = 0;
 };
 
 template<size_t VSIZE>
 class genefer : public igenefer
 {
+	using bvec = b_vec<VSIZE / 8>;
+	using mpzv = mpz_vec<VSIZE>;
+
 private:
 	struct deleter { void operator()(const genefer * const p) { delete p; } };
 
@@ -113,7 +116,7 @@ private:
 		pio::print(ss.str());
 	}
 
-	void create_transform_GPU(const b_vec & b, const int n, const size_t num_regs, const size_t device,
+	void create_transform_GPU(const bvec & b, const int n, const size_t num_regs, const size_t device,
 							const bool verbose = true, const bool full = true)
 	{
 		delete_transform();
@@ -121,7 +124,7 @@ private:
 		if (verbose) display_info(full);
 	}
 
-	void create_transform_CPU(const b_vec & b, const int n, const size_t num_regs,
+	void create_transform_CPU(const bvec & b, const int n, const size_t num_regs,
 							const bool verbose = true, const bool full = true)
 	{
 		delete_transform();
@@ -164,11 +167,11 @@ private:
 		return ss.str();
 	}
 
-	static std::string gfn_vector_status(const b_vec & b, const int n, const bool is_prp[32],
+	static std::string gfn_vector_status(const bvec & b, const int n, const bool is_prp[32],
 										 const UInt64_8 pkey[4], const UInt64_8 ckey[4], const UInt64_8 res64[4])
 	{
 		std::ostringstream ss;
-		for (size_t j = 0, size = b.get_size(); j < size; ++j)
+		for (size_t j = 0; j < VSIZE / 8; ++j)
 		{
 			for (size_t i = 0; i < 8; ++i)
 			{
@@ -178,10 +181,10 @@ private:
 		return ss.str();
 	}
 
-	static std::string gfn_vector_keys(const b_vec & b, const int n, const UInt64_8 ckey[4])
+	static std::string gfn_vector_keys(const bvec & b, const int n, const UInt64_8 ckey[4])
 	{
 		std::ostringstream ss;
-		for (size_t j = 0, size = b.get_size(); j < size; ++j)
+		for (size_t j = 0; j < VSIZE / 8; ++j)
 		{
 			for (size_t i = 0; i < 8; ++i)
 			{
@@ -360,7 +363,7 @@ private:
 		}
 	}
 
-	void power_zvec(const size_t reg, const mpz_vec & e) const
+	void power_zvec(const size_t reg, const mpzv & e) const
 	{
 		transform<VSIZE> * const ptransform = _transform;
 		ptransform->init_multiplicand(reg);
@@ -388,7 +391,7 @@ private:
 	}
 
 	// out: reg_0 is 2^exponent and reg_1 is d(t)
-	EReturn prp(const mpz_vec & exponent, const int B_GL, const int B_PL, double & test_time)
+	EReturn prp(const mpzv & exponent, const int B_GL, const int B_PL, double & test_time)
 	{
 		transform<VSIZE> * const ptransform = _transform;
 
@@ -459,7 +462,7 @@ private:
 	// Gerbicz-Li error checking
 	// in: reg_0 is 2^exponent and reg_1 is d(t)
 	// out: return valid/invalid
-	EReturn GL(const mpz_vec & exponent, const int B_GL, double & valid_time)
+	EReturn GL(const mpzv & exponent, const int B_GL, double & valid_time)
 	{
 		transform<VSIZE> * const ptransform = _transform;
 
@@ -481,7 +484,7 @@ private:
 		}
 		ptransform->copy(1, 0);
 
-		mpz_vec res(exponent.get_size()); res.set_GL_residue(exponent, B_GL);
+		mpzv res; res.set_GL_residue(exponent, B_GL);
 
 		// 2^res
 		ptransform->set(1);
@@ -511,7 +514,7 @@ private:
 	// (Pietrzak-Li proof generation
 	// in: ckpt[i]
 	// out: proof file, proof key
-	EReturn PL(const mpz_vec & exponent, const int depth, double & proof_time, UInt64_8 pkey[4])
+	EReturn PL(const int depth, double & proof_time, UInt64_8 pkey[4])
 	{
 		transform<VSIZE> * const ptransform = _transform;
 
@@ -530,12 +533,12 @@ private:
 		ptransform->write(proof_file);
 
 		// v1 = mu[0]^w[0]
-		const b_vec q = ptransform->gethash32();
+		const bvec q = ptransform->gethash32();
 		ptransform->power_vec(0, q);
 		ptransform->copy(2, 0);
 
 		const size_t L = size_t(1) << depth;
-		std::vector<mpz_vec> w(L / 2, mpz_vec(exponent.get_size()));
+		std::vector<mpzv> w(L / 2);
 		w[0].set_ui(q);
 
 // size_t s = 0;	// complexity
@@ -565,7 +568,7 @@ private:
 // std::cout << k << ": " << s << ", " << 32 * k * (1 << (k - 1))<< std::endl;
 			ptransform->to_int();
 			ptransform->write(proof_file);
-			const b_vec q = ptransform->gethash32();
+			const bvec q = ptransform->gethash32();
 			// v1 = v1 * mu[k]^w[k]
 			ptransform->power_vec(0, q);
 			ptransform->mul(2);
@@ -588,7 +591,7 @@ private:
 		return EReturn::Success;
 	}
 
-	EReturn quick(const mpz_vec & exponent, double & test_time, double & valid_time, bool is_prp[32], UInt64_8 res64[4])
+	EReturn quick(const mpzv & exponent, double & test_time, double & valid_time, bool is_prp[32], UInt64_8 res64[4])
 	{
 		const int B_GL = B_GerbiczLi(exponent.get_max_size());
 
@@ -601,7 +604,7 @@ private:
 		return GL(exponent, B_GL, valid_time);
 	}
 
-	EReturn proof(const mpz_vec & exponent, const int depth, double & test_time, double & valid_time, double & proof_time,
+	EReturn proof(const mpzv & exponent, const int depth, double & test_time, double & valid_time, double & proof_time,
 				  bool is_prp[32], UInt64_8 pkey[4], UInt64_8 res64[4])
 	{
 		const size_t esize = exponent.get_max_size();
@@ -615,7 +618,7 @@ private:
 
 		const EReturn rGL = GL(exponent, B_GL, valid_time);
 		if (rGL != EReturn::Success) return rGL;
-		return PL(exponent, depth, proof_time, pkey);
+		return PL(depth, proof_time, pkey);
 	}
 
 	static uint32_t rand32(const uint32_t rmin, const uint32_t rmax)
@@ -629,7 +632,7 @@ private:
 		return r;
 	}
 
-	EReturn server(const mpz_vec & exponent, double & time, bool is_prp[32], UInt64_8 pkey[4], UInt64_8 ckey[4], UInt64_8 res64[4])
+	EReturn server(const mpzv & exponent, double & time, bool is_prp[32], UInt64_8 pkey[4], UInt64_8 ckey[4], UInt64_8 res64[4])
 	{
 		transform<VSIZE> * const ptransform = _transform;
 
@@ -643,13 +646,13 @@ private:
 		const size_t esize = exponent.get_max_size();
 		const int B_PL = B_PietrzakLi(esize, depth);
 
-		std::vector<mpz_vec> w(L, mpz_vec(exponent.get_size()));
+		std::vector<mpzv> w(L);
 
 		// v1 = mu[0]^w[0], v1: reg = 1
 		ptransform->read(proof_file);
 		ptransform->from_int();
 		ptransform->is_one(is_prp, res64);
-		const b_vec q = ptransform->gethash32();
+		const bvec q = ptransform->gethash32();
 		w[0].set_ui(q);
 		ptransform->power_vec(0, q);
 		ptransform->copy(1, 0);
@@ -663,7 +666,7 @@ private:
 			// mu[k]: reg = 3
 			ptransform->read(proof_file);
 			ptransform->from_int();
-			const b_vec q = ptransform->gethash32();
+			const bvec q = ptransform->gethash32();
 			ptransform->copy(3, 0);
 
 			// v1 = v1 * mu[k]^w[k]
@@ -689,7 +692,7 @@ private:
 		ptransform->to_int();
 		ptransform->gethash64(pkey);
 
-		mpz_vec p2(exponent.get_size()); p2.set_PL_residue(exponent, B_PL, w.data(), L);
+		mpzv p2; p2.set_PL_residue(exponent, B_PL, w.data(), L);
 
 		// encode
 		std::srand(static_cast<unsigned int>(std::time(nullptr))); std::rand();	// use current time as seed for random generator
@@ -731,7 +734,7 @@ private:
 		return EReturn::Success;
 	}
 
-	EReturn check(const size_t bsize, double & time, UInt64_8 ckey[4])
+	EReturn check(double & time, UInt64_8 ckey[4])
 	{
 		transform<VSIZE> * const ptransform = _transform;
 
@@ -748,7 +751,7 @@ private:
 		}
 
 		int B_PL = 0;
-		mpz_vec p2(bsize);
+		mpzv p2;
 		{
 			file cert_file(cert_filename(), "rb", true);
 			int version = 0; cert_file.read(reinterpret_cast<char *>(&version), sizeof(version));
@@ -907,7 +910,7 @@ private:
 		}
 		ptransform->copy(1, 0);
 
-		mpz_vec res(bsize); res.set_GL_residue(p2, GL);
+		mpzv res; res.set_GL_residue(p2, GL);
 
 		// 2^res
 		ptransform->set(1);
@@ -934,19 +937,19 @@ private:
 		return EReturn::Success;
 	}
 
-	EReturn bench(const int n, const size_t bsize, const size_t device, const bool isCPU, const int depth)
+	EReturn bench(const int n, const size_t device, const bool isCPU, const int depth)
 	{
 		const size_t num_regs = 3 + (size_t(1) << depth);
 
-		b_vec b(bsize / 8); b.init(1000000000, 2, 12);
+		bvec b; b.init(1000000000, 2, 12);
 
-		if (isCPU) create_transform_CPU(b, n, num_regs, n == 7, false);
-		else create_transform_GPU(b, n, num_regs, device, n == 7, false);
+		if (isCPU) create_transform_CPU(b, n, num_regs, n == 13, false);
+		else create_transform_GPU(b, n, num_regs, device, n == 13, false);
 
 		transform<VSIZE> * const pTransform = _transform;
 
-		b_vec e(bsize / 8); e.init(isCPU ? 1000 : 100000, 2, 2);
-		mpz_vec exponent(bsize); exponent.set_exponent(e, 6);
+		bvec e; e.init(isCPU ? 1000 : 100000, 2, 2);
+		mpzv exponent; exponent.set_exponent(e, 6);
 
 		double test_time = 0, valid_time = 0; bool is_prp[32]; UInt64_8 res64[4];
 		const EReturn qret = quick(exponent, test_time, valid_time, is_prp, res64);
@@ -1005,15 +1008,15 @@ private:
 	}
 
 public:
-	EReturn check(const std::string & b_filename, const int n, const size_t bsize, const EMode mode, const size_t device, const bool isCPU, const int depth = 7) override
+	EReturn check(const std::string & b_filename, const int n, const EMode mode, const size_t device, const bool isCPU, const int depth) override
 	{
 		if (mode == EMode::Bench)
 		{
 			_main_filename = "tmp";
-			return bench(n, bsize, device, isCPU, depth);
+			return bench(n, device, isCPU, depth);
 		}
 
-		b_vec b(bsize / 8); b.init(b_filename);
+		bvec b; b.init(b_filename);
 
 		const bool empty_main_filename = _main_filename.empty();
 		if (empty_main_filename)
@@ -1038,7 +1041,7 @@ public:
 		if (mode == EMode::Check)
 		{
 			double time = 0; UInt64_8 ckey[4];
-			success = check(bsize, time, ckey);
+			success = check(time, ckey);
 			const double error = _transform->get_error();
 			clearline();
 			std::ostringstream ss;
@@ -1060,7 +1063,7 @@ public:
 		}
 		else
 		{
-			mpz_vec exponent(bsize); exponent.set_exponent(b, n);
+			mpzv exponent; exponent.set_exponent(b, n);
 
 			if (mode == EMode::Quick)
 			{

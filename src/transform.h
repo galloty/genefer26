@@ -39,8 +39,10 @@ public:
 template<size_t VSIZE>
 class transform : public itransform
 {
+	using bvec = b_vec<VSIZE / 8>;
+
 private:
-	const b_vec _b;
+	const bvec _b;
 	const int _ln;
 	const EKind _kind;
 	Int32_8 * const _d;
@@ -62,7 +64,7 @@ public:
 	virtual void copy_mask(const size_t dst, const size_t src, const uint32_t mask) const = 0;
 
 	virtual void power(const size_t src, const uint32_t e) = 0;
-	virtual void power_vec(const size_t src, const b_vec & e) = 0;
+	virtual void power_vec(const size_t src, const bvec & e) = 0;
 
 	virtual bool read_checkpoint(file & cfile) = 0;
 	virtual void save_checkpoint(file & cfile) const = 0;
@@ -74,28 +76,28 @@ public:
 	// the binary code must be generated for each instruction set
 	virtual void is_one(bool b[32], UInt64_8 res64[4]) const = 0;
 	virtual void gethash64(UInt64_8 h[4]) const = 0;
-	virtual b_vec gethash32() const = 0;
+	virtual bvec gethash32() const = 0;
 
 #ifdef QVALID
 	virtual void cosmic_ray() = 0;
 #endif
 
 private:
-	static transform * create_ocl_avx512(const b_vec & b, const int n, const size_t num_regs, const size_t device,
+	static transform * create_ocl_avx512(const bvec & b, const int n, const size_t num_regs, const size_t device,
 		const bool is_boinc, const bool get_boinc_ids, int _boinc_argc, char ** _boinc_argv);
-	static transform * create_ocl_avx2(const b_vec & b, const int n, const size_t num_regs, const size_t device,
+	static transform * create_ocl_avx2(const bvec & b, const int n, const size_t num_regs, const size_t device,
 		const bool is_boinc, const bool get_boinc_ids, int _boinc_argc, char ** _boinc_argv);
-	static transform * create_ocl_sse2(const b_vec & b, const int n, const size_t num_regs, const size_t device,
+	static transform * create_ocl_sse2(const bvec & b, const int n, const size_t num_regs, const size_t device,
 		const bool is_boinc, const bool get_boinc_ids, int _boinc_argc, char ** _boinc_argv);
 
-	static transform * create_avx10(const b_vec & b, const int n, const size_t num_regs);
-	static transform * create_avx512(const b_vec & b, const int n, const size_t num_regs);
-	static transform * create_fma(const b_vec & b, const int n, const size_t num_regs);
-	static transform * create_avx(const b_vec & b, const int n, const size_t num_regs);
-	static transform * create_sse4(const b_vec & b, const int n, const size_t num_regs);
+	static transform * create_avx10(const bvec & b, const int n, const size_t num_regs);
+	static transform * create_avx512(const bvec & b, const int n, const size_t num_regs);
+	static transform * create_fma(const bvec & b, const int n, const size_t num_regs);
+	static transform * create_avx(const bvec & b, const int n, const size_t num_regs);
+	static transform * create_sse4(const bvec & b, const int n, const size_t num_regs);
 
 public:
-	transform(const b_vec & b, const int ln, const EKind kind) : _b(b), _ln(ln), _kind(kind),
+	transform(const bvec & b, const int ln, const EKind kind) : _b(b), _ln(ln), _kind(kind),
 		_d(static_cast<Int32_8 *>(align_new(sizeof(Int32_8) << ln, sizeof(Int32_8)))) { _unbalanced = false; }
 	virtual ~transform() { align_delete(_d); }
 
@@ -152,7 +154,7 @@ private:
 	}
 
 protected:
-	const b_vec & get_b() const { return _b; }
+	const bvec & get_b() const { return _b; }
 	int get_ln() const { return _ln; }
 	EKind get_kind() const { return _kind; }
 	void set_type(const std::string & type) { _type = type; }
@@ -177,7 +179,7 @@ protected:
 		}
 	}
 
-	finline void _power_vec(const size_t src, const b_vec & e)
+	finline void _power_vec(const size_t src, const bvec & e)
 	{
 		init_multiplicand(src);
 		set(1);
@@ -193,9 +195,8 @@ protected:
 		unbalance();
 
 		const size_t n = size_t(1) << _ln;
-		const size_t size = _b.get_size();
 
-		for (size_t j = 0; j < size; ++j)	// TODO
+		for (size_t j = 0; j < VSIZE / 8; ++j)	// TODO
 		{
 			const UInt64_8 base = UInt32_8_to_UInt64_8(_b[j]);
 			const Int32_8 * const d = _d;
@@ -219,9 +220,8 @@ protected:
 		unbalance();
 
 		const size_t n = size_t(1) << _ln;
-		const size_t size = _b.get_size();
 
-		for (size_t j = 0; j < size; ++j)	// TODO
+		for (size_t j = 0; j < VSIZE / 8; ++j)	// TODO
 		{
 			const Int32_8 * const d = _d;
 			UInt64_8 hash64 = UInt64_8(uint64_t(0));
@@ -241,12 +241,11 @@ protected:
 		}
 	}
 
-	finline b_vec _gethash32() const
+	finline bvec _gethash32() const
 	{
 		UInt64_8 hash64[4]; _gethash64(hash64);
-		const size_t size = _b.get_size();
-		b_vec r(size);
-		for (size_t j = 0; j < size; ++j)
+		bvec r;
+		for (size_t j = 0; j < VSIZE / 8; ++j)
 		{
 			const UInt32_8 t = UInt64_8_to_UInt32_8(hash64[j]) ^ UInt64_8_to_UInt32_8(hash64[j] >> 32);
 			r[j] = t.max(UInt32_8(2));
@@ -255,7 +254,7 @@ protected:
 	}
 
 public:
-	static transform * create_gpu(const b_vec & b, const int n, const size_t num_regs, const size_t device,
+	static transform * create_gpu(const bvec & b, const int n, const size_t num_regs, const size_t device,
 								  const bool isBoinc, const bool get_boinc_ids, int _boinc_argc, char ** _boinc_argv)
 
 	{
@@ -275,7 +274,7 @@ public:
 		return ptransform;
 	}
 
-	static transform * create_cpu(const b_vec & b, const int n, const size_t num_regs)
+	static transform * create_cpu(const bvec & b, const int n, const size_t num_regs)
 	{
 		transform * ptransform = nullptr;
 
