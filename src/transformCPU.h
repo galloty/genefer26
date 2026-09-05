@@ -409,8 +409,11 @@ public:
 template<size_t VSIZE, size_t N>
 class transformCPU : public transform<VSIZE>
 {
-	using bvec = b_vec<VSIZE / 8>;
 	using parent = transform<VSIZE>;
+
+	using bvec = b_vec<VSIZE / 8>;
+	using i32vec = SVint<Int32_8, VSIZE / 8>;
+	using u64vec = SVint<UInt64_8, VSIZE / 8>;
 
 private:
 	const size_t _num_regs;
@@ -448,27 +451,27 @@ public:
 	}
 
 protected:
-	void getZi(Int32_8 * const d) const override
+	void getZi(i32vec * const d) const override	// TODO
 	{
-		const Complex_8_pair * const z = _z;
+		// const Complex_8_pair * const z = _z;
 
-		for (size_t k = 0; k < N; ++k)
-		{
-			const Complex_8 zk = z[k].get();
-			d[k + 0 * N] = Double_8_to_Int32_8_round(zk.real());
-			d[k + 1 * N] = Double_8_to_Int32_8_round(zk.imag());
-		}
+		// for (size_t k = 0; k < N; ++k)
+		// {
+		// 	const Complex_8 zk = z[k].get();
+		// 	d[k + 0 * N] = Double_8_to_Int32_8_round(zk.real());
+		// 	d[k + 1 * N] = Double_8_to_Int32_8_round(zk.imag());
+		// }
 	}
 
-	void setZi(const Int32_8 * const d) override
+	void setZi(const i32vec * const d) override	// TODO
 	{
-		Complex_8_pair * const z = _z;
+		// Complex_8_pair * const z = _z;
 
-		for (size_t k = 0; k < N; ++k)
-		{
-			const Double_8 re = Int32_8_to_Double_8(d[k + 0 * N]), im = Int32_8_to_Double_8(d[k + 1 * N]);
-			z[k].set(Complex_8(re, im));
-		}
+		// for (size_t k = 0; k < N; ++k)
+		// {
+		// 	const Double_8 re = Int32_8_to_Double_8(d[k + 0 * N]), im = Int32_8_to_Double_8(d[k + 1 * N]);
+		// 	z[k].set(Complex_8(re, im));
+		// }
 	}
 
 private:
@@ -851,8 +854,8 @@ public:
 	size_t get_cache_size() const override { return N * sizeof(Complex_8_pair) + N / 2 * sizeof(TwiddleFactor); }
 	double get_error() const override { return _error; }
 
-	void is_one(bool b[32], UInt64_8 res64[4]) const override { parent::_is_one(b, res64); }
-	void gethash64(UInt64_8 h[4]) const override { parent::_gethash64(h); }
+	void is_one(bool b[VSIZE], u64vec & res64) const override { parent::_is_one(b, res64); }
+	void gethash64(u64vec & h) const override { parent::_gethash64(h); }
 	bvec gethash32() const override { return parent::_gethash32(); }
 
 #ifdef QVALID

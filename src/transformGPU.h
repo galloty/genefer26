@@ -104,6 +104,8 @@ class transformGPU : public transform<VSIZE>
 	using xengine = engine<VSIZE, IS32>;
 
 	using bvec = b_vec<VSIZE / 8>;
+	using i32vec = SVint<Int32_8, VSIZE / 8>;
+	using u64vec = SVint<UInt64_8, VSIZE / 8>;
 
 	template<uint32 P, uint32 Q, uint32 R, uint32 H>
 	class ZPT : public ZP
@@ -277,13 +279,17 @@ public:
 		delete[] w;
 
 		uint32_t bu[VSIZE], b_inv[VSIZE]; int b_s[VSIZE];
-		for (size_t i = 0; i < VSIZE; ++i)
+		for (size_t j = 0; j < VSIZE / 8; ++j)
 		{
-			const uint32_t bi = b[0][i];	// TODO
-			const int s = 31 - __builtin_clz(bi) - 1;
-			bu[i] = bi;
-			b_inv[i] = uint32_t((uint64_t(1) << (s + 32)) / bi);
-			b_s[i] = s;
+			for (size_t i = 0; i < 8; ++i)
+			{
+				const uint32_t bk = b[j][i];
+				const int s = 31 - __builtin_clz(bk) - 1;
+				const size_t k = 8 * j + i;
+				bu[k] = bk;
+				b_inv[k] = uint32_t((uint64_t(1) << (s + 32)) / bk);
+				b_s[k] = s;
+			}
 		}
 
 		_engine->write_memory_b(bu, b_inv, b_s);
@@ -300,26 +306,32 @@ public:
 	}
 
 protected:
-	static size_t gpu_index(const size_t k, const size_t j, const size_t n)
+	static size_t gpu_index(const size_t k, const size_t l, const size_t n)
 	{
-		return (j % OCL_VSIZE) + OCL_VSIZE * k + (n * OCL_VSIZE) * (j / OCL_VSIZE);
+		return (l % OCL_VSIZE) + OCL_VSIZE * k + (n * OCL_VSIZE) * (l / OCL_VSIZE);
 	}
 
-	void getZi(Int32_8 * const zi) const override
+	void getZi(i32vec * const zi) const override
 	{
 		const size_t n = size_t(1) << LN;
 
 		_engine->read_memory_z(_z);
 		const ZP1 * const z1 = reinterpret_cast<ZP1 *>(&_z[0 * VSIZE * n]);
 
-		for (size_t k = 0; k < n; ++k)
+		for (size_t k = 0; k < n; ++k)	// TODO improve
 		{
-			int32 d[VSIZE]; for (size_t j = 0; j < VSIZE; ++j) d[j] = z1[gpu_index(k, j, n)].get_int();
-			zi[k] = Int32_8(d);
+			int32 d[VSIZE]; for (size_t l = 0; l < VSIZE; ++l) d[l] = z1[gpu_index(k, l, n)].get_int();
+			i32vec zk;
+			for (size_t j = 0; j < VSIZE / 8; ++j)
+			{
+				int32 d8[8]; for (size_t i = 0; i < 8; ++i) d8[i] = d[8 * j + i];
+				zk[j] = Int32_8(d8);
+			}
+			zi[k] = zk;
 		}
 	}
 
-	void setZi(const Int32_8 * const zi) override
+	void setZi(const i32vec * const zi) override
 	{
 		const size_t n = size_t(1) << LN, nvsize = VSIZE * n;
 		ZP1 * const z1 = reinterpret_cast<ZP1 *>(&_z[0 * nvsize]);
@@ -328,12 +340,17 @@ protected:
 
 		for (size_t k = 0; k < n; ++k)
 		{
-			const Int32_8 zk = zi[k];
-			for (size_t j = 0; j < VSIZE; ++j)
+			const i32vec zk = zi[k];
+			int32 d[VSIZE];
+			for (size_t j = 0; j < VSIZE / 8; ++j)
 			{
-				const int32 d = zk[j];
-				const size_t i = gpu_index(k, j, n);
-				z1[i].set_int(d); z2[i].set_int(d); z3[i].set_int(d);
+				for (size_t i = 0; i < 8; ++i) d[8 * j + i] = zk[j][i];
+			}
+
+			for (size_t l = 0; l < VSIZE; ++l)
+			{
+				const size_t i = gpu_index(k, l, n);
+				z1[i].set_int(d[l]); z2[i].set_int(d[l]); z3[i].set_int(d[l]);
 			}
 		}
 
@@ -472,8 +489,8 @@ public:
 	size_t get_cache_size() const override { const size_t n = size_t(1) << LN; return (3 * (VSIZE * n + n / 2)) * sizeof(ZP); }
 	double get_error() const override { return 0; }
 
-	void is_one(bool b[32], UInt64_8 res64[4]) const override { parent::_is_one(b, res64); }
-	void gethash64(UInt64_8 h[4]) const override { parent::_gethash64(h); }
+	void is_one(bool b[VSIZE], u64vec & res64) const override { parent::_is_one(b, res64); }
+	void gethash64(u64vec & h) const override { parent::_gethash64(h); }
 	bvec gethash32() const override { return parent::_gethash32(); }
 
 #ifdef QVALID

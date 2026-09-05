@@ -32,7 +32,7 @@ private:
 		vtype_4	i_4[4];
 	} vtype_u;
 
-protected:
+private:
 	vtype _n;
 
 public:
@@ -46,7 +46,7 @@ public:
 
 	finline const vtype & get() const { return _n; }
 
-	stype operator[](const size_t i) const { return _n[i]; }
+	finline stype operator[](const size_t i) const { return _n[i]; }
 
 	finline Vint operator==(const Vint & rhs) const { return Vint(_n == rhs._n); }
 	finline Vint operator!=(const Vint & rhs) const { return Vint(_n != rhs._n); }
@@ -137,3 +137,19 @@ finline Int32_8 UInt32_8_to_Int32_8(const UInt32_8 & rhs) { return Int32_8(__bui
 finline UInt64_8 Int32_8_to_UInt64_8(const Int32_8 & rhs) { return UInt64_8(__builtin_convertvector(rhs.get(), UInt64_8::vtype)); }
 finline UInt64_8 UInt32_8_to_UInt64_8(const UInt32_8 & rhs) { return UInt64_8(__builtin_convertvector(rhs.get(), UInt64_8::vtype)); }
 finline UInt32_8 UInt64_8_to_UInt32_8(const UInt64_8 & rhs) { return UInt32_8(__builtin_convertvector(rhs.get(), UInt32_8::vtype)); }
+
+template<typename vtype, size_t SIZE>
+class SVint
+{
+private:
+	vtype _d[SIZE];
+
+public:
+	finline explicit SVint() {}
+	finline SVint(const SVint & rhs) { for (size_t i = 0; i < SIZE; ++i) _d[i] = rhs._d[i]; }
+
+	finline SVint & operator=(const SVint & rhs) { for (size_t i = 0; i < SIZE; ++i) _d[i] = rhs._d[i]; return *this; }
+
+	finline const vtype & operator[](const size_t i) const { return _d[i]; }
+	finline vtype & operator[](const size_t i) { return _d[i]; }
+};

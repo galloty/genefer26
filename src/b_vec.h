@@ -22,8 +22,10 @@ public:
 	explicit b_vec() {}
 	virtual ~b_vec() {}
 
-	const UInt32_8 & operator[](const size_t i) const { return _b[i]; }
-	UInt32_8 & operator[](const size_t i) { return _b[i]; }
+	finline const UInt32_8 & operator[](const size_t i) const { return _b[i]; }
+	finline UInt32_8 & operator[](const size_t i) { return _b[i]; }
+
+	finline bool is_equal(const b_vec & rhs) const { bool b = true; for (size_t i = 0; i < SIZE; ++i) b &= _b[i].is_equal(rhs._b[i]); return b; }
 
 	void init(const uint32_t b_max, const uint32_t step_min, const uint32_t step_max)
 	{
@@ -69,7 +71,7 @@ public:
 		file.close();
 	}
 
-	uint32_t min() const
+	finline uint32_t min() const
 	{
 		const UInt32_8 * const b = _b;
 		uint32_t b_min = b[0].min();
@@ -77,7 +79,7 @@ public:
 		return b_min;
 	}
 
-	uint32_t max() const
+	finline uint32_t max() const
 	{
 		const UInt32_8 * const b = _b;
 		uint32_t b_max = b[0].max();
@@ -85,7 +87,7 @@ public:
 		return b_max;
 	}
 
-	uint32_t get_bit_mask(const int i) const
+	finline uint32_t get_bit_mask(const int i) const
 	{
 		const UInt32_8 * const b = _b;
 		uint32_t mask = 0;

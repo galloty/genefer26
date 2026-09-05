@@ -40,18 +40,20 @@ template<size_t VSIZE>
 class transform : public itransform
 {
 	using bvec = b_vec<VSIZE / 8>;
+	using i32vec = SVint<Int32_8, VSIZE / 8>;
+	using u64vec = SVint<UInt64_8, VSIZE / 8>;
 
 private:
 	const bvec _b;
 	const int _ln;
 	const EKind _kind;
-	Int32_8 * const _d;
+	i32vec * const _d;
 	std::string _type;
 	mutable bool _unbalanced;
 
 protected:
-	virtual void getZi(Int32_8 * const zi) const = 0;
-	virtual void setZi(const Int32_8 * const zi) = 0;
+	virtual void getZi(i32vec * const zi) const = 0;
+	virtual void setZi(const i32vec * const zi) = 0;
 
 public:
 	virtual void set(const uint32_t a) = 0;					// r_0 = a
@@ -74,8 +76,8 @@ public:
 	virtual double get_error() const { return 0; }
 
 	// the binary code must be generated for each instruction set
-	virtual void is_one(bool b[32], UInt64_8 res64[4]) const = 0;
-	virtual void gethash64(UInt64_8 h[4]) const = 0;
+	virtual void is_one(bool b[VSIZE], u64vec & res64) const = 0;
+	virtual void gethash64(u64vec & h) const = 0;
 	virtual bvec gethash32() const = 0;
 
 #ifdef QVALID
@@ -98,7 +100,7 @@ private:
 
 public:
 	transform(const bvec & b, const int ln, const EKind kind) : _b(b), _ln(ln), _kind(kind),
-		_d(static_cast<Int32_8 *>(align_new(sizeof(Int32_8) << ln, sizeof(Int32_8)))) { _unbalanced = false; }
+		_d(static_cast<i32vec *>(align_new(sizeof(i32vec) << ln, sizeof(i32vec)))) { _unbalanced = false; }
 	virtual ~transform() { align_delete(_d); }
 
 private:
@@ -108,48 +110,62 @@ private:
 		_unbalanced = true;
 
 		const size_t n = size_t(1) << _ln;
-		const Int32_8 base = UInt32_8_to_Int32_8(_b[0]);	// TODO
-		Int32_8 * const d = _d;
-		Int32_8 f = Int32_8(0);
+		i32vec * const d = _d;
+		Int32_8 base[VSIZE / 8]; for (size_t j = 0; j < VSIZE / 8; ++j) base[j] = UInt32_8_to_Int32_8(_b[j]);
+		Int32_8 f[VSIZE / 8]; for (size_t j = 0; j < VSIZE / 8; ++j) f[j] = Int32_8(0);
 
 		// We have -base <= d[i] <= base, -1 <= f <= 1
 		for (size_t i = 0; i < n; ++i)
 		{
-			Int32_8 r = d[i] + f;
-			f = Int32_8(0);
+			for (size_t j = 0; j < VSIZE / 8; ++j)
+			{
+				Int32_8 r = d[i][j] + f[j];
+				Int32_8 f_j = Int32_8(0);
 
-			const Int32_8 l = (r < Int32_8(0)), ge = (r >= base);
-			r += (base & l); f -= (Int32_8(1) & l);
-			const Int32_8 l2 = (r < Int32_8(0));	// This should not occur but quick and safer
-			r -= (base & ge); f += (Int32_8(1) & ge);
-			r += (base & l2); f -= (Int32_8(1) & l2);
+				const Int32_8 base_j = base[j];
+				const Int32_8 l = (r < Int32_8(0)), ge = (r >= base_j);
+				r += (base_j & l); f_j -= (Int32_8(1) & l);
+				const Int32_8 l2 = (r < Int32_8(0));	// This should not occur but quick and safer
+				r -= (base_j & ge); f_j += (Int32_8(1) & ge);
+				r += (base_j & l2); f_j -= (Int32_8(1) & l2);
 
-			d[i] = r;
+				f[j] = f_j;
+				d[i][j] = r;
+			}
 		}
 
-		while (!f.is_zero())
+		for (size_t j = 0; j < VSIZE / 8; ++j)
 		{
-			f = -f;	// f * x^size = -f
+			const Int32_8 base_j = base[j];
 
-			for (size_t i = 0; i < n; ++i)
+			while (!f[j].is_zero())
 			{
-				Int32_8 r = d[i] + f;
-				f = Int32_8(0);
+				f[j] = -f[j];	// f * x^size = -f
 
-				const Int32_8 l = (r < Int32_8(0)), ge = (r >= base);
-				r += (base & l); f -= (Int32_8(1) & l);
-				r -= (base & ge); f += (Int32_8(1) & ge);
+				for (size_t i = 0; i < n; ++i)
+				{
+					Int32_8 r = d[i][j] + f[j];
+					Int32_8 f_j = Int32_8(0);
 
-				d[i] = r;
+					const Int32_8 l = (r < Int32_8(0)), ge = (r >= base_j);
+					r += (base_j & l); f_j -= (Int32_8(1) & l);
+					r -= (base_j & ge); f_j += (Int32_8(1) & ge);
 
-				if (f.is_zero()) return;
+					f[j] = f_j;
+					d[i][j] = r;
+
+					if (f_j.is_zero()) break;
+				}
+
+				if (!f[j].is_zero())
+				{
+					// -1 cannot be unbalanced
+					Int32_8 is_minus_one = (f[j] == Int32_8(1));
+					for (size_t i = 0; i < n; ++i) is_minus_one &= (d[i][j] == Int32_8(0));
+					d[0][j] -= (Int32_8(1) & is_minus_one);
+					f[j] -= (Int32_8(1) & is_minus_one);
+				}
 			}
-
-			// -1 cannot be unbalanced
-			Int32_8 is_minus_one = (f == Int32_8(1));
-			for (size_t i = 0; i < n; ++i) is_minus_one &= (d[i] == Int32_8(0));
-			d[0] -= (Int32_8(1) & is_minus_one);
-			f -= (Int32_8(1) & is_minus_one);
 		}
 	}
 
@@ -190,60 +206,64 @@ protected:
 		}
 	}
 
-	finline void _is_one(bool b[32], UInt64_8 res64[4]) const
+	finline void _is_one(bool b[VSIZE], u64vec & res64) const
 	{
 		unbalance();
 
 		const size_t n = size_t(1) << _ln;
+		const i32vec * const d = _d;
+		UInt64_8 base[VSIZE / 8]; for (size_t j = 0; j < VSIZE / 8; ++j) base[j] = UInt32_8_to_UInt64_8(_b[j]);
+		UInt64_8 r64[VSIZE / 8]; for (size_t j = 0; j < VSIZE / 8; ++j) r64[j] = Int32_8_to_UInt64_8(d[0][j]);
+		UInt64_8 bi[VSIZE / 8]; for (size_t j = 0; j < VSIZE / 8; ++j) bi[j] = base[j];
+		Int32_8 one[VSIZE / 8]; for (size_t j = 0; j < VSIZE / 8; ++j) one[j] = (d[0][j] == Int32_8(1));
 
-		for (size_t j = 0; j < VSIZE / 8; ++j)	// TODO
+		for (size_t i = 1; i < n; ++i)
 		{
-			const UInt64_8 base = UInt32_8_to_UInt64_8(_b[j]);
-			const Int32_8 * const d = _d;
-
-			UInt64_8 r64 = Int32_8_to_UInt64_8(d[0]), bi = base;
-			Int32_8 one = (d[0] == Int32_8(1));
-			for (size_t i = 1; i < n; ++i)
+			for (size_t j = 0; j < VSIZE / 8; ++j)
 			{
-				r64 += bi * Int32_8_to_UInt64_8(d[i]);
-				bi *= base;
-				one &= (d[i] == Int32_8(0));
+				r64[j] += bi[j] * Int32_8_to_UInt64_8(d[i][j]);
+				bi[j] *= base[j];
+				one[j] &= (d[i][j] == Int32_8(0));
 			}
-			res64[j] = r64;
+		}
 
-			for (size_t i = 0; i < 8; ++i) b[8 * j + i] = (one[i] == -1);
+		for (size_t j = 0; j < VSIZE / 8; ++j)
+		{
+			res64[j] = r64[j];
+			for (size_t i = 0; i < 8; ++i) b[8 * j + i] = (one[j][i] == -1);
 		}
 	}
 
-	finline void _gethash64(UInt64_8 h[4]) const
+	finline void _gethash64(u64vec & h) const	// TODO return u64vec
 	{
 		unbalance();
 
 		const size_t n = size_t(1) << _ln;
+		const i32vec * const d = _d;
+		UInt64_8 hash64[VSIZE / 8]; for (size_t j = 0; j < VSIZE / 8; ++j) hash64[j] = UInt64_8(0ull);
+		Int32_8 zero[VSIZE / 8]; for (size_t j = 0; j < VSIZE / 8; ++j) zero[j] = Int32_8(-1);
 
-		for (size_t j = 0; j < VSIZE / 8; ++j)	// TODO
+		for (size_t i = 0; i < n; ++i)
 		{
-			const Int32_8 * const d = _d;
-			UInt64_8 hash64 = UInt64_8(uint64_t(0));
-
-			Int32_8 zero = Int32_8(-1);
-			for (size_t i = 0; i < n; ++i)
+			for (size_t j = 0; j < VSIZE / 8; ++j)
 			{
-				const Int32_8 d_i = d[i];
-				const UInt64_8 a_i = Int32_8_to_UInt64_8(d_i);
-				hash64 += a_i;
-				hash64 ^= (a_i + UInt64_8(0xc39d8a0552b073e8ull)).rotl((UInt64_8(17) * a_i + UInt64_8(5)) & UInt64_8(63));
-				zero &= Int32_8(d_i == Int32_8(0));
+				const UInt64_8 a_i = Int32_8_to_UInt64_8(d[i][j]);
+				hash64[j] += a_i;
+				hash64[j] ^= (a_i + UInt64_8(0xc39d8a0552b073e8ull)).rotl((UInt64_8(17) * a_i + UInt64_8(5)) & UInt64_8(63));
+				zero[j] &= Int32_8(d[i][j] == Int32_8(0));
 			}
-			if (zero.is_true()) pio::error("value is zero", true);
+		}
 
-			h[j] = hash64;
+		for (size_t j = 0; j < VSIZE / 8; ++j)
+		{
+			if (zero[j].is_true()) pio::error("value is zero", true);
+			h[j] = hash64[j];
 		}
 	}
 
 	finline bvec _gethash32() const
 	{
-		UInt64_8 hash64[4]; _gethash64(hash64);
+		u64vec hash64; _gethash64(hash64);
 		bvec r;
 		for (size_t j = 0; j < VSIZE / 8; ++j)
 		{
@@ -331,9 +351,9 @@ public:
 	void read(file & cFile)
 	{
 		uint32_t size; cFile.read(reinterpret_cast<char *>(&size), sizeof(size));
-		UInt32_8::vtype nbase; cFile.read(reinterpret_cast<char *>(&nbase), sizeof(nbase));
-		if ((size != (1u << _ln)) || !UInt32_8(nbase).is_equal(_b[0])) cFile.error("bad file");	// TODO
-		cFile.read(reinterpret_cast<char *>(_d), sizeof(UInt32_8) << _ln);
+		bvec base; cFile.read(reinterpret_cast<char *>(&base), sizeof(bvec));
+		if ((size != (1u << _ln)) || !base.is_equal(_b)) cFile.error("bad file");	// TODO
+		cFile.read(reinterpret_cast<char *>(_d), sizeof(i32vec) << _ln);
 
 		_unbalanced = false;
 	}
@@ -344,8 +364,7 @@ public:
 
 		const uint32_t n = 1u << _ln;
 		cFile.write(reinterpret_cast<const char *>(&n), sizeof(n));
-		const UInt32_8::vtype nbase = _b[0].get();	// TODO
-		cFile.write(reinterpret_cast<const char *>(&nbase), sizeof(nbase));
-		cFile.write(reinterpret_cast<const char *>(_d), sizeof(UInt32_8) << _ln);
+		cFile.write(reinterpret_cast<const char *>(&_b), sizeof(bvec));
+		cFile.write(reinterpret_cast<const char *>(_d), sizeof(i32vec) << _ln);
 	}
 };
