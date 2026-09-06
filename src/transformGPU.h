@@ -281,9 +281,11 @@ public:
 		uint32_t bu[VSIZE], b_inv[VSIZE]; int b_s[VSIZE];
 		for (size_t j = 0; j < VSIZE / 8; ++j)
 		{
+			const UInt32_8 b_j = b[j];
+
 			for (size_t i = 0; i < 8; ++i)
 			{
-				const uint32_t bk = b[j][i];
+				const uint32_t bk = b_j[i];
 				const int s = 31 - __builtin_clz(bk) - 1;
 				const size_t k = 8 * j + i;
 				bu[k] = bk;
@@ -306,51 +308,70 @@ public:
 	}
 
 protected:
-	static size_t gpu_index(const size_t k, const size_t l, const size_t n)
-	{
-		return (l % OCL_VSIZE) + OCL_VSIZE * k + (n * OCL_VSIZE) * (l / OCL_VSIZE);
-	}
+	// static size_t gpu_index(const size_t k, const size_t l, const size_t n)
+	// {
+	// 	return (l % OCL_VSIZE) + OCL_VSIZE * k + (n * OCL_VSIZE) * (l / OCL_VSIZE);
+	// }
 
 	void getZi(i32vec * const zi) const override
 	{
-		const size_t n = size_t(1) << LN;
-
 		_engine->read_memory_z(_z);
+
+		const size_t n = size_t(1) << LN;
 		const ZP1 * const z1 = reinterpret_cast<ZP1 *>(&_z[0 * VSIZE * n]);
 
-		for (size_t k = 0; k < n; ++k)	// TODO improve
+		for (size_t k = 0; k < n; ++k)
 		{
-			int32 d[VSIZE]; for (size_t l = 0; l < VSIZE; ++l) d[l] = z1[gpu_index(k, l, n)].get_int();
-			i32vec zk;
+			const ZP1 * const z1_k = &z1[OCL_VSIZE * k];
+			i32vec z_k;
+
 			for (size_t j = 0; j < VSIZE / 8; ++j)
 			{
-				int32 d8[8]; for (size_t i = 0; i < 8; ++i) d8[i] = d[8 * j + i];
-				zk[j] = Int32_8(d8);
+				const ZP1 * const z1_kj = &z1_k[8 * n * j];
+				int32 d[8];
+
+				for (size_t i_h = 0; i_h < 8 / OCL_VSIZE; ++i_h)
+				{
+					for (size_t i_l = 0; i_l < OCL_VSIZE; ++i_l)
+					{
+						d[OCL_VSIZE * i_h + i_l] = z1_kj[OCL_VSIZE * n * i_h + i_l].get_int();
+					}
+				}
+
+				z_k[j] = Int32_8(d);
 			}
-			zi[k] = zk;
+
+			zi[k] = z_k;
 		}
 	}
 
 	void setZi(const i32vec * const zi) override
 	{
-		const size_t n = size_t(1) << LN, nvsize = VSIZE * n;
-		ZP1 * const z1 = reinterpret_cast<ZP1 *>(&_z[0 * nvsize]);
-		ZP2 * const z2 = reinterpret_cast<ZP2 *>(&_z[1 * nvsize]);
-		ZP3 * const z3 = reinterpret_cast<ZP3 *>(&_z[2 * nvsize]);
+		const size_t n = size_t(1) << LN;
+		ZP1 * const z1 = reinterpret_cast<ZP1 *>(&_z[0 * VSIZE * n]);
 
 		for (size_t k = 0; k < n; ++k)
 		{
-			const i32vec zk = zi[k];
-			int32 d[VSIZE];
+			ZP1 * const z1_k = &z1[OCL_VSIZE * k];
+			const i32vec z_k = zi[k];
+
 			for (size_t j = 0; j < VSIZE / 8; ++j)
 			{
-				for (size_t i = 0; i < 8; ++i) d[8 * j + i] = zk[j][i];
-			}
+				ZP1 * const z1_kj = &z1_k[8 * n * j];
+				const Int32_8 z_kj = z_k[j];
 
-			for (size_t l = 0; l < VSIZE; ++l)
-			{
-				const size_t i = gpu_index(k, l, n);
-				z1[i].set_int(d[l]); z2[i].set_int(d[l]); z3[i].set_int(d[l]);
+				for (size_t i_h = 0; i_h < 8 / OCL_VSIZE; ++i_h)
+				{
+					for (size_t i_l = 0; i_l < OCL_VSIZE; ++i_l)
+					{
+						ZP1 * const z1_kji = &z1_kj[OCL_VSIZE * n * i_h + i_l];
+						ZP2 * const z2_kji = reinterpret_cast<ZP2 *>(&z1_kji[1 * VSIZE * n]);
+						ZP3 * const z3_kji = reinterpret_cast<ZP3 *>(&z1_kji[2 * VSIZE * n]);
+
+						const int32 d = z_kj[OCL_VSIZE * i_h + i_l];
+						z1_kji->set_int(d); z2_kji->set_int(d); z3_kji->set_int(d);
+					}
+				}
 			}
 		}
 
@@ -490,7 +511,7 @@ public:
 	double get_error() const override { return 0; }
 
 	void is_one(bool b[VSIZE], u64vec & res64) const override { parent::_is_one(b, res64); }
-	void gethash64(u64vec & h) const override { parent::_gethash64(h); }
+	u64vec gethash64() const override { return parent::_gethash64(); }
 	bvec gethash32() const override { return parent::_gethash32(); }
 
 #ifdef QVALID

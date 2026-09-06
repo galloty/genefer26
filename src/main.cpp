@@ -270,8 +270,8 @@ public:
 		}
 
 		if      (l ==  8) _g = new genefer<8>();
-		// else if (l == 16) _g = new genefer<16>();
-		// else if (l == 32) _g = new genefer<32>();
+		else if (l == 16) _g = new genefer<16>();
+		else if (l == 32) _g = new genefer<32>();
 		else std::runtime_error("b-vector size must be 8, 16 or 32");
 
 		igenefer * const g = _g;
@@ -306,16 +306,16 @@ public:
 		{
 			// internal test
 #ifdef QVALID
-			const bool is_cpu = true;
+			const bool is_cpu = false;
 			if (g->check("b10m.txt", 10, igenefer::EMode::Proof, device, is_cpu, 5) != igenefer::EReturn::Success) return;
 			if (g->check("b10m.txt", 10, igenefer::EMode::Server, device, is_cpu, 5) != igenefer::EReturn::Success) return;
 			if (g->check("b10m.txt", 10, igenefer::EMode::Check, device, is_cpu, 5) != igenefer::EReturn::Success) return;
-			// if (g->check("b11m.txt", 11, igenefer::EMode::Proof, device, is_cpu, 5) != igenefer::EReturn::Success) return;
-			// if (g->check("b11m.txt", 11, igenefer::EMode::Server, device, is_cpu, 5) != igenefer::EReturn::Success) return;
-			// if (g->check("b11m.txt", 11, igenefer::EMode::Check, device, is_cpu, 5) != igenefer::EReturn::Success) return;
-			// if (g->check("b12m.txt", 12, igenefer::EMode::Proof, device, is_cpu, 5) != igenefer::EReturn::Success) return;
-			// if (g->check("b12m.txt", 12, igenefer::EMode::Server, device, is_cpu, 5) != igenefer::EReturn::Success) return;
-			// if (g->check("b12m.txt", 12, igenefer::EMode::Check, device, is_cpu, 5) != igenefer::EReturn::Success) return;
+			if (g->check("b11m.txt", 11, igenefer::EMode::Proof, device, is_cpu, 5) != igenefer::EReturn::Success) return;
+			if (g->check("b11m.txt", 11, igenefer::EMode::Server, device, is_cpu, 5) != igenefer::EReturn::Success) return;
+			if (g->check("b11m.txt", 11, igenefer::EMode::Check, device, is_cpu, 5) != igenefer::EReturn::Success) return;
+			if (g->check("b12m.txt", 12, igenefer::EMode::Proof, device, is_cpu, 5) != igenefer::EReturn::Success) return;
+			if (g->check("b12m.txt", 12, igenefer::EMode::Server, device, is_cpu, 5) != igenefer::EReturn::Success) return;
+			if (g->check("b12m.txt", 12, igenefer::EMode::Check, device, is_cpu, 5) != igenefer::EReturn::Success) return;
 			return;
 #endif
 			pio::print(usage());

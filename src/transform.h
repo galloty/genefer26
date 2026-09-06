@@ -77,7 +77,7 @@ public:
 
 	// the binary code must be generated for each instruction set
 	virtual void is_one(bool b[VSIZE], u64vec & res64) const = 0;
-	virtual void gethash64(u64vec & h) const = 0;
+	virtual u64vec gethash64() const = 0;
 	virtual bvec gethash32() const = 0;
 
 #ifdef QVALID
@@ -234,7 +234,7 @@ protected:
 		}
 	}
 
-	finline void _gethash64(u64vec & h) const	// TODO return u64vec
+	finline u64vec _gethash64() const
 	{
 		unbalance();
 
@@ -254,16 +254,18 @@ protected:
 			}
 		}
 
+		u64vec h;
 		for (size_t j = 0; j < VSIZE / 8; ++j)
 		{
 			if (zero[j].is_true()) pio::error("value is zero", true);
 			h[j] = hash64[j];
 		}
+		return h;
 	}
 
 	finline bvec _gethash32() const
 	{
-		u64vec hash64; _gethash64(hash64);
+		const u64vec hash64 = _gethash64();
 		bvec r;
 		for (size_t j = 0; j < VSIZE / 8; ++j)
 		{
@@ -352,7 +354,7 @@ public:
 	{
 		uint32_t size; cFile.read(reinterpret_cast<char *>(&size), sizeof(size));
 		bvec base; cFile.read(reinterpret_cast<char *>(&base), sizeof(bvec));
-		if ((size != (1u << _ln)) || !base.is_equal(_b)) cFile.error("bad file");	// TODO
+		if ((size != (1u << _ln)) || !base.is_equal(_b)) cFile.error("bad file");
 		cFile.read(reinterpret_cast<char *>(_d), sizeof(i32vec) << _ln);
 
 		_unbalanced = false;

@@ -823,7 +823,8 @@ public:
 	void copy_mask(const size_t dst, const size_t src, const uint32_t mask) const override
 	{
 		if (mask == 0) return;
-		if (mask == (uint32_t(1) << VSIZE) - 1) { copy(dst, src); return; }
+		if (VSIZE == 32) { if (mask == uint32_t(-1)) { copy(dst, src); return; } }
+		else { if (mask == (uint32_t(1) << VSIZE) - 1) { copy(dst, src); return; } }
 
 		const Complex_8_pair * const z_src = &_z[src * N];
 		Complex_8_pair * const z_dst =  &_z[dst * N];
@@ -855,7 +856,7 @@ public:
 	double get_error() const override { return _error; }
 
 	void is_one(bool b[VSIZE], u64vec & res64) const override { parent::_is_one(b, res64); }
-	void gethash64(u64vec & h) const override { parent::_gethash64(h); }
+	u64vec gethash64() const override { return parent::_gethash64(); }
 	bvec gethash32() const override { return parent::_gethash32(); }
 
 #ifdef QVALID
@@ -869,8 +870,8 @@ inline transform<VSIZE> * create_transformCPU(const b_vec<VSIZE / 8> & b, const 
 	transform<VSIZE> * ptransform = nullptr;
 #ifdef QVALID
 	if      (n == 10) ptransform = new transformCPU<VSIZE, (1 <<  9)>(b, n, num_regs);
-	// else if (n == 11) ptransform = new transformCPU<VSIZE, (1 << 10)>(b, n, num_regs);
-	// else if (n == 12) ptransform = new transformCPU<VSIZE, (1 << 11)>(b, n, num_regs);
+	else if (n == 11) ptransform = new transformCPU<VSIZE, (1 << 10)>(b, n, num_regs);
+	else if (n == 12) ptransform = new transformCPU<VSIZE, (1 << 11)>(b, n, num_regs);
 #else
 	if      (n == 13) ptransform = new transformCPU<VSIZE, (1 << 12)>(b, n, num_regs);
 	else if (n == 14) ptransform = new transformCPU<VSIZE, (1 << 13)>(b, n, num_regs);

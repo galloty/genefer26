@@ -501,10 +501,10 @@ private:
 
 		// d(t)^{2^B} * 2^res ?= d(t + 1)
 		ptransform->to_int();
-		u64vec h1; ptransform->gethash64(h1);
+		const u64vec h1 = ptransform->gethash64();
 		ptransform->copy(0, 2);
 		ptransform->to_int();
-		u64vec h2; ptransform->gethash64(h2);
+		const u64vec h2 = ptransform->gethash64();
 
 		bool success = true;
 		for (size_t j = 0; j < VSIZE / 8; ++j) success &= h1[j].is_equal(h2[j]);
@@ -587,7 +587,7 @@ private:
 		// pkey = hash64(v1);
 		ptransform->copy(0, 2);
 		ptransform->to_int();
-		ptransform->gethash64(pkey);
+		pkey = ptransform->gethash64();
 
 		proof_time = chrono.get_elapsed_time();
 		return EReturn::Success;
@@ -692,7 +692,7 @@ private:
 		// pkey = hash64(v1);
 		ptransform->copy(0, 1);
 		ptransform->to_int();
-		ptransform->gethash64(pkey);
+		pkey = ptransform->gethash64();
 
 		mpzv p2; p2.set_PL_residue(exponent, B_PL, w.data(), L);
 
@@ -715,7 +715,7 @@ private:
 		ptransform->power(0, rnd3);
 		ptransform->mul(1);
 		ptransform->to_int();
-		ptransform->gethash64(ckey);
+		ckey = ptransform->gethash64();
 
 		ptransform->power(2, rnd2);
 		p2.mul_ui(rnd2);
@@ -844,10 +844,10 @@ private:
 
 			// u(0) * d(t)^{2^L} ?= d(t + 1)
 			ptransform->to_int();
-			u64vec h1; ptransform->gethash64(h1);
+			const u64vec h1 = ptransform->gethash64();
 			ptransform->copy(0, 3);
 			ptransform->to_int();
-			u64vec h2; ptransform->gethash64(h2);
+			const u64vec h2 = ptransform->gethash64();
 
 			bool success = true;
 			for (size_t j = 0; j < VSIZE / 8; ++j) success &= h1[j].is_equal(h2[j]);
@@ -897,7 +897,7 @@ private:
 
 		// ckey = hash64(v1')
 		ptransform->to_int();
-		ptransform->gethash64(ckey);
+		ckey = ptransform->gethash64();
 
 		// d(t + 1) = d(t) * result
 		ptransform->copy(0, 3);
@@ -930,10 +930,10 @@ private:
 
 		// d(t)^{2^GL} * 2^res ?= d(t + 1)
 		ptransform->to_int();
-		u64vec h1; ptransform->gethash64(h1);
+		const u64vec h1 = ptransform->gethash64();
 		ptransform->copy(0, 2);
 		ptransform->to_int();
-		u64vec h2; ptransform->gethash64(h2);
+		const u64vec h2 = ptransform->gethash64();
 
 		bool success = true;
 		for (size_t j = 0; j < VSIZE / 8; ++j) success &= h1[j].is_equal(h2[j]);
