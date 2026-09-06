@@ -417,20 +417,29 @@ class transformCPU : public transform<VSIZE>
 
 private:
 	const size_t _num_regs;
-	const Double_8 _base, _base_inv;
-	Complex_8_pair * const _z;
-	Complex_8_pair * const _zp;
 	TwiddleFactor * const _w;
+	Double_8 _base[VSIZE / 8], _base_inv[VSIZE / 8];
+	Complex_8_pair * _z[VSIZE / 8];
+	Complex_8_pair * _zp[VSIZE / 8];
 	double _error;
-
 
 public:
 	transformCPU(const bvec & b, const int n, const size_t num_regs) : transform<VSIZE>(b, n, parent::EKind::CPU),
-		_num_regs(num_regs), _base(UInt32_8_to_Double_8(b[0])), _base_inv(_base.inverse()),	// TODO
-		_z(static_cast<Complex_8_pair *>(align_new(num_regs * N * sizeof(Complex_8_pair), 2 * 1024 * 1024))),
-		_zp(static_cast<Complex_8_pair *>(align_new(N * sizeof(Complex_8_pair), sizeof(Complex_8_pair)))),
-		_w(static_cast<TwiddleFactor *>(align_new(N / 2 * sizeof(TwiddleFactor), sizeof(TwiddleFactor))))
+		_num_regs(num_regs), _w(static_cast<TwiddleFactor *>(align_new(N / 2 * sizeof(TwiddleFactor), sizeof(TwiddleFactor))))
 	{
+		for (size_t j = 0; j < VSIZE / 8; ++j)
+		{
+			const Double_8 base = UInt32_8_to_Double_8(b[j]);
+			_base[j] = base;
+			_base_inv[j] = base.inverse();
+		}
+
+		for (size_t j = 0; j < VSIZE / 8; ++j)
+		{
+			_z[j] = static_cast<Complex_8_pair *>(align_new(num_regs * N * sizeof(Complex_8_pair), 2 * 1024 * 1024));
+			_zp[j] = static_cast<Complex_8_pair *>(align_new(N * sizeof(Complex_8_pair), sizeof(Complex_8_pair)));
+		}
+
 		TwiddleFactor * const w = _w;
 		for (size_t s = 4; s < N / 2; s *= 2)
 		{
@@ -445,33 +454,42 @@ public:
 
 	virtual ~transformCPU()
 	{
-		align_delete(_z);
-		align_delete(_zp);
+		for (size_t j = 0; j < VSIZE / 8; ++j)
+		{
+			align_delete(_z[j]);
+			align_delete(_zp[j]);
+		}
 		align_delete(_w);
 	}
 
 protected:
-	void getZi(i32vec * const d) const override	// TODO
+	void getZi(i32vec * const d) const override	// TODO improve
 	{
-		// const Complex_8_pair * const z = _z;
+		for (size_t j = 0; j < VSIZE / 8; ++j)
+		{
+			Complex_8_pair * const z = _z[j];
 
-		// for (size_t k = 0; k < N; ++k)
-		// {
-		// 	const Complex_8 zk = z[k].get();
-		// 	d[k + 0 * N] = Double_8_to_Int32_8_round(zk.real());
-		// 	d[k + 1 * N] = Double_8_to_Int32_8_round(zk.imag());
-		// }
+			for (size_t k = 0; k < N; ++k)
+			{
+				const Complex_8 zk = z[k].get();
+				d[k + 0 * N][j] = Double_8_to_Int32_8_round(zk.real());
+				d[k + 1 * N][j] = Double_8_to_Int32_8_round(zk.imag());
+			}
+		}
 	}
 
-	void setZi(const i32vec * const d) override	// TODO
+	void setZi(const i32vec * const d) override	// TODO improve
 	{
-		// Complex_8_pair * const z = _z;
+		for (size_t j = 0; j < VSIZE / 8; ++j)
+		{
+			Complex_8_pair * const z = _z[j];
 
-		// for (size_t k = 0; k < N; ++k)
-		// {
-		// 	const Double_8 re = Int32_8_to_Double_8(d[k + 0 * N]), im = Int32_8_to_Double_8(d[k + 1 * N]);
-		// 	z[k].set(Complex_8(re, im));
-		// }
+			for (size_t k = 0; k < N; ++k)
+			{
+				const Double_8 re = Int32_8_to_Double_8(d[k + 0 * N][j]), im = Int32_8_to_Double_8(d[k + 1 * N][j]);
+				z[k].set(Complex_8(re, im));
+			}
+		}
 	}
 
 private:
@@ -747,77 +765,102 @@ private:
 public:
 	void set(const uint32_t a) override
 	{
-		Complex_8_pair * const z = _z;
+		for (size_t j = 0; j < VSIZE / 8; ++j)
+		{
+			Complex_8_pair * const z = _z[j];
 
-		z[0] = Complex_8_pair(double(a));
-		for (size_t k = 1; k < N; ++k) z[k] = Complex_8_pair(0.0);
+			z[0] = Complex_8_pair(double(a));
+			for (size_t k = 1; k < N; ++k) z[k] = Complex_8_pair(0.0);
+		}
 	}
 
 	void square_dup(const uint32_t dup) override
 	{
-		Complex_8_pair * const z = _z;
 		const TwiddleFactor * const w = _w;
 
-		forward4_0(z);
-		square_e(&z[0 * (N / 4)], w, N / 16, 4 + 0);
-		square_o(&z[1 * (N / 4)], w, N / 16, 4 + 0);
-		square_e(&z[2 * (N / 4)], w, N / 16, 4 + 1);
-		square_o(&z[3 * (N / 4)], w, N / 16, 4 + 1);
-		const double err = backward4_0_carry(z, _base, _base_inv, dup);
-		_error = std::max(_error, err);
+		for (size_t j = 0; j < VSIZE / 8; ++j)
+		{
+			Complex_8_pair * const z = _z[j];
+
+			forward4_0(z);
+			square_e(&z[0 * (N / 4)], w, N / 16, 4 + 0);
+			square_o(&z[1 * (N / 4)], w, N / 16, 4 + 0);
+			square_e(&z[2 * (N / 4)], w, N / 16, 4 + 1);
+			square_o(&z[3 * (N / 4)], w, N / 16, 4 + 1);
+			const double err = backward4_0_carry(z, _base[j], _base_inv[j], (dup >> (8 * j)) & 0xff);
+			_error = std::max(_error, err);
+		}
 	}
 
 	void init_multiplicand(const size_t src) override
 	{
-		const Complex_8_pair * const z_src = &_z[src * N];
-		Complex_8_pair * const zp = _zp;
 		const TwiddleFactor * const w = _w;
 
-		for (size_t k = 0; k < N; ++k) zp[k] = z_src[k];
+		for (size_t j = 0; j < VSIZE / 8; ++j)
+		{
+			Complex_8_pair * const z = _z[j];
+			const Complex_8_pair * const z_src = &z[src * N];
+			Complex_8_pair * const zp = _zp[j];
 
-		forward4_0(zp);
-		forward_e(&zp[0 * (N / 4)], w, N / 16, 4 + 0);
-		forward_o(&zp[1 * (N / 4)], w, N / 16, 4 + 0);
-		forward_e(&zp[2 * (N / 4)], w, N / 16, 4 + 1);
-		forward_o(&zp[3 * (N / 4)], w, N / 16, 4 + 1);
+			for (size_t k = 0; k < N; ++k) zp[k] = z_src[k];
+
+			forward4_0(zp);
+			forward_e(&zp[0 * (N / 4)], w, N / 16, 4 + 0);
+			forward_o(&zp[1 * (N / 4)], w, N / 16, 4 + 0);
+			forward_e(&zp[2 * (N / 4)], w, N / 16, 4 + 1);
+			forward_o(&zp[3 * (N / 4)], w, N / 16, 4 + 1);
+		}
 	}
 
 	void mul() override
 	{
-		Complex_8_pair * const z = _z;
-		const Complex_8_pair * const zp = _zp;
 		const TwiddleFactor * const w = _w;
 
-		forward4_0(z);
-		mul_e(&z[0 * (N / 4)], &zp[0 * (N / 4)], w, N / 16, 4 + 0);
-		mul_o(&z[1 * (N / 4)], &zp[1 * (N / 4)], w, N / 16, 4 + 0);
-		mul_e(&z[2 * (N / 4)], &zp[2 * (N / 4)], w, N / 16, 4 + 1);
-		mul_o(&z[3 * (N / 4)], &zp[3 * (N / 4)], w, N / 16, 4 + 1);
-		const double err = backward4_0_carry(z, _base, _base_inv, 0);
-		_error = std::max(_error, err);
+		for (size_t j = 0; j < VSIZE / 8; ++j)
+		{
+			Complex_8_pair * const z = _z[j];
+			const Complex_8_pair * const zp = _zp[j];
+
+			forward4_0(z);
+			mul_e(&z[0 * (N / 4)], &zp[0 * (N / 4)], w, N / 16, 4 + 0);
+			mul_o(&z[1 * (N / 4)], &zp[1 * (N / 4)], w, N / 16, 4 + 0);
+			mul_e(&z[2 * (N / 4)], &zp[2 * (N / 4)], w, N / 16, 4 + 1);
+			mul_o(&z[3 * (N / 4)], &zp[3 * (N / 4)], w, N / 16, 4 + 1);
+			const double err = backward4_0_carry(z, _base[j], _base_inv[j], 0);
+			_error = std::max(_error, err);
+		}
 	}
 
 	void mul_mask(const uint32_t mask) override
 	{
-		Complex_8_pair * const z = _z;
-		const Complex_8_pair * const zp = _zp;
 		const TwiddleFactor * const w = _w;
 
-		forward4_0(z);
-		mul_e_mask(&z[0 * (N / 4)], &zp[0 * (N / 4)], mask, w, N / 16, 4 + 0);
-		mul_o_mask(&z[1 * (N / 4)], &zp[1 * (N / 4)], mask, w, N / 16, 4 + 0);
-		mul_e_mask(&z[2 * (N / 4)], &zp[2 * (N / 4)], mask, w, N / 16, 4 + 1);
-		mul_o_mask(&z[3 * (N / 4)], &zp[3 * (N / 4)], mask, w, N / 16, 4 + 1);
-		const double err = backward4_0_carry(z, _base, _base_inv, 0);
-		_error = std::max(_error, err);
+		for (size_t j = 0; j < VSIZE / 8; ++j)
+		{
+			Complex_8_pair * const z = _z[j];
+			const Complex_8_pair * const zp = _zp[j];
+
+			forward4_0(z);
+			const uint32_t mask_j = (mask >> (8 * j)) & 0xff;
+			mul_e_mask(&z[0 * (N / 4)], &zp[0 * (N / 4)], mask_j, w, N / 16, 4 + 0);
+			mul_o_mask(&z[1 * (N / 4)], &zp[1 * (N / 4)], mask_j, w, N / 16, 4 + 0);
+			mul_e_mask(&z[2 * (N / 4)], &zp[2 * (N / 4)], mask_j, w, N / 16, 4 + 1);
+			mul_o_mask(&z[3 * (N / 4)], &zp[3 * (N / 4)], mask_j, w, N / 16, 4 + 1);
+			const double err = backward4_0_carry(z, _base[j], _base_inv[j], 0);
+			_error = std::max(_error, err);
+		}
 	}
 
 	void copy(const size_t dst, const size_t src) const override
 	{
-		const Complex_8_pair * const z_src = &_z[src * N];
-		Complex_8_pair * const z_dst =  &_z[dst * N];
+		for (size_t j = 0; j < VSIZE / 8; ++j)
+		{
+			Complex_8_pair * const z = _z[j];
+			const Complex_8_pair * const z_src = &z[src * N];
+			Complex_8_pair * const z_dst =  &z[dst * N];
 
-		for (size_t k = 0; k < N; ++k) z_dst[k] = z_src[k];
+			for (size_t k = 0; k < N; ++k) z_dst[k] = z_src[k];
+		}
 	}
 
 	void copy_mask(const size_t dst, const size_t src, const uint32_t mask) const override
@@ -826,10 +869,14 @@ public:
 		if (VSIZE == 32) { if (mask == uint32_t(-1)) { copy(dst, src); return; } }
 		else { if (mask == (uint32_t(1) << VSIZE) - 1) { copy(dst, src); return; } }
 
-		const Complex_8_pair * const z_src = &_z[src * N];
-		Complex_8_pair * const z_dst =  &_z[dst * N];
+		for (size_t j = 0; j < VSIZE / 8; ++j)
+		{
+			Complex_8_pair * const z = _z[j];
+			const Complex_8_pair * const z_src = &z[src * N];
+			Complex_8_pair * const z_dst =  &z[dst * N];
 
-		for (size_t k = 0; k < N; ++k) z_dst[k].copy_mask(z_src[k], mask);
+			for (size_t k = 0; k < N; ++k) z_dst[k].copy_mask(z_src[k], (mask >> (8 * j)) & 0xff);
+		}
 	}
 
 	void power(const size_t src, const uint32_t e) override { parent::_power(src, e); }
@@ -840,7 +887,7 @@ public:
 		int kind = 0;
 		if (!cFile.read(reinterpret_cast<char *>(&kind), sizeof(kind))) return false;
 		if (kind != int(parent::get_kind())) return false;
-		if (!cFile.read(reinterpret_cast<char *>(_z), _num_regs * N * sizeof(Complex_8_pair))) return false;
+		for (size_t j = 0; j < VSIZE / 8; ++j) if (!cFile.read(reinterpret_cast<char *>(_z[j]), _num_regs * N * sizeof(Complex_8_pair))) return false;
 		return true;
 	}
 
@@ -848,11 +895,11 @@ public:
 	{
 		const int kind = int(parent::get_kind());
 		if (!cFile.write(reinterpret_cast<const char *>(&kind), sizeof(kind))) return;
-		if (!cFile.write(reinterpret_cast<const char *>(_z), _num_regs * N * sizeof(Complex_8_pair))) return;
+		for (size_t j = 0; j < VSIZE / 8; ++j) if (!cFile.write(reinterpret_cast<const char *>(_z[j]), _num_regs * N * sizeof(Complex_8_pair))) return;
 	}
 
-	size_t get_data_size() const override { return (_num_regs + 1) * N * sizeof(Complex_8_pair) + N / 2 * sizeof(TwiddleFactor); }
-	size_t get_cache_size() const override { return N * sizeof(Complex_8_pair) + N / 2 * sizeof(TwiddleFactor); }
+	size_t get_data_size() const override { return VSIZE / 8 * (_num_regs + 1) * N * sizeof(Complex_8_pair) + N / 2 * sizeof(TwiddleFactor); }
+	size_t get_cache_size() const override { return VSIZE / 8 * N * sizeof(Complex_8_pair) + N / 2 * sizeof(TwiddleFactor); }
 	double get_error() const override { return _error; }
 
 	void is_one(bool b[VSIZE], u64vec & res64) const override { parent::_is_one(b, res64); }
@@ -860,7 +907,7 @@ public:
 	bvec gethash32() const override { return parent::_gethash32(); }
 
 #ifdef QVALID
-	void cosmic_ray() override { const Complex_8 z = _z[N / 2].get(); Double_8 x = z.real(); x.cosmic_ray(); _z[N / 2].set(Complex_8(x, z.imag())); }
+	void cosmic_ray() override { const Complex_8 z = _z[0][N / 2].get(); Double_8 x = z.real(); x.cosmic_ray(); _z[0][N / 2].set(Complex_8(x, z.imag())); }
 #endif
 };
 

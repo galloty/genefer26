@@ -195,6 +195,15 @@ private:
 		return ss.str();
 	}
 
+	static bool check_gfn_res(const u64vec & res64)
+	{
+		for (size_t j = 0; j < VSIZE / 8; ++j)
+		{
+			for (size_t i = 0; i < 8; ++i) if (res64[j][i] == 0ull) return false;
+		}
+		return true;
+	}
+
 	void init_print_progress(const int i0, const int i_start)
 	{
 		_print_range = i0; _print_i = i_start;
@@ -1080,6 +1089,7 @@ public:
 				std::ostringstream ss;
 				if (success == EReturn::Failed) ss << "Validation failed!";
 				else if (success == EReturn::Aborted) ss << "Test was aborted.";
+				else if (!check_gfn_res(res64)) ss << "Validation failed!";
 				else if (success == EReturn::Success)
 				{
 					ss << "Test succeeded";
@@ -1102,6 +1112,7 @@ public:
 				std::ostringstream ss;
 				if (success == EReturn::Failed) ss << "Validation failed!";
 				else if (success == EReturn::Aborted) ss << "Test was aborted.";
+				else if (!check_gfn_res(res64)) ss << "Validation failed!";
 				else if (success == EReturn::Success)
 				{
 					ss << "Proof file is generated";
@@ -1125,6 +1136,7 @@ public:
 				std::ostringstream ss;
 				if (success == EReturn::Failed) ss << "Generation failed!";
 				else if (success == EReturn::Aborted) ss << "Test was aborted.";
+				else if (!check_gfn_res(res64)) ss << "Generation failed!";
 				else if (success == EReturn::Success)
 				{
 					ss << "Certificate is generated";
@@ -1136,7 +1148,7 @@ public:
 				{
 					const std::string st = gfn_vector_status(b, n, is_prp, pkey, ckey, res64);
 					pio::print(st);
-					if (success == EReturn::Success) pio::result(st);
+					pio::result(st);
 				}
 			}
 		}
