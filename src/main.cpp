@@ -278,7 +278,7 @@ public:
 
 		g->set_boinc(b_boinc);
 #if defined(BOINC)
-		g.set_boinc_param(b_boinc && !boinc_is_standalone() && !ext_device, argc, argv);
+		g->set_boinc_param(b_boinc && !boinc_is_standalone() && !ext_device, argc, argv);
 #endif
 		g->set_filename(main_filename);
 
