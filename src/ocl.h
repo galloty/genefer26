@@ -392,7 +392,7 @@ public:
 		if (!hFile.is_open()) throw std::runtime_error("cannot write openCL header file");
 
 		hFile << "/*" << std::endl;
-		hFile << "Copyright 2022, Yves Gallot" << std::endl << std::endl;
+		hFile << "Copyright 2026, Yves Gallot" << std::endl << std::endl;
 		hFile << "genefer is free source code, under the MIT license (see LICENSE). You can redistribute, use and/or modify it." << std::endl;
 		hFile << "Please give feedback to the authors if improvement is realized. It is distributed in the hope that it will be useful." << std::endl;
 		hFile << "*/" << std::endl << std::endl;

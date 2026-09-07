@@ -108,6 +108,7 @@ private:
 	{
 		std::ostringstream ss; ss << "Using " << _transform->get_type() << " implementation";
 		if (!_transform->get_gpu_type().empty()) ss << "." << std::endl << "Running on " << _transform->get_gpu_type();
+		else if (VSIZE / 8 > 1) ss << ", " << (VSIZE / 8) << " threads";
 		if (full)
 		{
 			ss << ", data size: " << std::lrint(_transform->get_data_size() / (1024 * 1024.0)) << " MB";

@@ -469,16 +469,16 @@ public:
 		_engine->carry(0);
 	}
 
-	void copy(const size_t dst, const size_t src) const override
+	void copy(const size_t dst, const size_t src) override
 	{
 		_engine->copy(dst, src);
 	}
 
-	void copy_mask(const size_t dst, const size_t src, const uint32_t mask) const override
+	void copy_mask(const size_t dst, const size_t src, const uint32_t mask) override
 	{
 		if (mask == 0) return;
-		if (VSIZE == 32) { if (mask == uint32_t(-1)) { copy(dst, src); return; } }
-		else { if (mask == (uint32_t(1) << VSIZE) - 1) { copy(dst, src); return; } }
+		const uint32_t full = (VSIZE == 32) ? uint32_t(-1) : (1u << VSIZE) - 1;
+		if (mask == full) { copy(dst, src); return; }
 
 		_engine->copy_mask(dst, src, mask);
 	}

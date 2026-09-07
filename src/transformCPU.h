@@ -10,10 +10,9 @@ Please give feedback to the authors if improvement is realized. It is distribute
 #include <cstdint>
 #include <cmath>
 
-#include <immintrin.h>
-
 #include "transform.h"
 #include "vcomplex.h"
+#include "parallel.h"
 
 #ifndef finline
 #define finline	__attribute__((always_inline)) inline
@@ -410,6 +409,7 @@ template<size_t VSIZE, size_t N>
 class transformCPU : public transform<VSIZE>
 {
 	using parent = transform<VSIZE>;
+	using Par = parallel<transformCPU>;
 
 	using bvec = b_vec<VSIZE / 8>;
 	using i32vec = SVint<Int32_8, VSIZE / 8>;
@@ -417,27 +417,26 @@ class transformCPU : public transform<VSIZE>
 
 private:
 	const size_t _num_regs;
+	Par _parallel;
 	TwiddleFactor * const _w;
+	Complex_8_pair * const _mem;
 	Double_8 _base[VSIZE / 8], _base_inv[VSIZE / 8];
-	Complex_8_pair * _z[VSIZE / 8];
-	Complex_8_pair * _zp[VSIZE / 8];
 	double _error;
+	double _err_array[VSIZE / 8];
+	uint32_t _set_a, _sq_dup, _m_mask;
+	size_t _im_src, _c_src, _c_dst, _cm_src, _cm_dst, _cm_mask;
 
 public:
 	transformCPU(const bvec & b, const int n, const size_t num_regs) : transform<VSIZE>(b, n, parent::EKind::CPU),
-		_num_regs(num_regs), _w(static_cast<TwiddleFactor *>(align_new(N / 2 * sizeof(TwiddleFactor), sizeof(TwiddleFactor))))
+		_num_regs(num_regs), _parallel(this, VSIZE / 8 - 1),
+		_w(static_cast<TwiddleFactor *>(align_new(N / 2 * sizeof(TwiddleFactor), sizeof(TwiddleFactor)))),
+		_mem(static_cast<Complex_8_pair *>(align_new((VSIZE / 8) * (num_regs + 1) * N * sizeof(Complex_8_pair), 2 * 1024 * 1024)))
 	{
 		for (size_t j = 0; j < VSIZE / 8; ++j)
 		{
 			const Double_8 base = UInt32_8_to_Double_8(b[j]);
 			_base[j] = base;
 			_base_inv[j] = base.inverse();
-		}
-
-		for (size_t j = 0; j < VSIZE / 8; ++j)
-		{
-			_z[j] = static_cast<Complex_8_pair *>(align_new(num_regs * N * sizeof(Complex_8_pair), 2 * 1024 * 1024));
-			_zp[j] = static_cast<Complex_8_pair *>(align_new(N * sizeof(Complex_8_pair), sizeof(Complex_8_pair)));
 		}
 
 		TwiddleFactor * const w = _w;
@@ -454,40 +453,44 @@ public:
 
 	virtual ~transformCPU()
 	{
-		for (size_t j = 0; j < VSIZE / 8; ++j)
-		{
-			align_delete(_z[j]);
-			align_delete(_zp[j]);
-		}
+		align_delete(_mem);
 		align_delete(_w);
 	}
 
 protected:
-	void getZi(i32vec * const d) const override	// TODO improve
+	void getZi(i32vec * const d) const override
 	{
-		for (size_t j = 0; j < VSIZE / 8; ++j)
-		{
-			Complex_8_pair * const z = _z[j];
+		const size_t num_regs = _num_regs;
+		const Complex_8_pair * const mem = _mem;
 
-			for (size_t k = 0; k < N; ++k)
+		for (size_t k = 0; k < N; ++k)
+		{
+			i32vec r_k, i_k;
+			for (size_t j = 0; j < VSIZE / 8; ++j)
 			{
-				const Complex_8 zk = z[k].get();
-				d[k + 0 * N][j] = Double_8_to_Int32_8_round(zk.real());
-				d[k + 1 * N][j] = Double_8_to_Int32_8_round(zk.imag());
+				const Complex_8_pair * const z_j = &mem[num_regs * N * j];
+				const Complex_8 z_jk = z_j[k].get();
+				r_k[j] = Double_8_to_Int32_8_round(z_jk.real());
+				i_k[j] = Double_8_to_Int32_8_round(z_jk.imag());
 			}
+			d[k + 0 * N] = r_k; d[k + 1 * N] = i_k;
 		}
 	}
 
-	void setZi(const i32vec * const d) override	// TODO improve
+	void setZi(const i32vec * const d) override
 	{
-		for (size_t j = 0; j < VSIZE / 8; ++j)
-		{
-			Complex_8_pair * const z = _z[j];
+		const size_t num_regs = _num_regs;
+		Complex_8_pair * const mem = _mem;
 
-			for (size_t k = 0; k < N; ++k)
+		for (size_t k = 0; k < N; ++k)
+		{
+			const i32vec r_k = d[k + 0 * N], i_k = d[k + 1 * N];
+
+			for (size_t j = 0; j < VSIZE / 8; ++j)
 			{
-				const Double_8 re = Int32_8_to_Double_8(d[k + 0 * N][j]), im = Int32_8_to_Double_8(d[k + 1 * N][j]);
-				z[k].set(Complex_8(re, im));
+				Complex_8_pair * const z_j = &mem[num_regs * N * j];
+				const Complex_8 z_jk = Complex_8(Int32_8_to_Double_8(r_k[j]), Int32_8_to_Double_8(i_k[j]));
+				z_j[k].set(z_jk);
 			}
 		}
 	}
@@ -762,121 +765,161 @@ private:
 #endif
 	}
 
+	void error_update()
+	{
+		double err = _error;
+		const double * const e = _err_array;
+		for (size_t i = 0; i < VSIZE / 8; ++i) err = std::max(err, e[i]);
+		_error = err;
+	}
+
 public:
+	void set_t(const size_t thread_id)
+	{
+		Complex_8_pair * const z = &_mem[_num_regs * N * thread_id];
+
+		z[0] = Complex_8_pair(double(_set_a));
+		for (size_t k = 1; k < N; ++k) z[k] = Complex_8_pair(0.0);
+	}
+
 	void set(const uint32_t a) override
 	{
-		for (size_t j = 0; j < VSIZE / 8; ++j)
-		{
-			Complex_8_pair * const z = _z[j];
+		_set_a = a;
 
-			z[0] = Complex_8_pair(double(a));
-			for (size_t k = 1; k < N; ++k) z[k] = Complex_8_pair(0.0);
-		}
+		for (size_t i = 1; i < VSIZE / 8; ++i) _parallel.exec(i, Par::EFunction::Set);
+		set_t(0); if (VSIZE / 8 > 1) _parallel.wait();
+	}
+
+	void square_dup_t(const size_t thread_id)
+	{
+		const TwiddleFactor * const w = _w;
+		Complex_8_pair * const z = &_mem[_num_regs * N * thread_id];
+
+		forward4_0(z);
+		square_e(&z[0 * (N / 4)], w, N / 16, 4 + 0);
+		square_o(&z[1 * (N / 4)], w, N / 16, 4 + 0);
+		square_e(&z[2 * (N / 4)], w, N / 16, 4 + 1);
+		square_o(&z[3 * (N / 4)], w, N / 16, 4 + 1);
+		_err_array[thread_id] = backward4_0_carry(z, _base[thread_id], _base_inv[thread_id], (_sq_dup >> (8 * thread_id)) & 0xff);
 	}
 
 	void square_dup(const uint32_t dup) override
 	{
+		_sq_dup = dup;
+
+		for (size_t i = 1; i < VSIZE / 8; ++i) _parallel.exec(i, Par::EFunction::Square_dup);
+		square_dup_t(0); if (VSIZE / 8 > 1) _parallel.wait();
+
+		error_update();
+	}
+
+	void init_multiplicand_t(const size_t thread_id)
+	{
 		const TwiddleFactor * const w = _w;
+		Complex_8_pair * const z = &_mem[_num_regs * N * thread_id];
+		const Complex_8_pair * const z_src = &z[N * _im_src];
+		Complex_8_pair * const zp = &_mem[(VSIZE / 8) * _num_regs * N + N * thread_id];
 
-		for (size_t j = 0; j < VSIZE / 8; ++j)
-		{
-			Complex_8_pair * const z = _z[j];
+		for (size_t k = 0; k < N; ++k) zp[k] = z_src[k];
 
-			forward4_0(z);
-			square_e(&z[0 * (N / 4)], w, N / 16, 4 + 0);
-			square_o(&z[1 * (N / 4)], w, N / 16, 4 + 0);
-			square_e(&z[2 * (N / 4)], w, N / 16, 4 + 1);
-			square_o(&z[3 * (N / 4)], w, N / 16, 4 + 1);
-			const double err = backward4_0_carry(z, _base[j], _base_inv[j], (dup >> (8 * j)) & 0xff);
-			_error = std::max(_error, err);
-		}
+		forward4_0(zp);
+		forward_e(&zp[0 * (N / 4)], w, N / 16, 4 + 0);
+		forward_o(&zp[1 * (N / 4)], w, N / 16, 4 + 0);
+		forward_e(&zp[2 * (N / 4)], w, N / 16, 4 + 1);
+		forward_o(&zp[3 * (N / 4)], w, N / 16, 4 + 1);
 	}
 
 	void init_multiplicand(const size_t src) override
 	{
+		_im_src = src;
+
+		for (size_t i = 1; i < VSIZE / 8; ++i) _parallel.exec(i, Par::EFunction::Init_multiplicand);
+		init_multiplicand_t(0); if (VSIZE / 8 > 1) _parallel.wait();
+	}
+
+	void mul_t(const size_t thread_id)
+	{
 		const TwiddleFactor * const w = _w;
+		Complex_8_pair * const z = &_mem[_num_regs * N * thread_id];
+		const Complex_8_pair * const zp = &_mem[(VSIZE / 8) * _num_regs * N + N * thread_id];
 
-		for (size_t j = 0; j < VSIZE / 8; ++j)
-		{
-			Complex_8_pair * const z = _z[j];
-			const Complex_8_pair * const z_src = &z[src * N];
-			Complex_8_pair * const zp = _zp[j];
-
-			for (size_t k = 0; k < N; ++k) zp[k] = z_src[k];
-
-			forward4_0(zp);
-			forward_e(&zp[0 * (N / 4)], w, N / 16, 4 + 0);
-			forward_o(&zp[1 * (N / 4)], w, N / 16, 4 + 0);
-			forward_e(&zp[2 * (N / 4)], w, N / 16, 4 + 1);
-			forward_o(&zp[3 * (N / 4)], w, N / 16, 4 + 1);
-		}
+		forward4_0(z);
+		mul_e(&z[0 * (N / 4)], &zp[0 * (N / 4)], w, N / 16, 4 + 0);
+		mul_o(&z[1 * (N / 4)], &zp[1 * (N / 4)], w, N / 16, 4 + 0);
+		mul_e(&z[2 * (N / 4)], &zp[2 * (N / 4)], w, N / 16, 4 + 1);
+		mul_o(&z[3 * (N / 4)], &zp[3 * (N / 4)], w, N / 16, 4 + 1);
+		_err_array[thread_id] = backward4_0_carry(z, _base[thread_id], _base_inv[thread_id], 0);
 	}
 
 	void mul() override
 	{
+		for (size_t i = 1; i < VSIZE / 8; ++i) _parallel.exec(i, Par::EFunction::Mul);
+		mul_t(0); if (VSIZE / 8 > 1) _parallel.wait();
+
+		error_update();
+	}
+
+	void mul_mask_t(const size_t thread_id)
+	{
 		const TwiddleFactor * const w = _w;
+		Complex_8_pair * const z = &_mem[_num_regs * N * thread_id];
+		const Complex_8_pair * const zp = &_mem[(VSIZE / 8) * _num_regs * N + N * thread_id];
 
-		for (size_t j = 0; j < VSIZE / 8; ++j)
-		{
-			Complex_8_pair * const z = _z[j];
-			const Complex_8_pair * const zp = _zp[j];
-
-			forward4_0(z);
-			mul_e(&z[0 * (N / 4)], &zp[0 * (N / 4)], w, N / 16, 4 + 0);
-			mul_o(&z[1 * (N / 4)], &zp[1 * (N / 4)], w, N / 16, 4 + 0);
-			mul_e(&z[2 * (N / 4)], &zp[2 * (N / 4)], w, N / 16, 4 + 1);
-			mul_o(&z[3 * (N / 4)], &zp[3 * (N / 4)], w, N / 16, 4 + 1);
-			const double err = backward4_0_carry(z, _base[j], _base_inv[j], 0);
-			_error = std::max(_error, err);
-		}
+		forward4_0(z);
+		const uint32_t mask = (_m_mask >> (8 * thread_id)) & 0xff;
+		mul_e_mask(&z[0 * (N / 4)], &zp[0 * (N / 4)], mask, w, N / 16, 4 + 0);
+		mul_o_mask(&z[1 * (N / 4)], &zp[1 * (N / 4)], mask, w, N / 16, 4 + 0);
+		mul_e_mask(&z[2 * (N / 4)], &zp[2 * (N / 4)], mask, w, N / 16, 4 + 1);
+		mul_o_mask(&z[3 * (N / 4)], &zp[3 * (N / 4)], mask, w, N / 16, 4 + 1);
+		_err_array[thread_id] = backward4_0_carry(z, _base[thread_id], _base_inv[thread_id], 0);
 	}
 
 	void mul_mask(const uint32_t mask) override
 	{
-		const TwiddleFactor * const w = _w;
+		_m_mask = mask;
 
-		for (size_t j = 0; j < VSIZE / 8; ++j)
-		{
-			Complex_8_pair * const z = _z[j];
-			const Complex_8_pair * const zp = _zp[j];
+		for (size_t i = 1; i < VSIZE / 8; ++i) _parallel.exec(i, Par::EFunction::Mul_mask);
+		mul_mask_t(0); if (VSIZE / 8 > 1) _parallel.wait();
 
-			forward4_0(z);
-			const uint32_t mask_j = (mask >> (8 * j)) & 0xff;
-			mul_e_mask(&z[0 * (N / 4)], &zp[0 * (N / 4)], mask_j, w, N / 16, 4 + 0);
-			mul_o_mask(&z[1 * (N / 4)], &zp[1 * (N / 4)], mask_j, w, N / 16, 4 + 0);
-			mul_e_mask(&z[2 * (N / 4)], &zp[2 * (N / 4)], mask_j, w, N / 16, 4 + 1);
-			mul_o_mask(&z[3 * (N / 4)], &zp[3 * (N / 4)], mask_j, w, N / 16, 4 + 1);
-			const double err = backward4_0_carry(z, _base[j], _base_inv[j], 0);
-			_error = std::max(_error, err);
-		}
+		error_update();
 	}
 
-	void copy(const size_t dst, const size_t src) const override
+	void copy_t(const size_t thread_id)
 	{
-		for (size_t j = 0; j < VSIZE / 8; ++j)
-		{
-			Complex_8_pair * const z = _z[j];
-			const Complex_8_pair * const z_src = &z[src * N];
-			Complex_8_pair * const z_dst =  &z[dst * N];
+		Complex_8_pair * const z = &_mem[_num_regs * N * thread_id];
+		const Complex_8_pair * const z_src = &z[_c_src * N];
+		Complex_8_pair * const z_dst =  &z[_c_dst * N];
 
-			for (size_t k = 0; k < N; ++k) z_dst[k] = z_src[k];
-		}
+		for (size_t k = 0; k < N; ++k) z_dst[k] = z_src[k];
 	}
 
-	void copy_mask(const size_t dst, const size_t src, const uint32_t mask) const override
+	void copy(const size_t dst, const size_t src) override
+	{
+		_c_src = src; _c_dst = dst;
+
+		for (size_t i = 1; i < VSIZE / 8; ++i) _parallel.exec(i, Par::EFunction::Copy);
+		copy_t(0); if (VSIZE / 8 > 1) _parallel.wait();
+	}
+
+	void copy_mask_t(const size_t thread_id)
+	{
+		Complex_8_pair * const z = &_mem[_num_regs * N * thread_id];
+		const Complex_8_pair * const z_src = &z[_cm_src * N];
+		Complex_8_pair * const z_dst =  &z[_cm_dst * N];
+
+		for (size_t k = 0; k < N; ++k) z_dst[k].copy_mask(z_src[k], (_cm_mask >> (8 * thread_id)) & 0xff);
+	}
+
+	void copy_mask(const size_t dst, const size_t src, const uint32_t mask) override
 	{
 		if (mask == 0) return;
-		if (VSIZE == 32) { if (mask == uint32_t(-1)) { copy(dst, src); return; } }
-		else { if (mask == (uint32_t(1) << VSIZE) - 1) { copy(dst, src); return; } }
+		const uint32_t full = (VSIZE == 32) ? uint32_t(-1) : (1u << VSIZE) - 1;
+		if (mask == full) { copy(dst, src); return; }
 
-		for (size_t j = 0; j < VSIZE / 8; ++j)
-		{
-			Complex_8_pair * const z = _z[j];
-			const Complex_8_pair * const z_src = &z[src * N];
-			Complex_8_pair * const z_dst =  &z[dst * N];
+		_cm_src = src; _cm_dst = dst; _cm_mask = mask;
 
-			for (size_t k = 0; k < N; ++k) z_dst[k].copy_mask(z_src[k], (mask >> (8 * j)) & 0xff);
-		}
+		for (size_t i = 1; i < VSIZE / 8; ++i) _parallel.exec(i, Par::EFunction::Copy_mask);
+		copy_mask_t(0); if (VSIZE / 8 > 1) _parallel.wait();
 	}
 
 	void power(const size_t src, const uint32_t e) override { parent::_power(src, e); }
@@ -887,7 +930,7 @@ public:
 		int kind = 0;
 		if (!cFile.read(reinterpret_cast<char *>(&kind), sizeof(kind))) return false;
 		if (kind != int(parent::get_kind())) return false;
-		for (size_t j = 0; j < VSIZE / 8; ++j) if (!cFile.read(reinterpret_cast<char *>(_z[j]), _num_regs * N * sizeof(Complex_8_pair))) return false;
+		if (!cFile.read(reinterpret_cast<char *>(_mem), (VSIZE / 8) * _num_regs * N * sizeof(Complex_8_pair))) return false;
 		return true;
 	}
 
@@ -895,11 +938,11 @@ public:
 	{
 		const int kind = int(parent::get_kind());
 		if (!cFile.write(reinterpret_cast<const char *>(&kind), sizeof(kind))) return;
-		for (size_t j = 0; j < VSIZE / 8; ++j) if (!cFile.write(reinterpret_cast<const char *>(_z[j]), _num_regs * N * sizeof(Complex_8_pair))) return;
+		if (!cFile.write(reinterpret_cast<const char *>(_mem), (VSIZE / 8) * _num_regs * N * sizeof(Complex_8_pair))) return;
 	}
 
-	size_t get_data_size() const override { return VSIZE / 8 * (_num_regs + 1) * N * sizeof(Complex_8_pair) + N / 2 * sizeof(TwiddleFactor); }
-	size_t get_cache_size() const override { return VSIZE / 8 * N * sizeof(Complex_8_pair) + N / 2 * sizeof(TwiddleFactor); }
+	size_t get_data_size() const override { return (VSIZE / 8) * (_num_regs + 1) * N * sizeof(Complex_8_pair) + (N / 2) * sizeof(TwiddleFactor); }
+	size_t get_cache_size() const override { return (VSIZE / 8) * N * sizeof(Complex_8_pair) + (N / 2) * sizeof(TwiddleFactor); }
 	double get_error() const override { return _error; }
 
 	void is_one(bool b[VSIZE], u64vec & res64) const override { parent::_is_one(b, res64); }
@@ -907,7 +950,13 @@ public:
 	bvec gethash32() const override { return parent::_gethash32(); }
 
 #ifdef QVALID
-	void cosmic_ray() override { const Complex_8 z = _z[0][N / 2].get(); Double_8 x = z.real(); x.cosmic_ray(); _z[0][N / 2].set(Complex_8(x, z.imag())); }
+	void cosmic_ray() override
+	{
+		Complex_8_pair * const z = &_mem[_num_regs * N * 0];
+		const Complex_8 zcr = z[N / 2].get();
+		Double_8 x = zcr.real(); x.cosmic_ray();
+		z[N / 2].set(Complex_8(x, zcr.imag()));
+	}
 #endif
 };
 
