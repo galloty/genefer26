@@ -42,6 +42,7 @@ public:
 
 	virtual void quit() = 0;
 	virtual void set_boinc(const bool is_boinc) = 0;
+	virtual void set_boinc_param(const bool get_boinc_ids, int argc, char * argv[]) = 0;
 	virtual void set_filename(const std::string & main_filename) = 0;
 	virtual EReturn check(const std::string & b_filename, const int n, const EMode mode, const size_t device, const bool isCPU, const int depth) = 0;
 };
@@ -89,7 +90,7 @@ public:
 	}
 
 	void set_boinc(const bool is_boinc) override { _is_boinc = is_boinc; }
-	void set_boinc_param(const bool get_boinc_ids, int argc, char * argv[])
+	void set_boinc_param(const bool get_boinc_ids, int argc, char * argv[]) override
 	{
 		_get_boinc_ids = get_boinc_ids;
 		_boinc_argc = argc;
