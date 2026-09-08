@@ -162,6 +162,7 @@ static const char * const src_ocl_kernel = \
 "	return (uint2_32)(mulmod(lhs.s0, rhs, pq), mulmod(lhs.s1, rhs, pq));\n" \
 "}\n" \
 "\n" \
+"INLINE int2_32 get_int2(const uint2_32 n, const uint_32 p) { return (int2_32)(get_int(n.s0, p), get_int(n.s1, p)); }\n" \
 "INLINE uint2_32 set_int2(const int2_32 i, const uint_32 p) { return (uint2_32)(set_int(i.s0, p), set_int(i.s1, p)); }\n" \
 "\n" \
 "// --- v4\n" \
@@ -186,6 +187,7 @@ static const char * const src_ocl_kernel = \
 "	return (uint4_32)(mulmods2(lhs.s01, rhs, pq), mulmods2(lhs.s23, rhs, pq));\n" \
 "}\n" \
 "\n" \
+"INLINE int4_32 get_int4(const uint4_32 n, const uint_32 p) { return (int4_32)(get_int2(n.s01, p), get_int2(n.s23, p)); }\n" \
 "INLINE uint4_32 set_int4(const int4_32 i, const uint_32 p) { return (uint4_32)(set_int2(i.s01, p), set_int2(i.s23, p)); }\n" \
 "\n" \
 "// --- uint96/int96 ---\n" \
@@ -1616,6 +1618,26 @@ static const char * const src_ocl_kernel = \
 "}\n" \
 "\n" \
 "// --- misc ---\n" \
+"\n" \
+"__kernel\n" \
+"void extend_z(__global VTYPE * restrict const z)\n" \
+"{\n" \
+"	const sz_t id = (sz_t)get_global_id(0), k = 2 * (id & ~(N_VLEN - 1)) + id;\n" \
+"\n" \
+"#if OCL_VSIZE == 4\n" \
+"	const int4_32 r = get_int4(z[k], P1);\n" \
+"	z[k + 1 * N_VLEN] = set_int4(r, P2);\n" \
+"	z[k + 2 * N_VLEN] = set_int4(r, P3);\n" \
+"#elif OCL_VSIZE == 2\n" \
+"	const int2_32 r = get_int2(z[k], P1);\n" \
+"	z[k + 1 * N_VLEN] = set_int2(r, P2);\n" \
+"	z[k + 2 * N_VLEN] = set_int2(r, P3);\n" \
+"#else\n" \
+"	const int_32 r = get_int(z[k], P1);\n" \
+"	z[k + 1 * N_VLEN] = set_int(r, P2);\n" \
+"	z[k + 2 * N_VLEN] = set_int(r, P3);\n" \
+"#endif\n" \
+"}\n" \
 "\n" \
 "__kernel\n" \
 "void set(__global VTYPE * restrict const z, const uint_32 a)\n" \

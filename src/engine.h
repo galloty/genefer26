@@ -53,8 +53,9 @@ public:
 #define CREATE_MUL_KERNEL_DYN(name, dyn_mem_size) _##name = create_mul_kernel_dyn(#name, dyn_mem_size);
 
 #define CREATE_CARRY_KERNEL(name) _##name = create_carry_kernel(#name);
-#define CREATE_SETCOPY_KERNEL(name) _##name = create_set_copy_kernel(#name);
-#define CREATE_COPYP_KERNEL(name) _##name = create_copyp_kernel(#name);
+#define CREATE_1ARG_KERNEL(name) _##name = create_1arg_kernel(#name);
+#define CREATE_2ARGS_KERNEL(name) _##name = create_2args_kernel(#name);
+
 #define DEFINE_FORWARD_0P(u) void forward##u##_0p() { set_transform_arg0(_forward##u##_0, false); forward##u##_0(); set_transform_arg0(_forward##u##_0); }
 
 
@@ -91,6 +92,7 @@ private:
 #endif
 	cl_kernel _mul2x4_mask = nullptr, _mul4x2_mask = nullptr, _mul8_mask = nullptr;
 	cl_kernel _carry1 = nullptr, _carry2 = nullptr;
+	cl_kernel _extend_z = nullptr;
 	cl_kernel _set = nullptr, _copy = nullptr, _copyp = nullptr, _copy_mask = nullptr;
 #ifdef QVALID
 	cl_kernel _cosmic_ray = nullptr;
@@ -196,7 +198,7 @@ private:
 		return kernel;
 	}
 
-	cl_kernel create_set_copy_kernel(const char * const kernel_name)
+	cl_kernel create_1arg_kernel(const char * const kernel_name)
 	{
 		cl_kernel kernel = _createKernel(kernel_name);
 		_setKernelArg(kernel, 0, sizeof(cl_mem), &_z);
@@ -204,7 +206,7 @@ private:
 		return kernel;
 	}
 
-	cl_kernel create_copyp_kernel(const char * const kernel_name)
+	cl_kernel create_2args_kernel(const char * const kernel_name)
 	{
 		cl_kernel kernel = _createKernel(kernel_name);
 		_setKernelArg(kernel, 0, sizeof(cl_mem), &_zp);
@@ -280,12 +282,14 @@ public:
 		_setKernelArg(_carry1, 4, get_carry_workgroup_size() * OCL_CARRY_VSIZE * sizeof(int64), nullptr);
 		CREATE_CARRY_KERNEL(carry2);
 
-		CREATE_SETCOPY_KERNEL(set);
-		CREATE_SETCOPY_KERNEL(copy);
-		CREATE_COPYP_KERNEL(copyp);
-		CREATE_SETCOPY_KERNEL(copy_mask);
+		CREATE_1ARG_KERNEL(extend_z);
+
+		CREATE_1ARG_KERNEL(set);
+		CREATE_1ARG_KERNEL(copy);
+		CREATE_2ARGS_KERNEL(copyp);
+		CREATE_1ARG_KERNEL(copy_mask);
 #ifdef QVALID
-		CREATE_SETCOPY_KERNEL(cosmic_ray);
+		CREATE_1ARG_KERNEL(cosmic_ray);
 #endif
 	}
 
@@ -302,8 +306,10 @@ public:
 ///////////////////////////////
 
 public:
-	void read_memory_z(ZP * const z_ptr, const size_t count = 1) { _readBuffer(_z, z_ptr, 3 * VSIZE * count * _n * sizeof(ZP)); }
-	void write_memory_z(const ZP * const z_ptr, const size_t count = 1) { _writeBuffer(_z, z_ptr, 3 * VSIZE * count * _n * sizeof(ZP)); }
+	void read_memory_z(ZP * const z_ptr, const size_t count) { _readBuffer(_z, z_ptr, 3 * VSIZE * count * _n * sizeof(ZP)); }
+	void write_memory_z(const ZP * const z_ptr, const size_t count) { _writeBuffer(_z, z_ptr, 3 * VSIZE * count * _n * sizeof(ZP)); }
+	void read_memory_z1(ZP * const z_ptr) { _readBuffer(_z, z_ptr, VSIZE * _n * sizeof(ZP)); }
+	void write_memory_z1(const ZP * const z_ptr) { _writeBuffer(_z, z_ptr, VSIZE * _n * sizeof(ZP)); }
 	void write_memory_w(const ZP * const w_ptr) { _writeBuffer(_w, w_ptr, 3 * _n / 2 * sizeof(ZP)); }
 	void write_memory_b(const uint32_t * const b, const uint32_t * const b_inv, const int * const b_s)
 	{
@@ -406,6 +412,11 @@ public:
 		_setKernelArg(_carry1, 5, sizeof(uint32), &idup);
 		_executeKernel(_carry1, VSIZE / OCL_CARRY_VSIZE * _n / CARRY_LENGTH, get_carry_workgroup_size());
 		_executeKernel(_carry2, (VSIZE * _n / CARRY_LENGTH) >> _carry_shift);
+	}
+
+	void extend_z(const size_t num_regs)
+	{
+		_executeKernel(_extend_z, VSIZE / OCL_VSIZE * _n * num_regs);
 	}
 
 	void set(const uint32_t a)

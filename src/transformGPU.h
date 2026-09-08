@@ -150,13 +150,13 @@ class transformGPU : public transform<VSIZE>
 
 private:
 	const size_t _num_regs;
-	ZP * const _z;
+	mutable std::vector<ZP> _z;
 	xengine * _engine = nullptr;
 
 public:
 	transformGPU(const bvec & b, const size_t num_regs, const size_t device_id,
 				 const bool is_boinc, const cl_platform_id boinc_platform_id, const cl_device_id boinc_device_id)
-				: transform<VSIZE>(b, LN, parent::EKind::GPU), _num_regs(num_regs), _z(new ZP[3 * VSIZE * num_regs << LN])
+				: transform<VSIZE>(b, LN, parent::EKind::GPU), _num_regs(num_regs), _z(3 * VSIZE * num_regs << LN, ZP(0))
 	{
 		const bool is_boinc_platform = is_boinc && (boinc_device_id != 0) && (boinc_platform_id != 0);
 		const platform eng_platform = is_boinc_platform ? platform(boinc_platform_id, boinc_device_id) : platform();
@@ -303,8 +303,6 @@ public:
 		_engine->release_memory();
 		_engine->clearProgram();
 		delete _engine;
-
-		delete[] _z;
 	}
 
 protected:
@@ -315,11 +313,10 @@ protected:
 
 	void getZi(i32vec * const zi) const override
 	{
-		_engine->read_memory_z(_z);
+		ZP1 * const z1 = reinterpret_cast<ZP1 *>(_z.data());
+		_engine->read_memory_z1(z1);
 
 		const size_t n = size_t(1) << LN;
-		const ZP1 * const z1 = reinterpret_cast<ZP1 *>(&_z[0 * VSIZE * n]);
-
 		for (size_t k = 0; k < n; ++k)
 		{
 			const ZP1 * const z1_k = &z1[OCL_VSIZE * k];
@@ -348,7 +345,7 @@ protected:
 	void setZi(const i32vec * const zi) override
 	{
 		const size_t n = size_t(1) << LN;
-		ZP1 * const z1 = reinterpret_cast<ZP1 *>(&_z[0 * VSIZE * n]);
+		ZP1 * const z1 = reinterpret_cast<ZP1 *>(_z.data());
 
 		for (size_t k = 0; k < n; ++k)
 		{
@@ -365,17 +362,14 @@ protected:
 					for (size_t i_l = 0; i_l < OCL_VSIZE; ++i_l)
 					{
 						ZP1 * const z1_kji = &z1_kj[OCL_VSIZE * n * i_h + i_l];
-						ZP2 * const z2_kji = reinterpret_cast<ZP2 *>(&z1_kji[1 * VSIZE * n]);
-						ZP3 * const z3_kji = reinterpret_cast<ZP3 *>(&z1_kji[2 * VSIZE * n]);
-
-						const int32 d = z_kj[OCL_VSIZE * i_h + i_l];
-						z1_kji->set_int(d); z2_kji->set_int(d); z3_kji->set_int(d);
+						z1_kji->set_int(z_kj[OCL_VSIZE * i_h + i_l]);
 					}
 				}
 			}
 		}
 
-		_engine->write_memory_z(_z);
+		_engine->write_memory_z1(z1);
+		_engine->extend_z(1);
 	}
 
 public:
@@ -488,22 +482,34 @@ public:
 
 	bool read_checkpoint(file & cFile) override
 	{
+		ZP * const z = _z.data();
+
 		int kind = 0;
 		if (!cFile.read(reinterpret_cast<char *>(&kind), sizeof(kind))) return false;
 		if (kind != int(parent::get_kind())) return false;
-		if (!cFile.read(reinterpret_cast<char *>(_z), (3 * VSIZE * _num_regs * sizeof(ZP)) << LN)) return false;
+		for (size_t i = 0, num_regs = _num_regs; i < num_regs; ++i)
+		{
+			ZP * const z1_i = &z[3 * (VSIZE << LN) * i];
+			if (!cFile.read(reinterpret_cast<char *>(z1_i), (VSIZE << LN) * sizeof(ZP))) return false;
+		}
 
-		_engine->write_memory_z(_z, _num_regs);
+		_engine->write_memory_z(z, _num_regs);
+		_engine->extend_z(_num_regs);
 		return true;
 	}
 
 	void save_checkpoint(file & cFile) const override
 	{
-		_engine->read_memory_z(_z, _num_regs);
+		ZP * const z = _z.data();
+		_engine->read_memory_z(z, _num_regs);
 
 		const int kind = int(parent::get_kind());
 		if (!cFile.write(reinterpret_cast<const char *>(&kind), sizeof(kind))) return;
-		if (!cFile.write(reinterpret_cast<const char *>(_z), (3 * VSIZE * _num_regs * sizeof(ZP)) << LN)) return;
+		for (size_t i = 0, num_regs = _num_regs; i < num_regs; ++i)
+		{
+			const ZP * const z1_i = &z[3 * (VSIZE << LN) * i];
+			if (!cFile.write(reinterpret_cast<const char *>(z1_i), (VSIZE << LN) * sizeof(ZP))) return;
+		}
 	}
 
 	size_t get_data_size() const override { const size_t n = size_t(1) << LN; return (3 * (VSIZE * (_num_regs + 1) * n + n / 2)) * sizeof(ZP); }

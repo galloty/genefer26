@@ -150,6 +150,7 @@ INLINE uint2_32 mulmods2(const uint2_32 lhs, const uint_32 rhs, const uint2_32 p
 	return (uint2_32)(mulmod(lhs.s0, rhs, pq), mulmod(lhs.s1, rhs, pq));
 }
 
+INLINE int2_32 get_int2(const uint2_32 n, const uint_32 p) { return (int2_32)(get_int(n.s0, p), get_int(n.s1, p)); }
 INLINE uint2_32 set_int2(const int2_32 i, const uint_32 p) { return (uint2_32)(set_int(i.s0, p), set_int(i.s1, p)); }
 
 // --- v4
@@ -174,6 +175,7 @@ INLINE uint4_32 mulmods4(const uint4_32 lhs, const uint_32 rhs, const uint2_32 p
 	return (uint4_32)(mulmods2(lhs.s01, rhs, pq), mulmods2(lhs.s23, rhs, pq));
 }
 
+INLINE int4_32 get_int4(const uint4_32 n, const uint_32 p) { return (int4_32)(get_int2(n.s01, p), get_int2(n.s23, p)); }
 INLINE uint4_32 set_int4(const int4_32 i, const uint_32 p) { return (uint4_32)(set_int2(i.s01, p), set_int2(i.s23, p)); }
 
 // --- uint96/int96 ---
@@ -1604,6 +1606,26 @@ void carry2(const __global uint2_32 * restrict const bb_inv, const __global int_
 }
 
 // --- misc ---
+
+__kernel
+void extend_z(__global VTYPE * restrict const z)
+{
+	const sz_t id = (sz_t)get_global_id(0), k = 2 * (id & ~(N_VLEN - 1)) + id;
+
+#if OCL_VSIZE == 4
+	const int4_32 r = get_int4(z[k], P1);
+	z[k + 1 * N_VLEN] = set_int4(r, P2);
+	z[k + 2 * N_VLEN] = set_int4(r, P3);
+#elif OCL_VSIZE == 2
+	const int2_32 r = get_int2(z[k], P1);
+	z[k + 1 * N_VLEN] = set_int2(r, P2);
+	z[k + 2 * N_VLEN] = set_int2(r, P3);
+#else
+	const int_32 r = get_int(z[k], P1);
+	z[k + 1 * N_VLEN] = set_int(r, P2);
+	z[k + 2 * N_VLEN] = set_int(r, P3);
+#endif
+}
 
 __kernel
 void set(__global VTYPE * restrict const z, const uint_32 a)
