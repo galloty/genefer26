@@ -1098,10 +1098,12 @@ public:
 					if (error != 0) ss << ", error = " << std::setprecision(4) << error;
 					ss << ", time = " << timer::format_time(test_time + valid_time) << "." << std::endl;
 					u64vec zkey; for (size_t j = 0; j < VSIZE / 8; ++j) zkey[j] = UInt64_8(0ull);
-					ss << gfn_vector_status(b, n, is_prp, zkey, zkey, res64) << std::endl;
+					const std::string st = gfn_vector_status(b, n, is_prp, zkey, zkey, res64);
+					ss << st << std::endl;
+					pio::result(st);
 				}
 				pio::print(ss.str());
-				if ((success == EReturn::Success) || (!_is_boinc && (success == EReturn::Failed))) pio::result(ss.str());
+				if (!_is_boinc && (success == EReturn::Failed)) pio::result(ss.str());
 				if (!_is_boinc && (success != EReturn::Aborted)) clear_checkpoint();
 			}
 			else if (mode == EMode::Proof)
