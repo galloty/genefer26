@@ -230,6 +230,7 @@ public:
 #ifdef QVALID
 		src << "#define QVALID\t1" << std::endl;
 #endif
+#ifdef QVALID
 		std::cout << "N_SZ = " << n << ", VSIZE = " << VSIZE << ", OCL_VSIZE = " << OCL_VSIZE << ", OCL_CARRY_VSIZE = " << OCL_CARRY_VSIZE
 			<< ", CARRY_LENGTH = " << CARRY_LENGTH << ", CARRY_WG_SZ = " << _engine->get_carry_workgroup_size() << std::endl;
 		std::cout << "transform: " << 3 * VSIZE / OCL_VSIZE * n / 8
@@ -247,7 +248,7 @@ public:
 		else if (LN % 3 == 2) std::cout << ", square256 " << 256 / 8 * BLK256 << "x" << gsize / (256 / 8 * BLK256);
 		else if (LN % 3 == 0) std::cout << ", square512 " << 512 / 8 * BLK512 << "x" << gsize / (512 / 8 * BLK512);
 		std::cout << std::endl;
-
+#endif
 		if (is_boinc || !_engine->readOpenCL("ocl/kernel.cl", "src/ocl/kernel.h", "src_ocl_kernel", src)) src << src_ocl_kernel;
 
 		_engine->loadProgram(src.str());
