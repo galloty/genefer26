@@ -201,7 +201,7 @@ private:
 	{
 		for (size_t j = 0; j < VSIZE / 8; ++j)
 		{
-			for (size_t i = 0; i < 8; ++i) if (res64[j][i] == 0ull) return false;
+			for (size_t i = 0; i < 8; ++i) if (res64[j][i] == uint64_t(0)) return false;
 		}
 		return true;
 	}
@@ -1097,7 +1097,7 @@ public:
 					ss << "Test succeeded";
 					if (error != 0) ss << ", error = " << std::setprecision(4) << error;
 					ss << ", time = " << timer::format_time(test_time + valid_time) << "." << std::endl;
-					u64vec zkey; for (size_t j = 0; j < VSIZE / 8; ++j) zkey[j] = UInt64_8(0ull);
+					u64vec zkey; for (size_t j = 0; j < VSIZE / 8; ++j) zkey[j] = UInt64_8(uint64_t(0));
 					const std::string st = gfn_vector_status(b, n, is_prp, zkey, zkey, res64);
 					ss << st << std::endl;
 					pio::result(st);
@@ -1126,7 +1126,7 @@ public:
 				ss << std::endl; pio::print(ss.str());
 				if (success == EReturn::Success)
 				{
-					u64vec zkey; for (size_t j = 0; j < VSIZE / 8; ++j) zkey[j] = UInt64_8(0ull);
+					u64vec zkey; for (size_t j = 0; j < VSIZE / 8; ++j) zkey[j] = UInt64_8(uint64_t(0));
 					const std::string st = gfn_vector_status(b, n, is_prp, pkey, zkey, res64);
 					pio::result(st);
 					if (!_is_boinc) clear_checkpoint();

@@ -240,7 +240,7 @@ protected:
 
 		const size_t n = size_t(1) << _ln;
 		const i32vec * const d = _d;
-		UInt64_8 hash64[VSIZE / 8]; for (size_t j = 0; j < VSIZE / 8; ++j) hash64[j] = UInt64_8(0ull);
+		UInt64_8 hash64[VSIZE / 8]; for (size_t j = 0; j < VSIZE / 8; ++j) hash64[j] = UInt64_8(uint64_t(0));
 		Int32_8 zero[VSIZE / 8]; for (size_t j = 0; j < VSIZE / 8; ++j) zero[j] = Int32_8(-1);
 
 		for (size_t i = 0; i < n; ++i)
