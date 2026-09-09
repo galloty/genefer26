@@ -3,12 +3,12 @@ Generalized Fermat Prime search program
 
 ## About
 
-**genefer** performs a fast probable primality test for numbers of the form *b*<sup>2<sup>*n*</sup></sup>&nbsp;+&nbsp;1 ([Generalized Fermat Numbers](https://genefer.great-site.net/)) with [Fermat test](https://en.wikipedia.org/wiki/Fermat_primality_test). It is an [OpenCL™](https://www.khronos.org/opencl/) application on GPU and a multithreaded application on CPU.  
+**genefer** performs a fast probable primality test for numbers of the form *b*<sup>2<sup>*n*</sup></sup>&nbsp;+&nbsp;1 ([Generalized Fermat Numbers](https://genefer.great-site.net/)) using a [Fermat test](https://en.wikipedia.org/wiki/Fermat_primality_test). The GPU implementation is based on [OpenCL™](https://www.khronos.org/opencl/) and the GPU implementation is multithreaded.  
 
 **genefer** [version 22](https://github.com/galloty/genefer22) checks a single GFN. It is dedicated to the search for GFN primes in the range 17&nbsp;&le;&nbsp;*n*&nbsp;&le;&nbsp;23.
 
 **genefer** [version 26](https://github.com/galloty/genefer26) checks a list of 8, 16 or 32 GFN. It is dedicated to the search for GFN primes in the range 15&nbsp;&le;&nbsp;*n*&nbsp;&le;&nbsp;18.  
-The search for *b*&nbsp;<&nbsp;2,000,000,000 and *n*&nbsp;&le;&nbsp;14 is now complete thanks to the [PRIVATE GFN SERVER](http://boincvm.proxyma.ru:30080/test4vm/index.php).  
+The search for *b*&nbsp;<&nbsp;2,000,000,000 and *n*&nbsp;&le;&nbsp;14 is now complete thanks to the [PRIVATE GFN SERVER](http://boincvm.proxyma.ru:30080/test4vm/index.php) GFN-12/13/14 prime search.  
 **genefer** [version 20](https://github.com/galloty/genefer20) was used to test *n*&nbsp;=&nbsp;13 and *n*&nbsp;=&nbsp;14. This application is deprecated. It is replaced with this version.
 
 *geneferv* implements an [Efficient Modular Exponentiation Proof Scheme](https://arxiv.org/abs/2209.15623) discovered by Darren Li.
@@ -26,8 +26,8 @@ The x64 implementation is highly optimized for CPU with AVX-512 or AVX10.2 (AMD 
  
 ## Build
 
-Select the [makefile](https://github.com/galloty/genefer26/tree/main/genefer) of your target. On Windows, [MSYS2](https://www.msys2.org/) distribution and building platform can be installed.  
-The compiler (gcc or clang) can be changed, Boinc interface is optional.  
+Select the [makefile](https://github.com/galloty/genefer26/tree/main/build) of your target. On Windows, [MSYS2](https://www.msys2.org/) distribution and building platform can be installed.  
+The compiler (gcc or clang) can be selected, Boinc interface is optional.  
 The default settings are gcc and linked to Boinc.  
 
 ## Licence
