@@ -1,4 +1,4 @@
-# genefer 26
+# genefer&nbsp;26
 Generalized Fermat Prime search program
 
 ## About
