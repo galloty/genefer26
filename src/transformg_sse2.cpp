@@ -64,11 +64,8 @@ transform<SIZE> * transform<SIZE>::create_ocl_sse2(const b_vec<SIZE / 8> & b, co
 }
 
 template<size_t VSIZE>
-transform<VSIZE> * transform<VSIZE>::create_ocl_sse2(const b_vec<VSIZE / 8> & b, const int n, const size_t num_regs, const size_t device,
-											const bool is_boinc, const bool get_boinc_ids, int _boinc_argc, char ** _boinc_argv)
-{
-	return nullptr;
-}
+transform<VSIZE> * transform<VSIZE>::create_ocl_sse2(const b_vec<VSIZE / 8> &, const int, const size_t, const size_t,
+											const bool, const bool, int, char **) { return nullptr; }
 
 #ifndef NO8
 _create_ocl_sse2(8)

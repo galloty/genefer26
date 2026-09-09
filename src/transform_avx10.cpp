@@ -21,10 +21,7 @@ transform<SIZE> * transform<SIZE>::create_avx10(const b_vec<SIZE / 8> & b, const
 }
 
 template<size_t VSIZE>
-transform<VSIZE> * transform<VSIZE>::create_avx10(const b_vec<VSIZE / 8> & b, const int n, const size_t num_regs)
-{
-	return nullptr;
-}
+transform<VSIZE> * transform<VSIZE>::create_avx10(const b_vec<VSIZE / 8> &, const int, const size_t) { return nullptr; }
 
 #ifndef NO8
 _create_avx10(8)
