@@ -536,9 +536,9 @@ inline transform<VSIZE> * create_transformGPU(const b_vec<VSIZE / 8> & b, const 
 	else if (m == 11) pTransform = new transformGPU<VSIZE, IS32, 11>(b, num_regs, device_id, is_boinc, boinc_platform_id, boinc_device_id);
 	else if (m == 12) pTransform = new transformGPU<VSIZE, IS32, 12>(b, num_regs, device_id, is_boinc, boinc_platform_id, boinc_device_id);
 #else
-	if      (m == 13) pTransform = new transformGPU<VSIZE, IS32, 13>(b, num_regs, device_id, is_boinc, boinc_platform_id, boinc_device_id);
-	else if (m == 14) pTransform = new transformGPU<VSIZE, IS32, 14>(b, num_regs, device_id, is_boinc, boinc_platform_id, boinc_device_id);
-	else if (m == 15) pTransform = new transformGPU<VSIZE, IS32, 15>(b, num_regs, device_id, is_boinc, boinc_platform_id, boinc_device_id);
+	// if      (m == 13) pTransform = new transformGPU<VSIZE, IS32, 13>(b, num_regs, device_id, is_boinc, boinc_platform_id, boinc_device_id);
+	// else if (m == 14) pTransform = new transformGPU<VSIZE, IS32, 14>(b, num_regs, device_id, is_boinc, boinc_platform_id, boinc_device_id);
+	if      (m == 15) pTransform = new transformGPU<VSIZE, IS32, 15>(b, num_regs, device_id, is_boinc, boinc_platform_id, boinc_device_id);
 	else if (m == 16) pTransform = new transformGPU<VSIZE, IS32, 16>(b, num_regs, device_id, is_boinc, boinc_platform_id, boinc_device_id);
 	else if (m == 17) pTransform = new transformGPU<VSIZE, IS32, 17>(b, num_regs, device_id, is_boinc, boinc_platform_id, boinc_device_id);
 	else if (m == 18) pTransform = new transformGPU<VSIZE, IS32, 18>(b, num_regs, device_id, is_boinc, boinc_platform_id, boinc_device_id);

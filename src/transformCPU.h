@@ -969,9 +969,9 @@ inline transform<VSIZE> * create_transformCPU(const b_vec<VSIZE / 8> & b, const 
 	else if (n == 11) ptransform = new transformCPU<VSIZE, (1 << 10)>(b, n, num_regs);
 	else if (n == 12) ptransform = new transformCPU<VSIZE, (1 << 11)>(b, n, num_regs);
 #else
-	if      (n == 13) ptransform = new transformCPU<VSIZE, (1 << 12)>(b, n, num_regs);
-	else if (n == 14) ptransform = new transformCPU<VSIZE, (1 << 13)>(b, n, num_regs);
-	else if (n == 15) ptransform = new transformCPU<VSIZE, (1 << 14)>(b, n, num_regs);
+	// if      (n == 13) ptransform = new transformCPU<VSIZE, (1 << 12)>(b, n, num_regs);
+	// else if (n == 14) ptransform = new transformCPU<VSIZE, (1 << 13)>(b, n, num_regs);
+	if      (n == 15) ptransform = new transformCPU<VSIZE, (1 << 14)>(b, n, num_regs);
 	else if (n == 16) ptransform = new transformCPU<VSIZE, (1 << 15)>(b, n, num_regs);
 	else if (n == 17) ptransform = new transformCPU<VSIZE, (1 << 16)>(b, n, num_regs);
 	else if (n == 18) ptransform = new transformCPU<VSIZE, (1 << 17)>(b, n, num_regs);

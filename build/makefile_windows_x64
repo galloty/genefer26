@@ -1,6 +1,6 @@
-# Compiler: select gcc or clang
-COMP = gcc
-#COMP = clang
+# Compiler: select gcc or clang (Clang 22.1 or later is recommended)
+#COMP = gcc
+COMP = clang
 # Comment this line if Boinc is not needed
 BOINC = true
 
@@ -20,13 +20,18 @@ OCL_INC = -I$(ROOT_DIR)/Khronos
 OCL_LIB = C:/Windows/System32/OpenCL.dll
 
 ifdef BOINC
-# BOINC source code: https://github.com/BOINC/boinc/archive/refs/tags/client_release/8.2/8.2.9.zip
+# BOINC source code: https://github.com/BOINC/boinc/archive/refs/tags/client_release/8.2/8.2.15.zip
 # lib: Makefile.mingw => libboinc_api.a libboinc.a libboinc_opencl.a
 BOINC_DIR = $(ROOT_DIR)/../boinc
 BOINC_INC = -I$(BOINC_DIR) -I$(BOINC_DIR)/api -I$(BOINC_DIR)/lib -I$(BOINC_DIR)/win_build
 BOINC_LIB_DIR = $(BOINC_DIR)/lib
-BOINC_LIB = $(BOINC_LIB_DIR)/libboinc_api.a $(BOINC_LIB_DIR)/libboinc.a
-BOINC_LIB_OCL = $(BOINC_LIB_DIR)/libboinc_opencl.a
+ifeq ($(COMP), gcc)
+BOINC_LIB = $(BOINC_LIB_DIR)/libboinc_api_gcc.a $(BOINC_LIB_DIR)/libboinc_gcc.a
+BOINC_LIB_OCL = $(BOINC_LIB_DIR)/libboinc_opencl_gcc.a
+else
+BOINC_LIB = $(BOINC_LIB_DIR)/libboinc_api_clang.a $(BOINC_LIB_DIR)/libboinc_clang.a
+BOINC_LIB_OCL = $(BOINC_LIB_DIR)/libboinc_opencl_clang.a
+endif
 endif
 
 CFLAGS = -Wall -Wextra -Wsign-conversion

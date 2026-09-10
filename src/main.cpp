@@ -127,7 +127,7 @@ private:
 	{
 		std::ostringstream ss;
 		ss << "Usage: geneferv [options]  options may be specified in any order" << std::endl;
-		ss << "  -n <n>                   exponent of the GFN (13 <= n <= 18)" << std::endl;
+		ss << "  -n <n>                   exponent of the GFN (15 <= n <= 18)" << std::endl;
 		ss << "  -b <filename>            list of the 8/16/32 bases (10,000 <= b <= 2,000,000,000, one per line)" << std::endl;
 		ss << "  -l <8> or <16> or <32>   length of the b-vector (default 8)" << std::endl;
 		ss << "  -q                       quick test" << std::endl;
@@ -205,7 +205,7 @@ public:
 			{
 				const std::string nstr = ((arg == "-n") && (i + 1 < size)) ? args[++i] : arg.substr(2);
 				n = std::atoi(nstr.c_str());
-				if (n < 13) throw std::runtime_error("n < 13 is not supported");
+				if (n < 15) throw std::runtime_error("n < 15 is not supported");
 				if (n > 18) throw std::runtime_error("n > 18 is not supported");
 			}
 			if ((arg.substr(0, 2) == "-b") && (arg.substr(0, 3) != "-bo"))
