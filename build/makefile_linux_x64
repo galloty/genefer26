@@ -1,8 +1,8 @@
-# Compiler: select gcc or clang
-COMP = gcc
-#COMP = clang
+# Compiler: select gcc or clang (Clang 22.1 or later is recommended)
+#COMP = gcc
+COMP = clang
 # Comment this line if Boinc is not needed
-#BOINC = true
+BOINC = true
 
 ifeq ($(COMP), gcc)
 CC = g++ -std=c++17
@@ -20,7 +20,7 @@ OCL_INC = -I$(ROOT_DIR)/Khronos
 OCL_LIB = -lOpenCL
 
 ifdef BOINC
-# BOINC source code: https://github.com/BOINC/boinc/archive/refs/tags/client_release/8.2/8.2.9.zip
+# BOINC source code: https://github.com/BOINC/boinc/archive/refs/tags/client_release/8.2/8.2.15.zip
 # These packages are needed to build BOINC: m4 pkg-config autoconf libtool
 # ./_autosetup
 # ./configure --disable-server --disable-client --disable-manager
@@ -43,7 +43,7 @@ OFLAGS = -ffinite-math-only -ffp-contract=fast -fno-trapping-math -fno-signed-ze
 endif
 FLAGS = -O3
 
-# AVX10.2 was introduced in GCC 15 and LLVM/Clang 22. Remove transform_avx10.o if the compiler is older.
+# AVX10.2 was introduced in GCC 15 and LLVM/Clang 21. Remove transform_avx10.o if the compiler is older.
 OBJS = main.o transform_sse4.o transform_avx.o transform_fma.o transform_avx512.o transform_avx10.o transformg_sse2.o transformg_avx2.o transformg_avx512.o
 DEPS_COMMON = $(SRC_DIR)/transform.h $(SRC_DIR)/vint.h $(SRC_DIR)/mpz_vec.h $(SRC_DIR)/file.h $(SRC_DIR)/pio.h $(SRC_DIR)/boinc.h $(SRC_DIR)/alignment.h
 DEPS_MAIN = $(SRC_DIR)/genefer.h $(SRC_DIR)/timer.h $(DEPS_COMMON)
