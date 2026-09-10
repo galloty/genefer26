@@ -302,7 +302,7 @@ public:
 
 		__builtin_cpu_init();
 
-#if (defined(__GNUC__) && (__GNUC__ >= 15)) || (defined(__clang__) && (__clang_major__ >= 21))
+#if (defined(__GNUC__) && (__GNUC__ >= 15)) || (defined(__clang__) && (__clang_major__ >= 22))
 		if (__builtin_cpu_supports("avx10.2") != 0)
 		{
 			ptransform = transform::create_avx10(b, n, num_regs);
