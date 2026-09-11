@@ -128,7 +128,7 @@ public:
 			if (getMaxMemAllocSize() < max_mem_size)
 			{
 				std::ostringstream ss; ss << "Trying to allocate " << max_mem_size / (1u << 20) <<
-					" MB and the maximum OpenCL size is " << getMaxMemAllocSize() / (1u << 20) << " MB." << std::endl;
+					" MB and the maximum OpenCL size is " << getMaxMemAllocSize() / (1u << 20) << " MB";
 				pio::error(ss.str());
 			}
 			_z = _createBuffer(CL_MEM_READ_WRITE, max_mem_size);
