@@ -205,7 +205,9 @@ public:
 			{
 				const std::string nstr = ((arg == "-n") && (i + 1 < size)) ? args[++i] : arg.substr(2);
 				n = std::atoi(nstr.c_str());
+#ifndef QVALID
 				if (n < 15) throw std::runtime_error("n < 15 is not supported");
+#endif
 				if (n > 18) throw std::runtime_error("n > 18 is not supported");
 			}
 			if ((arg.substr(0, 2) == "-b") && (arg.substr(0, 3) != "-bo"))

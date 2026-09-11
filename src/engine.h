@@ -11,6 +11,7 @@ Please give feedback to the authors if improvement is realized. It is distribute
 #include <vector>
 
 #include "ocl.h"
+#include "pio.h"
 
 typedef cl_uint		uint32;
 typedef cl_int		int32;
@@ -123,7 +124,13 @@ public:
 		const size_t n = _n;
 		if (n != 0)
 		{
-			_z = _createBuffer(CL_MEM_READ_WRITE, 3 * VSIZE * _num_regs * n * sizeof(ZP));
+			const size_t max_mem_size = 3 * VSIZE * _num_regs * n * sizeof(ZP);
+			if (getMaxMemAllocSize() < max_mem_size)
+			{
+				std::ostringstream ss; ss << "Trying to allocate " << max_mem_size / (1u << 20) << "MB and the maximum OpenCL size is " << getMaxMemAllocSize() << "." << std::endl;
+				pio::error(ss.str());
+			}
+			_z = _createBuffer(CL_MEM_READ_WRITE, max_mem_size);
 			_zp = _createBuffer(CL_MEM_READ_WRITE, 3 * VSIZE * n * sizeof(ZP));
 			_w = _createBuffer(CL_MEM_READ_ONLY, 3 * n / 2 * sizeof(ZP));
 			_c = _createBuffer(CL_MEM_READ_WRITE, VSIZE * n / 8 * sizeof(int64));

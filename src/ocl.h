@@ -231,6 +231,7 @@ private:
 	cl_ulong _localMemSize = 0;
 	size_t _maxWorkGroupSize = 0;
 	cl_ulong _timerResolution = 0;
+	cl_ulong _maxMemAllocSize = 0;
 	EVendor _vendor = EVendor::Unknown;
 	cl_context _context = nullptr;
 	cl_command_queue _queueF = nullptr;
@@ -275,6 +276,7 @@ public:
 		cl_ulong memConstSize; oclFatal(clGetDeviceInfo(_device, CL_DEVICE_MAX_CONSTANT_BUFFER_SIZE, sizeof(memConstSize), &memConstSize, nullptr));
 		oclFatal(clGetDeviceInfo(_device, CL_DEVICE_MAX_WORK_GROUP_SIZE, sizeof(_maxWorkGroupSize), &_maxWorkGroupSize, nullptr));
 		oclFatal(clGetDeviceInfo(_device, CL_DEVICE_PROFILING_TIMER_RESOLUTION, sizeof(_timerResolution), &_timerResolution, nullptr));
+		oclFatal(clGetDeviceInfo(_device, CL_DEVICE_MAX_MEM_ALLOC_SIZE, sizeof(_maxMemAllocSize), &_maxMemAllocSize, nullptr));
 
 		std::ostringstream ssd;
 		ssd << "device '" << deviceName << "', vendor '" << deviceVendor << "', version '" << deviceVersion << "', driver '" << driverVersion << "'";
@@ -314,6 +316,7 @@ public:
 	size_t getMaxWorkGroupSize() const { return _maxWorkGroupSize; }
 	size_t getLocalMemSize() const { return _localMemSize; }
 	size_t getTimerResolution() const { return _timerResolution; }
+	size_t getMaxMemAllocSize() const { return _maxMemAllocSize; }
 	const std::string getType() const { return _type; }
 
 private:
