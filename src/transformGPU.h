@@ -230,25 +230,24 @@ public:
 #ifdef QVALID
 		src << "#define QVALID\t1" << std::endl;
 #endif
-#ifdef QVALID
-		std::cout << "N_SZ = " << n << ", VSIZE = " << VSIZE << ", OCL_VSIZE = " << OCL_VSIZE << ", OCL_CARRY_VSIZE = " << OCL_CARRY_VSIZE
-			<< ", CARRY_LENGTH = " << CARRY_LENGTH << ", CARRY_WG_SZ = " << _engine->get_carry_workgroup_size() << std::endl;
-		std::cout << "transform: " << 3 * VSIZE / OCL_VSIZE * n / 8
-			<< ", carry1: " << VSIZE / OCL_CARRY_VSIZE * n / CARRY_LENGTH << " / " << _engine->get_carry_workgroup_size()
-			<< ", carry2: " << ((VSIZE * n / CARRY_LENGTH) >> _engine->get_carry_shift()) << std::endl;
+		// std::cout << "N_SZ = " << n << ", VSIZE = " << VSIZE << ", OCL_VSIZE = " << OCL_VSIZE << ", OCL_CARRY_VSIZE = " << OCL_CARRY_VSIZE
+		// 	<< ", CARRY_LENGTH = " << CARRY_LENGTH << ", CARRY_WG_SZ = " << _engine->get_carry_workgroup_size() << std::endl;
+		// std::cout << "transform: " << 3 * VSIZE / OCL_VSIZE * n / 8
+		// 	<< ", carry1: " << VSIZE / OCL_CARRY_VSIZE * n / CARRY_LENGTH << " / " << _engine->get_carry_workgroup_size()
+		// 	<< ", carry2: " << ((VSIZE * n / CARRY_LENGTH) >> _engine->get_carry_shift()) << std::endl;
 
-		const size_t gsize = 3 * VSIZE / OCL_VSIZE * n / 8;
-		std::cout << gsize;
-		if (LN <= 15) std::cout << ", forward64_0 " << 64 / 8 * CHUNK64 << "x" << gsize / (64 / 8 * CHUNK64);
-		else std::cout << ", forward512_0 " << 512 / 8 * CHUNK512 << "x" << gsize / (512 / 8 * CHUNK512);
-		if      (LN == 10) std::cout << ", square16 " << 16 / 8 * BLK16 << "x" << gsize / (16 / 8 * BLK16);
-		else if (LN == 11) std::cout << ", square32 " << 32 / 8 * BLK32 << "x" << gsize / (32 / 8 * BLK32);
-		else if (LN == 12) std::cout << ", square64 " << 64 / 8 * BLK64 << "x" << gsize / (64 / 8 * BLK64);
-		else if (LN % 3 == 1) std::cout << ", square128 " << 128 / 8 * BLK128 << "x" << gsize / (128 / 8 * BLK128);
-		else if (LN % 3 == 2) std::cout << ", square256 " << 256 / 8 * BLK256 << "x" << gsize / (256 / 8 * BLK256);
-		else if (LN % 3 == 0) std::cout << ", square512 " << 512 / 8 * BLK512 << "x" << gsize / (512 / 8 * BLK512);
-		std::cout << std::endl;
-#endif
+		// const size_t gsize = 3 * VSIZE / OCL_VSIZE * n / 8;
+		// std::cout << gsize;
+		// if (LN <= 15) std::cout << ", forward64_0 " << 64 / 8 * CHUNK64 << "x" << gsize / (64 / 8 * CHUNK64);
+		// else std::cout << ", forward512_0 " << 512 / 8 * CHUNK512 << "x" << gsize / (512 / 8 * CHUNK512);
+		// if      (LN == 10) std::cout << ", square16 " << 16 / 8 * BLK16 << "x" << gsize / (16 / 8 * BLK16);
+		// else if (LN == 11) std::cout << ", square32 " << 32 / 8 * BLK32 << "x" << gsize / (32 / 8 * BLK32);
+		// else if (LN == 12) std::cout << ", square64 " << 64 / 8 * BLK64 << "x" << gsize / (64 / 8 * BLK64);
+		// else if (LN % 3 == 1) std::cout << ", square128 " << 128 / 8 * BLK128 << "x" << gsize / (128 / 8 * BLK128);
+		// else if (LN % 3 == 2) std::cout << ", square256 " << 256 / 8 * BLK256 << "x" << gsize / (256 / 8 * BLK256);
+		// else if (LN % 3 == 0) std::cout << ", square512 " << 512 / 8 * BLK512 << "x" << gsize / (512 / 8 * BLK512);
+		// std::cout << std::endl;
+
 		if (is_boinc || !_engine->readOpenCL("ocl/kernel.cl", "src/ocl/kernel.h", "src_ocl_kernel", src)) src << src_ocl_kernel;
 
 		_engine->loadProgram(src.str());

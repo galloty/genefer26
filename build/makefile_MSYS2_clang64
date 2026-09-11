@@ -1,7 +1,13 @@
+# Use the dedicated MSYS2 Clang64 environment
+# These packages are needed
+# pacman -S mingw-w64-clang-x86_64-toolchain
+# pacman -S mingw-w64-clang-x86_64-gmp
+
 # Comment this line if Boinc is not needed
 BOINC = true
 
-CC = g++ -std=c++17
+# Clang 22.1 or later is recommended
+CC = clang++ -std=c++17
 RM = del
 
 ROOT_DIR = ..
@@ -14,7 +20,7 @@ OCL_LIB = C:/Windows/System32/OpenCL.dll
 
 ifdef BOINC
 # BOINC source code: https://github.com/BOINC/boinc/archive/refs/tags/client_release/8.2/8.2.15.zip
-# lib: Makefile.mingw => libboinc_api.a libboinc.a libboinc_opencl.a
+# lib: Makefile.mingw (set CC = $(MINGW)-clang, CXX = $(MINGW)-clang++) => libboinc_api.a libboinc.a libboinc_opencl.a
 BOINC_DIR = $(ROOT_DIR)/../boinc
 BOINC_INC = -I$(BOINC_DIR) -I$(BOINC_DIR)/api -I$(BOINC_DIR)/lib -I$(BOINC_DIR)/win_build
 BOINC_LIB_DIR = $(BOINC_DIR)/lib
@@ -26,7 +32,7 @@ CFLAGS = -Wall -Wextra -Wsign-conversion
 ifdef BOINC
 CFLAGS += -DBOINC $(BOINC_INC)
 endif
-OFLAGS = -ffinite-math-only -frename-registers -fprefetch-loop-arrays
+OFLAGS = -ffinite-math-only -ffp-contract=fast -fno-trapping-math -fno-signed-zeros
 FLAGS = -O3
 
 # AVX10.2 was introduced in GCC 15 and LLVM/Clang 22. Remove transform_avx10.o if the compiler is older.
