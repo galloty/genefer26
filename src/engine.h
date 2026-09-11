@@ -127,7 +127,8 @@ public:
 			const size_t max_mem_size = 3 * VSIZE * _num_regs * n * sizeof(ZP);
 			if (getMaxMemAllocSize() < max_mem_size)
 			{
-				std::ostringstream ss; ss << "Trying to allocate " << max_mem_size / (1u << 20) << "MB and the maximum OpenCL size is " << getMaxMemAllocSize() << "." << std::endl;
+				std::ostringstream ss; ss << "Trying to allocate " << max_mem_size / (1u << 20) <<
+					" MB and the maximum OpenCL size is " << getMaxMemAllocSize() / (1u << 20) << " MB." << std::endl;
 				pio::error(ss.str());
 			}
 			_z = _createBuffer(CL_MEM_READ_WRITE, max_mem_size);
