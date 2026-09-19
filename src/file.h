@@ -24,13 +24,13 @@ private:
 
 public:
 	file(const std::string & filename, const char * const mode, const bool fatal)
-		: _filename(filename), _cfile(pio::open(filename.c_str(), mode)), _fatal(fatal), _crc32(0) //, _isSync(std::string(mode) == "wb")
+		: _filename(filename), _cfile(pio::open(filename.c_str(), mode)), _fatal(fatal), _crc32(0)
 	{
 		if (_cfile == nullptr) error("cannot open file");
 	}
 
 	file(const std::string & filename)
-		: _filename(filename), _cfile(pio::open(filename.c_str(), "rb")), _fatal(false), _crc32(0) //, _isSync(false)
+		: _filename(filename), _cfile(pio::open(filename.c_str(), "rb")), _fatal(false), _crc32(0)
 	{
 		// _cfile may be null
 	}

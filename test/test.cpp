@@ -62,7 +62,7 @@ int main(int argc, char * argv[])
 		{
 			std::string line;
 			std::getline(file_res, line);
-			if (line.find("is a probable prime") == std::string::npos) { std::cerr << b[i] << "is not prime." << std::endl; return EXIT_FAILURE; }
+			if (line.find("is a probable prime") == std::string::npos) { std::cerr << b[i] << " is not prime." << std::endl; return EXIT_FAILURE; }
 			pkey[i] = line.substr(line.find("pkey =") + 7, 16);
 		}
 
@@ -70,7 +70,7 @@ int main(int argc, char * argv[])
 		{
 			std::string line;
 			std::getline(file_res, line);
-			if (line.find("is a probable prime") == std::string::npos) { std::cerr << b[i] << "is not prime." << std::endl; return EXIT_FAILURE; }
+			if (line.find("is a probable prime") == std::string::npos) { std::cerr << b[i] << " is not prime." << std::endl; return EXIT_FAILURE; }
 			if (line.substr(line.find("pkey =") + 7, 16) != pkey[i]) { std::cerr << b[i] << ", pkey failed." << std::endl; return EXIT_FAILURE; }
 			ckey[i] = line.substr(line.find("ckey =") + 7, 16);
 		}
