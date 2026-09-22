@@ -5,18 +5,13 @@ genefer is free source code, under the MIT license (see LICENSE). You can redist
 Please give feedback to the authors if improvement is realized. It is distributed in the hope that it will be useful.
 */
 
-// #include <cstdint>
-#include <string>
-#include <cstdio>
-#include <cstdlib>
-#include <memory>
+#include <cstdint>
 #include <iostream>
 #include <stdexcept>
-#include <vector>
+#include <cstdlib>
+#include <memory>
 #include <thread>
-// #include <fstream>
-// #include <sstream>
-
+#include <filesystem>
 
 #if defined(_WIN64)
 #include <Windows.h>
@@ -28,6 +23,9 @@ Please give feedback to the authors if improvement is realized. It is distribute
 
 #include "boinc_api.h"
 #include "version.h"
+
+#define PORT		1221
+#define BUFFER_SIZE	512
 
 struct io
 {
@@ -175,7 +173,7 @@ public:
 
 		uint32_t b = 0, n = 0;
 		EMode mode = EMode::None;
-		std::string main_filename;
+		std::string main_filename = "gproof";
 
 		// parse args
 		for (size_t i = 0, size = args.size(); i < size; ++i)
@@ -192,14 +190,8 @@ public:
 				const std::string nstr = ((arg == "-n") && (i + 1 < size)) ? args[++i] : arg.substr(2);
 				n = static_cast<uint32_t>(std::atoi(nstr.c_str()));
 			}
-			if (arg.substr(0, 2) == "-p")
-			{
-				mode = EMode::Proof;
-			}
-			if (arg.substr(0, 2) == "-c")
-			{
-				mode = EMode::Check;
-			}
+			if (arg.substr(0, 2) == "-p") { mode = EMode::Proof; }
+			if (arg.substr(0, 2) == "-c") { mode = EMode::Check; }
 			if (arg.substr(0, 2) == "-f")
 			{
 				main_filename = ((arg == "-f") && (i + 1 < size)) ? args[++i] : arg.substr(2);
@@ -219,16 +211,42 @@ public:
 
 		boinc_fraction_done(0.1);
 
-		std::ostringstream sse;
 		if (mode == EMode::Proof)
 		{
-			sse << "C:\\genefer\\genefer22g.exe -p -n " << n << " -b " << b << " -f gproof";
+			SOCKET p_socket = socket(AF_INET, SOCK_STREAM, 0);
+			if (p_socket == INVALID_SOCKET)
+			{
+				throw std::runtime_error("cannot open server socket");
+			}
+
+			struct sockaddr_in server_addr;
+			server_addr.sin_family = AF_INET;
+			server_addr.sin_port = htons(PORT);
+			server_addr.sin_addr.s_addr = inet_addr("127.0.0.1");
+			if (connect(p_socket, (struct sockaddr *)&server_addr, sizeof(server_addr)) == SOCKET_ERROR)
+			{
+				throw std::runtime_error("cannot connect to server");
+			}
+
+			char buffer[BUFFER_SIZE];
+			strcpy(buffer, std::filesystem::current_path().string().c_str());
+			send(p_socket, buffer, BUFFER_SIZE, 0);
+
+			memset(buffer, 0, BUFFER_SIZE);
+			const ssize_t size = recv(p_socket, buffer, BUFFER_SIZE, 0);	// echo
+
+			std::ostringstream sse; sse << "C:\\genefer\\genefer22g.exe -p -n " << n << " -b " << b << " -f gproof";
+			std::system(sse.str().c_str());
+
+			close(p_socket);
 		}
 		else if (mode == EMode::Check)
 		{
-			sse << "C:\\genefer\\genefer22.exe -c -n " << n << " -b " << b << " -f gproof";
+			std::ostringstream sse; sse << "C:\\genefer\\genefer22.exe -c -n " << n << " -b " << b << " -f gproof";
+			std::system(sse.str().c_str());
 		}
-		std::system(sse.str().c_str());
+
+		if (boinc_time_to_checkpoint() != 0) boinc_checkpoint_completed();
 
 		std::ostringstream ssr;
 		if (mode == EMode::Proof)
@@ -272,6 +290,10 @@ public:
 int main(int argc, char * argv[])
 {
 	std::setvbuf(stderr, nullptr, _IONBF, 0);	// no buffer
+#if defined(_WIN64)
+	WSADATA wsaData;
+	WSAStartup(MAKEWORD(2, 2), &wsaData);
+#endif
 
 	try
 	{
@@ -281,8 +303,14 @@ int main(int argc, char * argv[])
 	catch (const std::runtime_error & e)
 	{
 		io::error(e.what(), true);
+#if defined(_WIN64)
+		WSACleanup();
+#endif
 		return EXIT_FAILURE;
 	}
 
+#if defined(_WIN64)
+	WSACleanup();
+#endif
 	return EXIT_SUCCESS;
 }
