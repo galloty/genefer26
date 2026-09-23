@@ -7,6 +7,7 @@ Please give feedback to the authors if improvement is realized. It is distribute
 
 #include <cstdint>
 #include <iostream>
+#include <sstream>
 #include <stdexcept>
 #include <cstdlib>
 #include <memory>
@@ -171,7 +172,7 @@ public:
 
 		io::print(header(args, true));
 
-		uint32_t b = 0, n = 0;
+		int b = 0, n = 0;
 		EMode mode = EMode::None;
 		std::string main_filename = "gproof";
 
@@ -183,12 +184,12 @@ public:
 			if ((arg.substr(0, 2) == "-b") && (arg.substr(0, 3) != "-bo"))
 			{
 				const std::string bstr = ((arg == "-b") && (i + 1 < size)) ? args[++i] : arg.substr(2);
-				b = static_cast<uint32_t>(std::atoi(bstr.c_str()));
+				b = std::atoi(bstr.c_str());
 			}
 			if (arg.substr(0, 2) == "-n")
 			{
 				const std::string nstr = ((arg == "-n") && (i + 1 < size)) ? args[++i] : arg.substr(2);
-				n = static_cast<uint32_t>(std::atoi(nstr.c_str()));
+				n = std::atoi(nstr.c_str());
 			}
 			if (arg.substr(0, 2) == "-p") { mode = EMode::Proof; }
 			if (arg.substr(0, 2) == "-c") { mode = EMode::Check; }
@@ -213,32 +214,40 @@ public:
 
 		if (mode == EMode::Proof)
 		{
+			bool success = false;
 			SOCKET p_socket = socket(AF_INET, SOCK_STREAM, 0);
-			if (p_socket == INVALID_SOCKET)
+			if (p_socket != INVALID_SOCKET)
 			{
-				throw std::runtime_error("cannot open server socket");
+				struct sockaddr_in server_addr;
+				server_addr.sin_family = AF_INET;
+				server_addr.sin_port = htons(PORT);
+				server_addr.sin_addr.s_addr = inet_addr("127.0.0.1");
+				if (connect(p_socket, (struct sockaddr *)&server_addr, sizeof(server_addr)) != SOCKET_ERROR)
+				{
+					char res_file[512]; boinc_resolve_filename("results.txt", res_file, sizeof(res_file));
+					char proof_file[512]; boinc_resolve_filename("gproof.proof", proof_file, sizeof(proof_file));
+
+					const auto current_path = std::filesystem::current_path();
+					const auto res_path = current_path / res_file, proof_path = current_path / proof_file;
+					std::ostringstream ssm; ssm << n << " " << b << " " << res_path.lexically_normal().string() << " " << proof_path.lexically_normal().string();
+					char buffer[BUFFER_SIZE];
+					strcpy(buffer, ssm.str().c_str());
+					if (send(p_socket, buffer, BUFFER_SIZE, 0) != SOCKET_ERROR)
+					{
+						memset(buffer, 0, BUFFER_SIZE);
+						const ssize_t size = recv(p_socket, buffer, BUFFER_SIZE, 0);
+						success = ((size > 0) && (strcmp(buffer, "OK") == 0));
+						if (size > 0) std::cout << buffer << std::endl;
+					}
+				}
+				close(p_socket);
 			}
 
-			struct sockaddr_in server_addr;
-			server_addr.sin_family = AF_INET;
-			server_addr.sin_port = htons(PORT);
-			server_addr.sin_addr.s_addr = inet_addr("127.0.0.1");
-			if (connect(p_socket, (struct sockaddr *)&server_addr, sizeof(server_addr)) == SOCKET_ERROR)
+			if (!success)
 			{
-				throw std::runtime_error("cannot connect to server");
+				std::ostringstream sse; sse << "C:\\genefer\\genefer22g.exe -p -n " << n << " -b " << b << " -f gproof";
+				std::system(sse.str().c_str());
 			}
-
-			char buffer[BUFFER_SIZE];
-			strcpy(buffer, std::filesystem::current_path().string().c_str());
-			send(p_socket, buffer, BUFFER_SIZE, 0);
-
-			memset(buffer, 0, BUFFER_SIZE);
-			const ssize_t size = recv(p_socket, buffer, BUFFER_SIZE, 0);	// echo
-
-			std::ostringstream sse; sse << "C:\\genefer\\genefer22g.exe -p -n " << n << " -b " << b << " -f gproof";
-			std::system(sse.str().c_str());
-
-			close(p_socket);
 		}
 		else if (mode == EMode::Check)
 		{
@@ -255,8 +264,7 @@ public:
 		}
 		else if (mode == EMode::Check)
 		{
-			char path_res[512];
-			boinc_resolve_filename("results.txt", path_res, sizeof(path_res));
+			char path_res[512]; boinc_resolve_filename("results.txt", path_res, sizeof(path_res));
 			std::ifstream file_res(path_res);
 			std::string line;
 			if (file_res.is_open())
@@ -269,19 +277,6 @@ public:
 			ssr << b << "^{2^" << n << "} + 1 is checked, ckey = " << ckey << ", time = 00:00:01." << std::endl;
 		}
 		io::print(ssr.str());
-
-	// const int depth = 7, m = 1 << 17;
-	// int B_PL_prev = 0, b_prev = 0;
-	// for (int b = 500000000; b <= 510000000; b += 2)
-	// {
-	// 	const size_t esize = size_t(m * log2(b)) + 1;
-	// 	const int B_PL = static_cast<int>((esize - 1) >> depth) + 1;
-	// 	if (B_PL != B_PL_prev)
-	// 	{
-	// 		if (B_PL_prev != 0) std::cout << b << ": " << B_PL << ", " << b - b_prev << std::endl;
-	// 		B_PL_prev = B_PL; b_prev = b;
-	// 	}
-	// }
 
 		boinc_finish(EXIT_SUCCESS);
 	}

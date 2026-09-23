@@ -7,8 +7,10 @@ Please give feedback to the authors if improvement is realized. It is distribute
 
 #include <cstdint>
 #include <iostream>
+#include <sstream>
 #include <stdexcept>
 #include <thread>
+#include <vector>
 
 #if defined(_WIN64)
 #include <winsock2.h>
@@ -24,6 +26,19 @@ Please give feedback to the authors if improvement is realized. It is distribute
 
 #define PORT		1221
 #define BUFFER_SIZE	512
+
+	// const int depth = 7, m = 1 << 17;
+	// int B_PL_prev = 0, b_prev = 0;
+	// for (int b = 500000000; b <= 510000000; b += 2)
+	// {
+	// 	const size_t esize = size_t(m * log2(b)) + 1;
+	// 	const int B_PL = static_cast<int>((esize - 1) >> depth) + 1;
+	// 	if (B_PL != B_PL_prev)
+	// 	{
+	// 		if (B_PL_prev != 0) std::cout << b << ": " << B_PL << ", " << b - b_prev << std::endl;
+	// 		B_PL_prev = B_PL; b_prev = b;
+	// 	}
+	// }
 
 static void run()
 {
@@ -55,6 +70,8 @@ static void run()
 
 	std::cout << "Server is listening on port " << PORT << "..." << std::endl;
 
+	size_t task_id = 0;
+
 	while (true)
 	{
 		SOCKET socket = accept(server_socket, nullptr, nullptr);
@@ -63,25 +80,55 @@ static void run()
 			throw std::runtime_error("accept failed");
 		}
 
-		std::thread t([=]()
+		char buffer[BUFFER_SIZE];
+		const ssize_t size = recv(socket, buffer, BUFFER_SIZE, 0);
+		if (size > 0)
 		{
-			bool alive = true;
-			while (alive)
+			std::cout << "Task " << task_id << ": '" << buffer << "'." << std::endl;
+			std::vector<std::string> token;
+			std::stringstream ssl(buffer);
+			std::string item; while (std::getline(ssl, item, ' ')) token.push_back(item);
+			if (token.size() == 4)
 			{
-				char buffer[BUFFER_SIZE];
-				const ssize_t size = recv(socket, buffer, BUFFER_SIZE, 0);
-				if (size > 0)
-				{
-					std::cout << "New connection: '" << buffer << "'." << std::endl;
-					send(socket, buffer, size, 0);	// echo
-				}
-				else alive = false;
+				int n = std::stoi(token[0]), b = std::stoi(token[1]);
+				std::string res_path = token[2], proof_path = token[3];
+
+				std::ostringstream sse; sse << "C:\\genefer\\genefer22g.exe -p -n " << n << " -b " << b << " -f gproof";
+				sse << std::endl << "results.txt => " << res_path << ", gproof.proof => " << proof_path;
+				std::cout << sse.str() << std::endl;
 			}
 
-			std::cout << "Connection closed." << std::endl;
-
+			memset(buffer, 0, BUFFER_SIZE);
+			strcpy(buffer, "NOK");
+			send(socket, buffer, size, 0);
 			close(socket);
-		}); t.detach();
+			std::cout << "Task " << task_id << " terminated." << std::endl;
+
+			++task_id;
+		}
+
+		// std::thread t([=]()
+		// {
+		// 	bool alive = true;
+		// 	while (alive)
+		// 	{
+		// 		char buffer[BUFFER_SIZE];
+		// 		const ssize_t size = recv(socket, buffer, BUFFER_SIZE, 0);
+		// 		if (size > 0)
+		// 		{
+		// 			std::cout << "New task: '" << buffer << "'." << std::endl;
+		// 			send(socket, buffer, size, 0);	// echo
+
+		// 			std::ostringstream sse; sse << "C:\\genefer\\genefer22g.exe -p -n " << n << " -b " << b << " -f gproof";
+		// 			std::system(sse.str().c_str());
+		// 		}
+		// 		else alive = false;
+		// 	}
+
+		// 	std::cout << "Connection closed." << std::endl;
+
+		// 	close(socket);
+		// }); t.detach();
 	}
 
 	close(server_socket);
