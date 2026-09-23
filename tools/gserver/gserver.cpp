@@ -10,7 +10,11 @@ Please give feedback to the authors if improvement is realized. It is distribute
 #include <sstream>
 #include <stdexcept>
 #include <thread>
+#include <chrono>
 #include <vector>
+#include <queue>
+#include <mutex>
+#include <filesystem>
 
 #if defined(_WIN64)
 #include <winsock2.h>
@@ -39,6 +43,70 @@ Please give feedback to the authors if improvement is realized. It is distribute
 	// 		B_PL_prev = B_PL; b_prev = b;
 	// 	}
 	// }
+
+class Task
+{
+private:
+	size_t _id;
+	SOCKET _socket;
+	int _n, _b;
+	std::string _res_path, _proof_path;
+
+public:
+	Task() {}
+	Task(const size_t id, const SOCKET & socket, const int n, const int b, const std::string & res_path, const std::string & proof_path)
+		: _id(id), _socket(socket), _n(n), _b(b), _res_path(res_path), _proof_path(proof_path) {}
+
+	size_t id() const { return _id; }
+	const SOCKET & socket() const { return _socket; }
+	int n() const { return _n; }
+	int b() const { return _b; }
+	const std::string & res_path() const { return _res_path; }
+	const std::string & proof_path() const { return _proof_path; }
+};
+
+std::queue<Task> tasks;
+std::mutex tasks_mutex;
+
+static void compute()
+{
+	Task task;
+
+	while (true)
+	{
+		bool found = false;
+		{
+			const std::lock_guard<std::mutex> lock(tasks_mutex);
+			if (!tasks.empty())
+			{
+				task = tasks.front();
+				tasks.pop();
+				found = true;
+			}
+		}
+
+		if (!found) std::this_thread::sleep_for(std::chrono::milliseconds(100));
+		else
+		{
+			std::ostringstream sse; sse << "C:\\genefer\\genefer22g.exe -p -n " << task.n() << " -b " << task.b() << " -f gproof";
+			std::system(sse.str().c_str());
+
+			std::filesystem::rename("results.txt", task.res_path());
+			std::filesystem::rename("gproof.proof", task.proof_path());
+
+			char buffer[BUFFER_SIZE];
+			memset(buffer, 0, BUFFER_SIZE);
+			strcpy(buffer, "OK");
+			send(task.socket(), buffer, BUFFER_SIZE, 0);
+			close(task.socket());
+
+			std::cout << "Task " << task.id() << " terminated." << std::endl;
+
+			std::filesystem::remove("results.txt");
+			std::filesystem::remove("gproof.proof");
+		}
+	}
+}
 
 static void run()
 {
@@ -70,6 +138,8 @@ static void run()
 
 	std::cout << "Server is listening on port " << PORT << "..." << std::endl;
 
+	std::thread t(compute); t.detach();
+
 	size_t task_id = 0;
 
 	while (true)
@@ -85,50 +155,18 @@ static void run()
 		if (size > 0)
 		{
 			std::cout << "Task " << task_id << ": '" << buffer << "'." << std::endl;
+
 			std::vector<std::string> token;
 			std::stringstream ssl(buffer);
 			std::string item; while (std::getline(ssl, item, ' ')) token.push_back(item);
 			if (token.size() == 4)
 			{
-				int n = std::stoi(token[0]), b = std::stoi(token[1]);
-				std::string res_path = token[2], proof_path = token[3];
-
-				std::ostringstream sse; sse << "C:\\genefer\\genefer22g.exe -p -n " << n << " -b " << b << " -f gproof";
-				sse << std::endl << "results.txt => " << res_path << ", gproof.proof => " << proof_path;
-				std::cout << sse.str() << std::endl;
+				const std::lock_guard<std::mutex> lock(tasks_mutex);
+				tasks.push(Task(task_id, socket, std::stoi(token[0]), std::stoi(token[1]), token[2], token[3]));
 			}
-
-			memset(buffer, 0, BUFFER_SIZE);
-			strcpy(buffer, "NOK");
-			send(socket, buffer, size, 0);
-			close(socket);
-			std::cout << "Task " << task_id << " terminated." << std::endl;
 
 			++task_id;
 		}
-
-		// std::thread t([=]()
-		// {
-		// 	bool alive = true;
-		// 	while (alive)
-		// 	{
-		// 		char buffer[BUFFER_SIZE];
-		// 		const ssize_t size = recv(socket, buffer, BUFFER_SIZE, 0);
-		// 		if (size > 0)
-		// 		{
-		// 			std::cout << "New task: '" << buffer << "'." << std::endl;
-		// 			send(socket, buffer, size, 0);	// echo
-
-		// 			std::ostringstream sse; sse << "C:\\genefer\\genefer22g.exe -p -n " << n << " -b " << b << " -f gproof";
-		// 			std::system(sse.str().c_str());
-		// 		}
-		// 		else alive = false;
-		// 	}
-
-		// 	std::cout << "Connection closed." << std::endl;
-
-		// 	close(socket);
-		// }); t.detach();
 	}
 
 	close(server_socket);

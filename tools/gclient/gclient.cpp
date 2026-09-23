@@ -237,7 +237,6 @@ public:
 						memset(buffer, 0, BUFFER_SIZE);
 						const ssize_t size = recv(p_socket, buffer, BUFFER_SIZE, 0);
 						success = ((size > 0) && (strcmp(buffer, "OK") == 0));
-						if (size > 0) std::cout << buffer << std::endl;
 					}
 				}
 				close(p_socket);
