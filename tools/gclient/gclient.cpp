@@ -7,6 +7,7 @@ Please give feedback to the authors if improvement is realized. It is distribute
 
 #include <cstdint>
 #include <iostream>
+#include <fstream>
 #include <sstream>
 #include <stdexcept>
 #include <cstdlib>
@@ -22,6 +23,7 @@ Please give feedback to the authors if improvement is realized. It is distribute
 #include <sys/resource.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include <arpa/inet.h>
 #include <unistd.h>
 #include <string.h>
 typedef int SOCKET;
@@ -252,13 +254,15 @@ public:
 			if (!success)
 			{
 				std::ostringstream sse; sse << "C:\\genefer\\genefer22g.exe -p -n " << n << " -b " << b << " -f gproof";
-				std::system(sse.str().c_str());
+				const int error = std::system(sse.str().c_str());
+				if (error != 0) throw std::runtime_error("test failed");
 			}
 		}
 		else if (mode == EMode::Check)
 		{
 			std::ostringstream sse; sse << "C:\\genefer\\genefer22.exe -c -n " << n << " -b " << b << " -f gproof";
-			std::system(sse.str().c_str());
+			const int error = std::system(sse.str().c_str());
+			if (error != 0) throw std::runtime_error("test failed");
 		}
 
 		if (boinc_time_to_checkpoint() != 0) boinc_checkpoint_completed();
