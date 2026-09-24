@@ -12,9 +12,10 @@ Please give feedback to the authors if improvement is realized. It is distribute
 #include <thread>
 #include <chrono>
 #include <vector>
-#include <queue>
+#include <list>
 #include <mutex>
 #include <filesystem>
+#include <cmath>
 
 #if defined(_WIN64)
 #include <winsock2.h>
@@ -26,23 +27,15 @@ Please give feedback to the authors if improvement is realized. It is distribute
 #include <unistd.h>
 #include <string.h>
 #include <errno.h>
+typedef int SOCKET;
+#define INVALID_SOCKET	(SOCKET)(~0)
+#define SOCKET_ERROR	(-1)
 #endif
 
 #define PORT		1221
 #define BUFFER_SIZE	512
 
-	// const int depth = 7, m = 1 << 17;
-	// int B_PL_prev = 0, b_prev = 0;
-	// for (int b = 500000000; b <= 510000000; b += 2)
-	// {
-	// 	const size_t esize = size_t(m * log2(b)) + 1;
-	// 	const int B_PL = static_cast<int>((esize - 1) >> depth) + 1;
-	// 	if (B_PL != B_PL_prev)
-	// 	{
-	// 		if (B_PL_prev != 0) std::cout << b << ": " << B_PL << ", " << b - b_prev << std::endl;
-	// 		B_PL_prev = B_PL; b_prev = b;
-	// 	}
-	// }
+const int depth = 7;
 
 class Task
 {
@@ -65,8 +58,15 @@ public:
 	const std::string & proof_path() const { return _proof_path; }
 };
 
-std::queue<Task> tasks;
+typedef std::pair<int, Task> PTask;
+std::list<PTask> tasks;
 std::mutex tasks_mutex;
+
+static int B_PietrzakLi(const int n, const int b)
+{
+	const size_t esize = size_t((1 << n) * log2(double(b))) + 1;
+	return int((esize - 1) >> depth) + 1;
+}
 
 static void compute()
 {
@@ -79,8 +79,12 @@ static void compute()
 			const std::lock_guard<std::mutex> lock(tasks_mutex);
 			if (!tasks.empty())
 			{
-				task = tasks.front();
-				tasks.pop();
+				std::cout << tasks.size() << " tasks:";
+				for (const auto & p : tasks) std::cout << " " << p.first;
+				std::cout << std::endl;
+
+				task = tasks.front().second;
+				tasks.pop_front();
 				found = true;
 			}
 		}
@@ -161,8 +165,10 @@ static void run()
 			std::string item; while (std::getline(ssl, item, ' ')) token.push_back(item);
 			if (token.size() == 4)
 			{
+				const int n = std::stoi(token[0]), b = std::stoi(token[1]);
 				const std::lock_guard<std::mutex> lock(tasks_mutex);
-				tasks.push(Task(task_id, socket, std::stoi(token[0]), std::stoi(token[1]), token[2], token[3]));
+				tasks.push_back(std::make_pair(B_PietrzakLi(n, b), Task(task_id, socket, n, b, token[2], token[3])));
+				tasks.sort([](const PTask & x, const PTask & y) { return (x.first < y.first); });
 			}
 
 			++task_id;
