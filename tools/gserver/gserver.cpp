@@ -23,10 +23,8 @@ Please give feedback to the authors if improvement is realized. It is distribute
 #else
 #include <sys/socket.h>
 #include <netinet/in.h>
-#include <arpa/inet.h>
 #include <unistd.h>
 #include <string.h>
-#include <errno.h>
 typedef int SOCKET;
 #define INVALID_SOCKET	(SOCKET)(~0)
 #define SOCKET_ERROR	(-1)
@@ -93,14 +91,17 @@ static void compute()
 		else
 		{
 			std::ostringstream sse; sse << "C:\\genefer\\genefer22g.exe -p -n " << task.n() << " -b " << task.b() << " -f gproof";
-			std::system(sse.str().c_str());
+			const int error = std::system(sse.str().c_str());
 
-			std::filesystem::rename("results.txt", task.res_path());
-			std::filesystem::rename("gproof.proof", task.proof_path());
+			if (error == 0)
+			{
+				std::filesystem::rename("results.txt", task.res_path());
+				std::filesystem::rename("gproof.proof", task.proof_path());
+			}
 
 			char buffer[BUFFER_SIZE];
 			memset(buffer, 0, BUFFER_SIZE);
-			strcpy(buffer, "OK");
+			strcpy(buffer, (error == 0) ? "OK" : "NOK");
 			send(task.socket(), buffer, BUFFER_SIZE, 0);
 			close(task.socket());
 

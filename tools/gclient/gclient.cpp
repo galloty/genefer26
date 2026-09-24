@@ -20,6 +20,10 @@ Please give feedback to the authors if improvement is realized. It is distribute
 #include <signal.h>
 #include <sys/time.h>
 #include <sys/resource.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <unistd.h>
+#include <string.h>
 typedef int SOCKET;
 #define INVALID_SOCKET	(SOCKET)(~0)
 #define SOCKET_ERROR	(-1)
