@@ -48,6 +48,9 @@ private:
 	const int _ln;
 	const EKind _kind;
 	i32vec * const _d;
+#ifdef SPECIAL_EDITION
+	int32_t * const _dse;
+#endif
 	std::string _type;
 	mutable bool _unbalanced;
 
@@ -77,6 +80,9 @@ public:
 
 	// the binary code must be generated for each instruction set
 	virtual void is_one(bool b[VSIZE], u64vec & res64) const = 0;
+#ifdef SPECIAL_EDITION
+	virtual void is_one(bool b[VSIZE], u64vec & res64, u64vec & old64) const = 0;
+#endif
 	virtual u64vec gethash64() const = 0;
 	virtual bvec gethash32() const = 0;
 
@@ -100,8 +106,20 @@ private:
 
 public:
 	transform(const bvec & b, const int ln, const EKind kind) : _b(b), _ln(ln), _kind(kind),
-		_d(static_cast<i32vec *>(align_new(sizeof(i32vec) << ln, sizeof(i32vec)))) { _unbalanced = false; }
-	virtual ~transform() { align_delete(_d); }
+		_d(static_cast<i32vec *>(align_new(sizeof(i32vec) << ln, sizeof(i32vec))))
+#ifdef SPECIAL_EDITION
+		, _dse(new int32_t[VSIZE << ln])
+#endif
+	{
+		_unbalanced = false;
+	}
+	virtual ~transform()
+	{
+		align_delete(_d);
+#ifdef SPECIAL_EDITION
+		delete[] _dse;
+#endif
+	}
 
 private:
 	finline void unbalance() const
@@ -219,11 +237,13 @@ protected:
 
 		for (size_t i = 1; i < n; ++i)
 		{
+			const i32vec & d_i = d[i];
+
 			for (size_t j = 0; j < VSIZE / 8; ++j)
 			{
-				r64[j] += bi[j] * Int32_8_to_UInt64_8(d[i][j]);
+				r64[j] += bi[j] * Int32_8_to_UInt64_8(d_i[j]);
 				bi[j] *= base[j];
-				one[j] &= (d[i][j] == Int32_8(0));
+				one[j] &= (d_i[j] == Int32_8(0));
 			}
 		}
 
@@ -233,6 +253,28 @@ protected:
 			for (size_t i = 0; i < 8; ++i) b[8 * j + i] = (one[j][i] == -1);
 		}
 	}
+
+#ifdef SPECIAL_EDITION
+	finline void _is_one(bool b[VSIZE], u64vec & res64, u64vec & old64) const
+	{
+		_is_one(b, res64);
+
+		const size_t n = size_t(1) << _ln;
+		const i32vec * const d = _d;
+
+		for (size_t j = 0; j < VSIZE / 8; ++j)	// TODO swap j and l
+		{
+			uint64_t old_8[8];
+			for (size_t l = 0; l < 8; ++l)
+			{
+				uint64_t old = 0;
+				for (size_t i = 8; i != 0; --i) old = (old << 8) | static_cast<uint8_t>(d[n - i][j][l]);
+				old_8[l] = old;
+			}
+			old64[j] = UInt64_8(old_8);
+		}
+	}
+#endif
 
 	finline u64vec _gethash64() const
 	{
@@ -245,12 +287,14 @@ protected:
 
 		for (size_t i = 0; i < n; ++i)
 		{
+			const i32vec & d_i = d[i];
+
 			for (size_t j = 0; j < VSIZE / 8; ++j)
 			{
-				const UInt64_8 a_i = Int32_8_to_UInt64_8(d[i][j]);
+				const UInt64_8 a_i = Int32_8_to_UInt64_8(d_i[j]);
 				hash64[j] += a_i;
 				hash64[j] ^= (a_i + UInt64_8(0xc39d8a0552b073e8ull)).rotl((UInt64_8(17) * a_i + UInt64_8(5)) & UInt64_8(63));
-				zero[j] &= Int32_8(d[i][j] == Int32_8(0));
+				zero[j] &= Int32_8(d_i[j] == Int32_8(0));
 			}
 		}
 
@@ -369,4 +413,38 @@ public:
 		cFile.write(reinterpret_cast<const char *>(&_b), sizeof(bvec));
 		cFile.write(reinterpret_cast<const char *>(_d), sizeof(i32vec) << _ln);
 	}
+
+#ifdef SPECIAL_EDITION
+	void split()
+	{
+		const int ln = _ln;
+		const size_t n = size_t(1) << ln;
+		const i32vec * const d = _d;
+		int32_t * const dse = _dse;
+
+		unbalance();
+
+		for (size_t i = 0; i < n; ++i)
+		{
+			const i32vec & d_i = d[i];
+
+			for (size_t j = 0; j < VSIZE / 8; ++j)
+			{
+				const Int32_8 d_ij = d_i[j];
+
+				for (size_t l = 0; l < 8; ++l) dse[((8 * j + l) << ln) + i] = d_ij[l];
+			}
+		}
+	}
+
+	void write(file & cFile, const size_t i) const
+	{
+		const uint32_t n = 1u << _ln;
+		cFile.write(reinterpret_cast<const char *>(&n), sizeof(n));
+		const uint32_t b_i = _b[i / 8][i % 8];
+		cFile.write(reinterpret_cast<const char *>(&b_i), sizeof(b_i));
+		const int32_t * const dse_i = &_dse[i << _ln];
+		cFile.write(reinterpret_cast<const char *>(dse_i), sizeof(int32_t) << _ln);
+	}
+#endif
 };

@@ -77,12 +77,14 @@ private:
 
 private:
 	// result: normal: 'results.txt' file
-	bool _result(const std::string & str, const std::string & filename) const
+	bool _result(const std::string & str, const int index) const
 	{
-		const char * const file_name = filename.empty() ? "results.txt" : filename.c_str();
+		std::string file_name;
+		if (index < 0) file_name = "results.txt";
+		else { std::ostringstream ss; ss << "results" << index << ".txt"; file_name = ss.str(); }
 		if (_is_boinc)
 		{
-			FILE * const out_file = _open(file_name, "a");
+			FILE * const out_file = _open(file_name.c_str(), "a");
 			if (out_file == nullptr) throw std::runtime_error("Cannot write 'results.txt' file");
 			std::fprintf(out_file, "%s", str.c_str());
 			std::fclose(out_file);
@@ -111,7 +113,7 @@ public:
 	static void print(const std::string & str) { get_instance()._print(str); }
 	static void display(const std::string & str) { get_instance()._display(str); }
 	static void error(const std::string & str, const bool fatal = false) { get_instance()._error(str, fatal); }
-	static bool result(const std::string & str, const std::string & filename = "") { return get_instance()._result(str, filename); }
+	static bool result(const std::string & str, const int index = -1) { return get_instance()._result(str, index); }
 
 	static FILE * open(const char * const filename, const char * const mode) { return get_instance()._open(filename, mode); }
 };

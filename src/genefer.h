@@ -147,6 +147,9 @@ private:
 	std::string checkpoint_filename() const { return _main_filename + ".chk"; }
 	std::string proof_filename() const { return _main_filename + ".proof"; }
 	std::string cert_filename() const { return _main_filename + ".cert"; }
+#ifdef SPECIAL_EDITION
+	std::string proof_filename(const size_t i) const { return _main_filename + std::to_string(i) + ".proof"; }
+#endif
 
 	static std::string uint64toString(const uint64_t u)
 	{
@@ -535,15 +538,29 @@ private:
 
 		watch chrono;
 
-		file proof_file(proof_filename(), "wb", true);
 		int version = 1;
+#ifdef SPECIAL_EDITION
+		file * proof_file[VSIZE];
+		for (size_t i = 0; i < VSIZE; ++i)
+		{
+			proof_file[i] = new file(proof_filename(i), "wb", true);
+		 	proof_file[i]->write(reinterpret_cast<const char *>(&version), sizeof(version));
+			proof_file[i]->write(reinterpret_cast<const char *>(&depth), sizeof(depth));
+		}
+#else
+		file proof_file(proof_filename(), "wb", true);
 		proof_file.write(reinterpret_cast<const char *>(&version), sizeof(version));
 		proof_file.write(reinterpret_cast<const char *>(&depth), sizeof(depth));
-
+#endif
 		// mu[0] = ckpt[0]
 		ptransform->copy(0, 3 + 0);
 		ptransform->to_int();
+#ifdef SPECIAL_EDITION
+		ptransform->split();
+		for (size_t i = 0; i < VSIZE; ++i) ptransform->write(*(proof_file[i]), i);
+#else
 		ptransform->write(proof_file);
+#endif
 
 		// v1 = mu[0]^w[0]
 		const bvec q = ptransform->gethash32();
@@ -580,7 +597,12 @@ private:
 			}
 // std::cout << k << ": " << s << ", " << 32 * k * (1 << (k - 1))<< std::endl;
 			ptransform->to_int();
+#ifdef SPECIAL_EDITION
+			ptransform->split();
+			for (size_t i = 0; i < VSIZE; ++i) ptransform->write(*(proof_file[i]), i);
+#else
 			ptransform->write(proof_file);
+#endif
 			const bvec q = ptransform->gethash32();
 			// v1 = v1 * mu[k]^w[k]
 			ptransform->power_vec(0, q);
@@ -593,8 +615,15 @@ private:
 			}
 		}
 
+#ifdef SPECIAL_EDITION
+		for (size_t i = 0; i < VSIZE; ++i)
+		{
+			proof_file[i]->write_crc32();
+			delete proof_file[i];
+		}
+#else
 		proof_file.write_crc32();
-
+#endif
 		// pkey = hash64(v1);
 		ptransform->copy(0, 2);
 		ptransform->to_int();
@@ -618,7 +647,11 @@ private:
 	}
 
 	EReturn proof(const mpzv & exponent, const int depth, double & test_time, double & valid_time, double & proof_time,
-				  bool is_prp[VSIZE], u64vec & pkey, u64vec & res64)
+				  bool is_prp[VSIZE], u64vec & pkey, u64vec & res64
+#ifdef SPECIAL_EDITION
+				, u64vec & old64
+#endif
+				)
 	{
 		const size_t esize = exponent.get_max_size();
 		const int B_GL = B_GerbiczLi(esize), B_PL = B_PietrzakLi(esize, depth);
@@ -627,8 +660,11 @@ private:
 		if (rPrp != EReturn::Success) return rPrp;
 
 		_transform->to_int();
+#ifdef SPECIAL_EDITION
+		_transform->is_one(is_prp, res64, old64);
+#else
 		_transform->is_one(is_prp, res64);
-
+#endif
 		const EReturn rGL = GL(exponent, B_GL, valid_time);
 		if (rGL != EReturn::Success) return rGL;
 		return PL(depth, proof_time, pkey);
@@ -1109,7 +1145,14 @@ public:
 			else if (mode == EMode::Proof)
 			{
 				double test_time = 0, valid_time = 0, proof_time = 0; bool is_prp[VSIZE]; u64vec pkey, res64;
-				success = proof(exponent, depth, test_time, valid_time, proof_time, is_prp, pkey, res64);
+#ifdef SPECIAL_EDITION
+				u64vec old64;
+#endif
+				success = proof(exponent, depth, test_time, valid_time, proof_time, is_prp, pkey, res64
+#ifdef SPECIAL_EDITION
+						, old64
+#endif
+					);
 				const double error = _transform->get_error();
 				const double time = test_time + valid_time + proof_time;
 				clearline();
@@ -1126,9 +1169,24 @@ public:
 				ss << std::endl; pio::print(ss.str());
 				if (success == EReturn::Success)
 				{
+#ifdef SPECIAL_EDITION
+					for (size_t j = 0; j < VSIZE / 8; ++j)
+					{
+						for (size_t i = 0; i < 8; ++i)
+						{
+							std::ostringstream ssr;
+							ssr << gfn(b[j][i], n) << " is ";
+							if (is_prp[8 * j + i]) ssr << "a probable prime";
+							else ssr << "composite, res64 = " << uint64toString(res64[j][i]) << ", old64 = " << uint64toString(old64[j][i]);
+							ssr << ", pkey = " << uint64toString(pkey[j][i]) << ", time = 00:01:00.";
+							pio::result(ssr.str(), int(8 * j + i));
+						}
+					}
+#else
 					u64vec zkey; for (size_t j = 0; j < VSIZE / 8; ++j) zkey[j] = UInt64_8(uint64_t(0));
 					const std::string st = gfn_vector_status(b, n, is_prp, pkey, zkey, res64);
 					pio::result(st);
+#endif
 					if (!_is_boinc) clear_checkpoint();
 				}
 			}

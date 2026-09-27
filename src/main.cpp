@@ -190,7 +190,12 @@ public:
 		igenefer::EMode mode = igenefer::EMode::None;
 		size_t device = 0;
 		bool isCPU = false;
-		const int depth = 6;
+		const int depth =
+#ifdef SPECIAL_EDITION
+		7;
+#else
+		6;
+#endif
 #if defined(BOINC)
 		bool ext_device = false;
 #endif

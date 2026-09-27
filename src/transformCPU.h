@@ -946,6 +946,9 @@ public:
 	double get_error() const override { return _error; }
 
 	void is_one(bool b[VSIZE], u64vec & res64) const override { parent::_is_one(b, res64); }
+#ifdef SPECIAL_EDITION
+	void is_one(bool b[VSIZE], u64vec & res64, u64vec & old64) const override { parent::_is_one(b, res64, old64); }
+#endif
 	u64vec gethash64() const override { return parent::_gethash64(); }
 	bvec gethash32() const override { return parent::_gethash32(); }
 

@@ -13,6 +13,7 @@ Please give feedback to the authors if improvement is realized. It is distribute
 #include <chrono>
 #include <vector>
 #include <list>
+#include <map>
 #include <mutex>
 #include <filesystem>
 #include <cmath>
@@ -32,6 +33,8 @@ typedef int SOCKET;
 
 #define PORT		1221
 #define BUFFER_SIZE	512
+
+#define VSIZE	4
 
 const int depth = 7;
 
@@ -68,7 +71,8 @@ static int B_PietrzakLi(const int n, const int b)
 
 static void compute()
 {
-	Task task;
+	// Task task;
+	Task task26[VSIZE];
 
 	while (true)
 	{
@@ -77,38 +81,55 @@ static void compute()
 			const std::lock_guard<std::mutex> lock(tasks_mutex);
 			if (!tasks.empty())
 			{
-				std::cout << tasks.size() << " tasks:";
-				for (const auto & p : tasks) std::cout << " " << p.first;
-				std::cout << std::endl;
+				std::map<int, int> occurrence; for (const auto & p : tasks) occurrence[p.first] += 1;
+				for (const auto & [key, count] : occurrence) std::cout << count << " task(s) '" << key << "'" << std::endl;
 
-				task = tasks.front().second;
-				tasks.pop_front();
-				found = true;
+				int B_PL = 0; for (const auto & [key, count] : occurrence) if (count >= VSIZE) { B_PL = key; break; }
+				if (B_PL != 0)
+				{
+					found = true;
+					size_t i = 0;
+					for (auto it = tasks.begin(); it != tasks.end();)
+					{
+						if (it->first == B_PL)
+						{
+							task26[i] = it->second; ++i;
+							it = tasks.erase(it);
+							if (i == VSIZE) break;
+						}
+						else ++it;
+					}
+				}
 			}
 		}
 
 		if (!found) std::this_thread::sleep_for(std::chrono::milliseconds(100));
 		else
 		{
-			std::ostringstream sse; sse << "C:\\genefer\\genefer22g.exe -p -n " << task.n() << " -b " << task.b() << " -f gproof";
-			const int error = std::system(sse.str().c_str());
-
-			if (error == 0)
+			for (size_t i = 0; i < VSIZE; ++i)
 			{
-				std::filesystem::rename("results.txt", task.res_path());
-				std::filesystem::rename("gproof.proof", task.proof_path());
+				const Task & task = task26[i];
+
+				std::ostringstream sse; sse << "C:\\genefer\\genefer22g.exe -p -n " << task.n() << " -b " << task.b() << " -f gproof";
+				const int error = std::system(sse.str().c_str());
+
+				if (error == 0)
+				{
+					std::filesystem::rename("results.txt", task.res_path());
+					std::filesystem::rename("gproof.proof", task.proof_path());
+				}
+
+				char buffer[BUFFER_SIZE];
+				memset(buffer, 0, BUFFER_SIZE);
+				strcpy(buffer, (error == 0) ? "OK" : "NOK");
+				send(task.socket(), buffer, BUFFER_SIZE, 0);
+				close(task.socket());
+
+				std::cout << "Task " << task.id() << " terminated." << std::endl;
+
+				std::filesystem::remove("results.txt");
+				std::filesystem::remove("gproof.proof");
 			}
-
-			char buffer[BUFFER_SIZE];
-			memset(buffer, 0, BUFFER_SIZE);
-			strcpy(buffer, (error == 0) ? "OK" : "NOK");
-			send(task.socket(), buffer, BUFFER_SIZE, 0);
-			close(task.socket());
-
-			std::cout << "Task " << task.id() << " terminated." << std::endl;
-
-			std::filesystem::remove("results.txt");
-			std::filesystem::remove("gproof.proof");
 		}
 	}
 }
