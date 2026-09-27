@@ -262,16 +262,16 @@ protected:
 		const size_t n = size_t(1) << _ln;
 		const i32vec * const d = _d;
 
-		for (size_t j = 0; j < VSIZE / 8; ++j)	// TODO swap j and l
+		for (size_t j = 0; j < VSIZE / 8; ++j)
 		{
-			uint64_t old_8[8];
-			for (size_t l = 0; l < 8; ++l)
+			const UInt64_8 mask = UInt64_8(uint64_t(0xff));
+			UInt64_8 old_8 = UInt64_8(uint64_t(0));
+			for (size_t i = 8; i != 0; --i)
 			{
-				uint64_t old = 0;
-				for (size_t i = 8; i != 0; --i) old = (old << 8) | static_cast<uint8_t>(d[n - i][j][l]);
-				old_8[l] = old;
+				const UInt64_8 d_ij = Int32_8_to_UInt64_8(d[n - i][j]);
+				old_8 = (old_8 << 8) | (d_ij & mask);
 			}
-			old64[j] = UInt64_8(old_8);
+			old64[j] = old_8;
 		}
 	}
 #endif
