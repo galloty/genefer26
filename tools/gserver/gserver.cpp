@@ -8,6 +8,7 @@ Please give feedback to the authors if improvement is realized. It is distribute
 #include <cstdint>
 #include <iostream>
 #include <sstream>
+#include <fstream>
 #include <stdexcept>
 #include <thread>
 #include <chrono>
@@ -34,7 +35,7 @@ typedef int SOCKET;
 #define PORT		1221
 #define BUFFER_SIZE	512
 
-#define VSIZE	4
+#define VSIZE	8
 
 const int depth = 7;
 
@@ -71,7 +72,6 @@ static int B_PietrzakLi(const int n, const int b)
 
 static void compute()
 {
-	// Task task;
 	Task task26[VSIZE];
 
 	while (true)
@@ -106,17 +106,22 @@ static void compute()
 		if (!found) std::this_thread::sleep_for(std::chrono::milliseconds(100));
 		else
 		{
+			std::ofstream file_b("b.txt");
+			for (size_t i = 0; i < VSIZE; ++i) file_b << task26[i].b() << std::endl;
+			file_b.close();
+
+			std::ostringstream sse; sse << "C:\\genefer\\geneferv_se.exe -p -n " << task26[0].n() << " -b b.txt" << " -f gproof";
+			const int error = std::system(sse.str().c_str());
+
 			for (size_t i = 0; i < VSIZE; ++i)
 			{
 				const Task & task = task26[i];
-
-				std::ostringstream sse; sse << "C:\\genefer\\genefer22g.exe -p -n " << task.n() << " -b " << task.b() << " -f gproof";
-				const int error = std::system(sse.str().c_str());
+				std::ostringstream ssr, ssp; ssr << "results" << i << ".txt"; ssp << "gproof" << i << ".proof";
 
 				if (error == 0)
 				{
-					std::filesystem::rename("results.txt", task.res_path());
-					std::filesystem::rename("gproof.proof", task.proof_path());
+					std::filesystem::rename(ssr.str(), task.res_path());
+					std::filesystem::rename(ssp.str(), task.proof_path());
 				}
 
 				char buffer[BUFFER_SIZE];
@@ -127,9 +132,11 @@ static void compute()
 
 				std::cout << "Task " << task.id() << " terminated." << std::endl;
 
-				std::filesystem::remove("results.txt");
-				std::filesystem::remove("gproof.proof");
+				std::filesystem::remove(ssr.str());
+				std::filesystem::remove(ssp.str());
 			}
+
+			std::remove("b.txt");
 		}
 	}
 }
