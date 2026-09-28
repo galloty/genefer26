@@ -32,6 +32,7 @@ BOINC_LIB = $(BOINC_DIR)/api/libboinc_api.a $(BOINC_DIR)/lib/libboinc.a
 BOINC_LIB_OCL = $(BOINC_DIR)/api/libboinc_opencl.a
 endif
 
+# -DSPECIAL_EDITION
 CFLAGS = -Wall -Wextra -Wsign-conversion
 ifdef BOINC
 CFLAGS += -DBOINC $(BOINC_INC)
