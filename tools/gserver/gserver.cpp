@@ -63,6 +63,7 @@ public:
 typedef std::pair<int, Task> PTask;
 std::list<PTask> tasks;
 std::mutex tasks_mutex;
+bool new_task = false;
 
 static int B_PietrzakLi(const int n, const int b)
 {
@@ -82,7 +83,11 @@ static void compute()
 			if (!tasks.empty())
 			{
 				std::map<int, int> occurrence; for (const auto & p : tasks) occurrence[p.first] += 1;
-				for (const auto & [key, count] : occurrence) std::cout << count << " task(s) '" << key << "'" << std::endl;
+				if (new_task)
+				{
+					for (const auto & [key, count] : occurrence) std::cout << count << " task(s) '" << key << "'" << std::endl;
+					new_task = false;
+				}
 
 				int B_PL = 0; for (const auto & [key, count] : occurrence) if (count >= VSIZE) { B_PL = key; break; }
 				if (B_PL != 0)
@@ -198,6 +203,7 @@ static void run()
 				const std::lock_guard<std::mutex> lock(tasks_mutex);
 				tasks.push_back(std::make_pair(B_PietrzakLi(n, b), Task(task_id, socket, n, b, token[2], token[3])));
 				tasks.sort([](const PTask & x, const PTask & y) { return (x.first < y.first); });
+				new_task = true;
 			}
 
 			++task_id;

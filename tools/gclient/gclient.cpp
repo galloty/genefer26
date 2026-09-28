@@ -221,9 +221,9 @@ public:
 
 		boinc_fraction_done(0.1);
 
+		bool success = false;
 		if (mode == EMode::Proof)
 		{
-			bool success = false;
 			SOCKET p_socket = socket(AF_INET, SOCK_STREAM, 0);
 			if (p_socket != INVALID_SOCKET)
 			{
@@ -270,7 +270,7 @@ public:
 		std::ostringstream ssr;
 		if (mode == EMode::Proof)
 		{
-			ssr << b << "^{2^" << n << "} + 1: proof file is generated, time = 00:01:00." << std::endl;
+			ssr << b << "^{2^" << n << "} + 1: proof file is generated, time = 00:0" << (success ? "1" : "3") << ":00." << std::endl;
 		}
 		else if (mode == EMode::Check)
 		{
