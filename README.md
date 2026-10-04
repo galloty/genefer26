@@ -3,7 +3,7 @@ Generalized Fermat Prime search program
 
 ## About
 
-**genefer** performs a fast probable primality test for numbers of the form *b*<sup>2<sup>*n*</sup></sup>&nbsp;+&nbsp;1 ([Generalized Fermat Numbers](https://genefer.great-site.net/)) using a [Fermat test](https://en.wikipedia.org/wiki/Fermat_primality_test). The GPU implementation is based on [OpenCL™](https://www.khronos.org/opencl/) and the GPU implementation is multithreaded.  
+**genefer** performs a fast probable primality test for numbers of the form *b*<sup>2<sup>*n*</sup></sup>&nbsp;+&nbsp;1 ([Generalized Fermat Numbers](https://genefer.great-site.net/)) using a [Fermat test](https://en.wikipedia.org/wiki/Fermat_primality_test). The GPU implementation is based on [OpenCL™](https://www.khronos.org/opencl/) and the CPU implementation is multithreaded.  
 
 **genefer** [version 22](https://github.com/galloty/genefer22) checks a single GFN. It is dedicated to the search for GFN primes in the range 17&nbsp;&le;&nbsp;*n*&nbsp;&le;&nbsp;23.
 
